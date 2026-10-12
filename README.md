@@ -15,7 +15,9 @@ npm run build   # build de produção com service worker (pasta dist)
 - `src/telas/` e `src/ui/`: telas e componentes. Não fazem conta.
 
 ## Deploy (Vercel)
-Projeto Vite: a Vercel detecta sozinha (build `npm run build`, saída `dist`).
+Endereço: **https://acerto-motoboy.vercel.app** (projeto `acerto-motoboy`, ligado a este repositório).
+
+Projeto Vite: a Vercel detecta sozinha (build `npm run build`, saída `dist`). A branch de produção é `main`: o que entra na `main` vai para o endereço acima; outras branches geram prévias.
 
 ## Instalar no celular (Android, Chrome)
 1. Abra o endereço do app no Chrome.
