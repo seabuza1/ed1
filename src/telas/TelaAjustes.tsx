@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { alternarArea, editarAjustes, editarArea, novaArea } from '../domain/ajustes'
 import type { Resultado } from '../domain/comanda'
+import { formatarDataHora } from '../domain/datas'
 import { formatarReais, lerReais, paraCampo } from '../domain/dinheiro'
 import type { Ajustes, Area } from '../domain/tipos'
+import { procurarAtualizacao } from '../data/atualizacao'
 import { novoId } from '../data/id'
 import { repo } from '../data/repo'
 import { CampoReais } from '../ui/CampoReais'
@@ -14,6 +16,7 @@ export function TelaAjustes(props: { areas: Area[]; ajustes: Ajustes }) {
       <h1>Ajustes</h1>
       <Areas areas={props.areas} />
       <ValoresPadrao key={`${props.ajustes.caixaPadrao}-${props.ajustes.diariaPadrao}`} ajustes={props.ajustes} />
+      <SobreApp />
     </main>
   )
 }
@@ -162,6 +165,36 @@ function ValoresPadrao({ ajustes }: { ajustes: Ajustes }) {
         Salvar
       </button>
       {msg && <p className={msg.ok ? 'sucesso' : 'erro'}>{msg.texto}</p>}
+    </section>
+  )
+}
+
+const TEXTO_ATUALIZACAO = {
+  atualizando: 'Baixando a versão nova. O app recarrega sozinho em instantes.',
+  'em-dia': 'Você já está na versão mais nova.',
+  'sem-internet': 'Sem internet agora. Tente de novo com conexão.',
+}
+
+function SobreApp() {
+  const [msg, setMsg] = useState<string | null>(null)
+  return (
+    <section className="bloco pilha-curta">
+      <h2>App</h2>
+      <p className="discreto pequeno">
+        Versão {__VERSAO__} de {formatarDataHora(__COMPILADO_EM__)}. O app se atualiza sozinho ao abrir ou ao voltar
+        para ele.
+      </p>
+      <button
+        type="button"
+        className="secundario"
+        onClick={async () => {
+          setMsg('Procurando…')
+          setMsg(TEXTO_ATUALIZACAO[await procurarAtualizacao()])
+        }}
+      >
+        Procurar atualização
+      </button>
+      {msg && <p className="discreto">{msg}</p>}
     </section>
   )
 }
