@@ -23,6 +23,8 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
   const [pagamento, setPagamento] = useState(pagamentoVazio)
   const [erro, setErro] = useState<string | null>(null)
   const [repetidaOk, setRepetidaOk] = useState(false)
+  // Com comanda em rota, abre recolhido: na porta do cliente a lista "Em rota" fica à mão.
+  const [aberto, setAberto] = useState(() => !props.comandas.some((c) => c.status === 'em_rota'))
   const refCodigo = useRef<HTMLInputElement>(null)
   const refTotal = useRef<HTMLInputElement>(null)
 
@@ -68,9 +70,21 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
     setRepetidaOk(false)
   }
 
+  if (!aberto)
+    return (
+      <button type="button" className="primario" onClick={() => setAberto(true)}>
+        + Lançar comanda
+      </button>
+    )
+
   return (
     <section className="pilha cartao-form">
-      <h2>Lançar comanda</h2>
+      <div className="titulo-form">
+        <h2>Lançar comanda</h2>
+        <button type="button" className="link" onClick={() => setAberto(false)}>
+          Recolher
+        </button>
+      </div>
       <div className="lado-a-lado">
         <label className="campo">
           <span>Código</span>

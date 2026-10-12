@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { calcularAcerto } from './acerto'
-import { criarComanda, type EntradaComanda } from './comanda'
+import {
+  criarComanda,
+  editarComanda,
+  marcarEntregue,
+  marcarVoltou,
+  saiuDeNovo,
+  trocarForma,
+  type EntradaComanda,
+} from './comanda'
 import type { Area, Comanda, Forma, Noite, Status } from './tipos'
 import { r$ } from '../teste/r$'
 
@@ -176,5 +184,54 @@ describe('criarComanda', () => {
   it('R1 código com 4 dígitos', () => {
     expect(criarComanda(entrada({ codigo: '123' }), pontal, ctx).ok).toBe(false)
     expect(criarComanda(entrada({ codigo: '12a4' }), pontal, ctx).ok).toBe(false)
+  })
+})
+
+describe('ações sobre a comanda', () => {
+  const agora = '2026-10-12T22:00:00Z'
+
+  it('T7 pelo fluxo: voltou, saiu de novo e foi entregue', () => {
+    const areas = areasPadrao()
+    const base = noiteBase(areas)
+    const voltou = base.find((c) => c.codigo === '8094')!
+    const r = saiuDeNovo(voltou, areas.find((a) => a.id === voltou.areaId), { id: 'nova', agora })
+    if (!r.ok) throw new Error(r.erro)
+    expect(r.valor).toMatchObject({ id: 'nova', codigo: '8094', status: 'em_rota', taxa: R(12) })
+    const a = calcularAcerto(noite(), [...base, marcarEntregue(r.valor, agora)])
+    expect(a.devolver).toBe(R(308))
+    expect(a.receber).toBe(R(98))
+  })
+
+  it('só sai de novo quem voltou', () => {
+    const areas = areasPadrao()
+    const entregue = noiteBase(areas)[0]
+    expect(saiuDeNovo(entregue, areas[2], { id: 'x', agora }).ok).toBe(false)
+  })
+
+  it('voltou: a taxa conta, os valores não', () => {
+    const areas = areasPadrao()
+    const [primeira, ...resto] = noiteBase(areas)
+    const a = calcularAcerto(noite(), [marcarVoltou(primeira, agora), ...resto])
+    expect(a.devolver).toBe(R(243 - 113))
+    expect(a.receber).toBe(R(86))
+  })
+
+  it('trocou a forma: novos pagamentos, entregue, com validação', () => {
+    const areas = areasPadrao()
+    const c = { ...noiteBase(areas)[0], status: 'em_rota' as const } // 3557, 113, dinheiro
+    const r = trocarForma(c, { pagamentos: [{ forma: 'cartao', valor: R(113) }], troco: 0 }, agora)
+    expect(r.ok && r.valor).toMatchObject({ status: 'entregue', pagamentos: [{ forma: 'cartao', valor: R(113) }] })
+    expect(trocarForma(c, { pagamentos: [{ forma: 'cartao', valor: R(100) }], troco: 0 }, agora).ok).toBe(false)
+  })
+
+  it('editar mantém a taxa gravada; trocar de área pega a taxa da tabela (R3)', () => {
+    const areas = areasPadrao()
+    const c = noiteBase(areas)[0] // Barra, taxa 12
+    areas[2].taxa = R(13)
+    const entrada = { codigo: '3557', total: R(120), pagamentos: [{ forma: 'dinheiro' as const, valor: R(120) }], troco: 0 }
+    const mesma = editarComanda(c, entrada, areas[2], 'entregue', agora)
+    expect(mesma.ok && [mesma.valor.taxa, mesma.valor.total]).toEqual([R(12), R(120)])
+    const outra = editarComanda(c, entrada, areas[3], 'voltou', agora)
+    expect(outra.ok && [outra.valor.areaId, outra.valor.taxa, outra.valor.status]).toEqual(['parque', R(15), 'voltou'])
   })
 })

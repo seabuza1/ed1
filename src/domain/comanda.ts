@@ -1,7 +1,13 @@
 import { formatarReais } from './dinheiro'
-import type { Area, Comanda, Forma, Pagamento } from './tipos'
+import type { Area, Comanda, Forma, Pagamento, Status } from './tipos'
 
 export const FORMAS: Forma[] = ['dinheiro', 'cartao', 'pix_maquina', 'pix_antecipado']
+
+export const NOMES_STATUS: Record<Status, string> = {
+  em_rota: 'Em rota',
+  entregue: 'Entregue',
+  voltou: 'Voltou',
+}
 
 export const NOMES_FORMA: Record<Forma, string> = {
   dinheiro: 'Dinheiro',
@@ -106,4 +112,89 @@ export function separarPorStatus(comandas: Comanda[]) {
 export function descreverPagamentos(pagamentos: Pagamento[]): string {
   if (pagamentos.length === 1) return NOMES_FORMA[pagamentos[0].forma]
   return pagamentos.map((p) => `${NOMES_FORMA[p.forma]} ${formatarReais(p.valor)}`).join(' + ')
+}
+
+// R6: ações sobre a comanda.
+
+export const marcarEntregue = (c: Comanda, agora: string): Comanda => ({
+  ...c,
+  status: 'entregue',
+  atualizadaEm: agora,
+})
+
+export const marcarVoltou = (c: Comanda, agora: string): Comanda => ({
+  ...c,
+  status: 'voltou',
+  atualizadaEm: agora,
+})
+
+/** "Trocou a forma": grava os novos pagamentos e marca entregue. */
+export function trocarForma(
+  c: Comanda,
+  pagamento: { pagamentos: Pagamento[]; troco: number },
+  agora: string,
+): Resultado<Comanda> {
+  const erro = validarComanda({ codigo: c.codigo, total: c.total, ...pagamento }, c.taxa)
+  if (erro) return { ok: false, erro }
+  return {
+    ok: true,
+    valor: {
+      ...c,
+      pagamentos: pagamento.pagamentos.map((p) => ({ ...p })),
+      troco: pagamento.troco,
+      status: 'entregue',
+      atualizadaEm: agora,
+    },
+  }
+}
+
+/** R7: o pedido que voltou e sai outra vez vira comanda nova, em rota, com outra taxa. */
+export function saiuDeNovo(
+  c: Comanda,
+  area: Area | undefined,
+  ctx: { id: string; agora: string },
+): Resultado<Comanda> {
+  if (c.status !== 'voltou') return { ok: false, erro: 'Só comanda que voltou pode sair de novo.' }
+  const taxa = area?.taxa ?? c.taxa
+  const erro = validarComanda(c, taxa)
+  if (erro) return { ok: false, erro }
+  return {
+    ok: true,
+    valor: {
+      ...c,
+      id: ctx.id,
+      taxa,
+      status: 'em_rota',
+      pagamentos: c.pagamentos.map((p) => ({ ...p })),
+      criadaEm: ctx.agora,
+      atualizadaEm: ctx.agora,
+    },
+  }
+}
+
+/** Edição. R3: mantém a taxa gravada; só pega a taxa da tabela se a área mudar. */
+export function editarComanda(
+  c: Comanda,
+  entrada: EntradaComanda,
+  area: Area,
+  status: Status,
+  agora: string,
+): Resultado<Comanda> {
+  const taxa = area.id === c.areaId ? c.taxa : area.taxa
+  const erro = validarComanda(entrada, taxa)
+  if (erro) return { ok: false, erro }
+  return {
+    ok: true,
+    valor: {
+      ...c,
+      codigo: entrada.codigo,
+      total: entrada.total,
+      pagamentos: entrada.pagamentos.map((p) => ({ ...p })),
+      troco: entrada.troco,
+      areaId: area.id,
+      taxa,
+      status,
+      atualizadaEm: agora,
+    },
+  }
 }

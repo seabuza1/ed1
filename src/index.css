@@ -340,3 +340,78 @@ button.remover {
   border-radius: 12px;
   padding: 10px 12px;
 }
+
+.comanda {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+button.resumo-botao {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+
+.acoes {
+  display: grid;
+  grid-template-columns: 1fr 1.3fr 1fr;
+  gap: 8px;
+}
+
+.acoes button {
+  padding: 0 6px;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+button.ok {
+  background: #15803d;
+  border-color: #15803d;
+  color: #fff;
+}
+
+button.largo {
+  width: 100%;
+}
+
+button.perigo {
+  width: 100%;
+  background: none;
+  border-color: var(--erro);
+  color: var(--erro);
+  font-weight: 600;
+}
+
+button.perigo.armado {
+  background: var(--erro);
+  color: #fff;
+}
+
+.editar {
+  border-top: 1px solid var(--borda);
+  padding-top: 12px;
+}
+
+.editar input,
+.editar select {
+  background: var(--fundo);
+}
+
+.chips-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.titulo-form {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.titulo-form button.link {
+  align-self: center;
+  min-height: 44px;
+}
