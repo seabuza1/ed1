@@ -415,3 +415,98 @@ button.perigo.armado {
   align-self: center;
   min-height: 44px;
 }
+
+.bloco {
+  border: 1px solid var(--borda);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.bloco h2 {
+  margin-bottom: 6px;
+}
+
+.linha-conta + .linha-conta {
+  border-top: 1px solid var(--borda);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.linha-conta-topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.linha-conta-topo strong {
+  font-size: 1.2rem;
+  white-space: nowrap;
+}
+
+.tabela {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tabela td {
+  padding: 8px 4px;
+  border-top: 1px solid var(--borda);
+}
+
+.tabela tr:first-child td {
+  border-top: 0;
+}
+
+.direita {
+  text-align: right;
+}
+
+.resultado {
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.resultado.bateu {
+  background: #dcfce7;
+  color: #14532d;
+}
+
+.resultado.falta {
+  background: #fee2e2;
+  color: #7f1d1d;
+}
+
+.resultado.sobra {
+  background: var(--aviso-fundo);
+  color: var(--aviso-texto);
+}
+
+@media (prefers-color-scheme: dark) {
+  .resultado.bateu {
+    background: #14532d;
+    color: #dcfce7;
+  }
+  .resultado.falta {
+    background: #7f1d1d;
+    color: #fee2e2;
+  }
+}
+
+textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--borda);
+  background: var(--fundo);
+  color: var(--texto);
+  resize: vertical;
+}
+
+input:disabled,
+textarea:disabled,
+button:disabled {
+  opacity: 0.6;
+}

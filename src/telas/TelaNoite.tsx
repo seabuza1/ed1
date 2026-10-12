@@ -57,7 +57,7 @@ function AbrirNoite({ noites, ajustes }: { noites: Noite[]; ajustes: Ajustes }) 
     const r = reabrirNoite(noite, noites)
     if (!r.ok) return setErro(r.erro)
     try {
-      await repo.salvarNoite(r.valor)
+      await repo.atualizarNoite(noite.id, { fechadaEm: r.valor.fechadaEm })
     } catch (e) {
       setErro(mensagemDeErro(e))
     }
@@ -115,7 +115,7 @@ function ValoresNoite({ noite }: { noite: Noite }) {
     const r = editarValoresNoite(noite, { caixaInicial, diaria: valorDiaria })
     if (!r.ok) return setErro(r.erro)
     try {
-      await repo.salvarNoite(r.valor)
+      await repo.atualizarNoite(noite.id, { caixaInicial, diaria: valorDiaria })
       setEditando(false)
     } catch (e) {
       setErro(mensagemDeErro(e))

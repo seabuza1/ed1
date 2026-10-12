@@ -34,6 +34,7 @@ export function criarRepoLocal(nome: string): Repo {
   return {
     listarNoites: () => db.noites.toArray(),
     salvarNoite: (noite) => gravar(() => db.noites.put(noite)),
+    atualizarNoite: (id, mudancas) => gravar(() => db.noites.update(id, mudancas)),
 
     listarComandas: (noiteId) => db.comandas.where('noiteId').equals(noiteId).sortBy('criadaEm'),
     salvarComanda: (comanda) => gravar(() => db.comandas.put(comanda)),

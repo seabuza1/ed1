@@ -10,6 +10,7 @@ export function CampoReais({
   valor: string
   onChange: (texto: string) => void
   placeholder?: string
+  desabilitado?: boolean
 }) {
   return (
     <label className="campo">
@@ -22,6 +23,7 @@ export function CampoReais({
           enterKeyHint="done"
           autoComplete="off"
           placeholder={props.placeholder}
+          disabled={props.desabilitado}
           value={props.valor}
           onChange={(e) => props.onChange(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}

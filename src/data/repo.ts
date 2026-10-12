@@ -8,6 +8,8 @@ import { criarRepoLocal } from './repoLocal'
 export interface Repo {
   listarNoites(): Promise<Noite[]>
   salvarNoite(noite: Noite): Promise<void>
+  /** Grava só os campos informados (evita sobrescrever o que mudou em outra gravação). */
+  atualizarNoite(id: string, mudancas: Partial<Omit<Noite, 'id'>>): Promise<void>
 
   listarComandas(noiteId: string): Promise<Comanda[]>
   salvarComanda(comanda: Comanda): Promise<void>

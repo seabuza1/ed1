@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { calcularAcerto } from './acerto'
+import {
+  calcularAcerto,
+  compararComLuan,
+  detalharAcerto,
+  diferencaLuan,
+  itensMaquininha,
+  registrarContado,
+  registrarLuan,
+  seloLuan,
+  tipoDiferenca,
+} from './acerto'
 import {
   criarComanda,
   editarComanda,
@@ -233,5 +243,86 @@ describe('ações sobre a comanda', () => {
     expect(mesma.ok && [mesma.valor.taxa, mesma.valor.total]).toEqual([R(12), R(120)])
     const outra = editarComanda(c, entrada, areas[3], 'voltou', agora)
     expect(outra.ok && [outra.valor.areaId, outra.valor.taxa, outra.valor.status]).toEqual(['parque', R(15), 'voltou'])
+  })
+})
+
+describe('tela de acerto', () => {
+  const noiteCompleta = (extra: Partial<Noite> = {}): Noite => ({
+    id: 'n1', data: '2026-10-12', caixaInicial: R(80), diaria: R(30), dinheiroContado: null,
+    fechadaEm: null, luanPagou: null, luanDiferenca: null, minutosAcerto: null, obs: '', ...extra,
+  })
+
+  it('situação da conferência', () => {
+    const sit = (contado: number) => calcularAcerto(noite(R(contado)), noiteBase()).conferencia!.situacao
+    expect([sit(240), sit(243), sit(250)]).toEqual(['falta', 'bateu', 'sobra'])
+  })
+
+  it('explica de onde vem cada número', () => {
+    const a = calcularAcerto(noite(), noiteBase())
+    expect(detalharAcerto(a).map((l) => [l.rotulo, l.valor, l.origem])).toEqual([
+      ['Devolver', R(243), r$('R$ 80,00 de caixa + R$ 160,00 em dinheiro + R$ 3,00 de troco por Pix')],
+      ['Maquininha', R(162), r$('R$ 90,00 em cartão + R$ 72,00 em Pix na máquina')],
+      ['Receber', R(86), r$('R$ 30,00 de diária + R$ 56,00 de taxas (6 comandas)')],
+      ['Pix antecipado', R(60), 'Não passa pela sua mão; só a taxa conta'],
+    ])
+  })
+
+  it('noite vazia', () => {
+    const l = detalharAcerto(calcularAcerto(noite(), []))
+    expect(l.map((x) => x.origem)).toEqual([
+      r$('R$ 80,00 de caixa'),
+      'Nada na maquininha',
+      r$('R$ 30,00 de diária + R$ 0,00 de taxas (0 comandas)'),
+    ])
+  })
+
+  it('lista da maquininha: cartão e Pix na máquina das entregues', () => {
+    const areas = areasPadrao()
+    const comandas = [
+      ...noiteBase(areas),
+      lancar(areas, '1111', 40, 'pontal', [['cartao', 15], ['dinheiro', 25]]),
+      lancar(areas, '2222', 30, 'pontal', [['cartao', 30]], { status: 'voltou' }),
+    ]
+    expect(itensMaquininha(comandas).map((i) => [i.codigo, i.nomeForma, i.valor])).toEqual([
+      ['2672', 'Cartão', R(90)],
+      ['0910', 'Pix na máquina', R(72)],
+      ['1111', 'Cartão', R(15)],
+    ])
+  })
+
+  it('falta ou sobra do Luan', () => {
+    expect(diferencaLuan('falta', R(3))).toBe(-R(3))
+    expect(diferencaLuan('sobra', R(7))).toBe(R(7))
+    expect(diferencaLuan('bateu', null)).toBe(0)
+    expect(diferencaLuan('falta', null)).toBeNull()
+    expect(diferencaLuan(null, R(3))).toBeNull()
+    expect([tipoDiferenca(-1), tipoDiferenca(0), tipoDiferenca(5), tipoDiferenca(null)]).toEqual(['falta', 'bateu', 'sobra', null])
+  })
+
+  it('compara com o Luan', () => {
+    const comandas = noiteBase()
+    const comparar = (n: Noite) => compararComLuan(n, calcularAcerto(n, comandas))
+    expect(comparar(noiteCompleta())).toBeNull()
+
+    const bateu = comparar(noiteCompleta({ dinheiroContado: R(240), luanPagou: R(83), luanDiferenca: -R(3) }))!
+    expect(bateu).toMatchObject({ esperado: R(83), diferencaPago: 0, diferencaFaltaSobra: 0, bateu: true })
+    expect(seloLuan(bateu)).toBe('Bateu com o Luan')
+
+    const pagouMenos = comparar(noiteCompleta({ luanPagou: R(84) }))! // sem contado: espera receber 86
+    expect(pagouMenos).toMatchObject({ esperado: R(86), diferencaPago: -R(2), diferencaFaltaSobra: null, bateu: false })
+    expect(seloLuan(pagouMenos)).toBe(r$('Diferença de R$ 2,00'))
+
+    const faltaDiferente = comparar(noiteCompleta({ dinheiroContado: R(243), luanPagou: R(86), luanDiferenca: -R(5) }))!
+    expect(faltaDiferente.bateu).toBe(false)
+    expect(seloLuan(faltaDiferente)).toBe(r$('Diferença de R$ 5,00'))
+  })
+
+  it('conferência e Luan só com a noite aberta', () => {
+    expect(registrarContado(noiteCompleta(), R(240))).toEqual({ ok: true, valor: { dinheiroContado: R(240) } })
+    expect(registrarContado(noiteCompleta({ fechadaEm: 'x' }), R(240)).ok).toBe(false)
+    const dados = { luanPagou: R(83), luanDiferenca: -R(3), minutosAcerto: 12, obs: '  ' }
+    expect(registrarLuan(noiteCompleta(), dados)).toEqual({ ok: true, valor: { ...dados, obs: '' } })
+    expect(registrarLuan(noiteCompleta(), { ...dados, minutosAcerto: 1.5 }).ok).toBe(false)
+    expect(registrarLuan(noiteCompleta({ fechadaEm: 'x' }), dados).ok).toBe(false)
   })
 })

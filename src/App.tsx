@@ -28,7 +28,7 @@ export default function App() {
   return (
     <>
       {aba === 'noite' && <TelaNoite noites={noites} ajustes={ajustes} areas={areas} comandas={comandas} />}
-      {aba === 'acerto' && <TelaAcerto noite={emFoco} noites={noites} comandas={comandas} />}
+      {aba === 'acerto' && <TelaAcerto noite={emFoco} noites={noites} comandas={comandas} areas={areas} />}
       <nav className="abas">
         {ABAS.map((a) => (
           <button

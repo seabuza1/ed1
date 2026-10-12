@@ -29,6 +29,9 @@ it('grava e lê noites e comandas, e avisa a cada gravação', async () => {
   if (!r.ok) throw new Error(r.erro)
   await repo.salvarNoite(r.valor)
   expect(await repo.listarNoites()).toEqual([r.valor])
+  await repo.atualizarNoite(r.valor.id, { dinheiroContado: 24000 })
+  await repo.atualizarNoite(r.valor.id, { luanPagou: 8300 })
+  expect(await repo.listarNoites()).toEqual([{ ...r.valor, dinheiroContado: 24000, luanPagou: 8300 }])
 
   const comanda = (codigo: string, criadaEm: string, noiteId = r.valor.id): Comanda => ({
     id: novoId(), noiteId, codigo, total: 5000, areaId: 'a', taxa: 1000, status: 'em_rota',
@@ -44,10 +47,10 @@ it('grava e lê noites e comandas, e avisa a cada gravação', async () => {
   await repo.excluirComanda(a.id)
   expect((await repo.listarComandas(r.valor.id)).map((c) => c.codigo)).toEqual(['2222'])
 
-  expect(ouvinte).toHaveBeenCalledTimes(5)
+  expect(ouvinte).toHaveBeenCalledTimes(7)
   parar()
   await repo.salvarAjustes({ id: 'padrao', caixaPadrao: 10000, diariaPadrao: 3000 })
-  expect(ouvinte).toHaveBeenCalledTimes(5)
+  expect(ouvinte).toHaveBeenCalledTimes(7)
   expect((await repo.obterAjustes()).caixaPadrao).toBe(10000)
 })
 
