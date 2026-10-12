@@ -3,6 +3,7 @@ import { dataDaNoite, formatarData } from './datas'
 import { lerReais, paraCampo } from './dinheiro'
 import { abrirNoite, avisoAoFechar, editarValoresNoite, fecharNoite, noiteAberta, reabrirNoite } from './noite'
 import type { Comanda, Noite } from './tipos'
+import { r$ } from '../teste/r$'
 
 describe('R13 dataDaNoite', () => {
   it('entre 18h e meia-noite é o próprio dia', () => {
@@ -26,6 +27,7 @@ describe('lerReais', () => {
     expect(lerReais('80')).toBe(8000)
     expect(lerReais('80,5')).toBe(8050)
     expect(lerReais('R$ 1.234,56')).toBe(123456)
+    expect(lerReais(r$('R$ 1.234,56'))).toBe(123456) // colado da tela
     expect(lerReais('12.5')).toBe(1250)
     expect(lerReais('1.234')).toBe(123400)
     expect(lerReais('0,07')).toBe(7)

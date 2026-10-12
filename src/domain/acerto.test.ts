@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { calcularAcerto } from './acerto'
 import { criarComanda, type EntradaComanda } from './comanda'
 import type { Area, Comanda, Forma, Noite, Status } from './tipos'
+import { r$ } from '../teste/r$'
 
 const R = (reais: number) => reais * 100
 
@@ -153,7 +154,7 @@ describe('criarComanda', () => {
       ctx,
     )
     expect(r.ok).toBe(false)
-    if (!r.ok) expect(r.erro).toBe('As formas somam R$ 45,00, mas o total é R$ 50,00.')
+    if (!r.ok) expect(r.erro).toBe(r$('As formas somam R$ 45,00, mas o total é R$ 50,00.'))
   })
 
   it('entra em rota com a taxa da área', () => {
@@ -164,7 +165,7 @@ describe('criarComanda', () => {
 
   it('R2 total menor que a taxa é bloqueado', () => {
     const r = criarComanda(entrada({ total: R(8), pagamentos: [{ forma: 'dinheiro', valor: R(8) }] }), pontal, ctx)
-    expect(r).toEqual({ ok: false, erro: 'Total menor que a taxa da área (R$ 10,00).' })
+    expect(r).toEqual({ ok: false, erro: r$('Total menor que a taxa da área (R$ 10,00).') })
   })
 
   it('R5 troco por Pix só com parte em dinheiro', () => {

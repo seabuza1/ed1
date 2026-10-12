@@ -16,17 +16,18 @@ export default function App() {
   const [aba, setAba] = useState<Aba>('noite')
   const noites = useConsulta(async () => ordenarNoites(await repo.listarNoites()), [])
   const ajustes = useConsulta(() => repo.obterAjustes(), [])
+  const areas = useConsulta(() => repo.listarAreas(), [])
   const emFoco = noites && (noiteAberta(noites) ?? noites[0])
   const comandas = useConsulta(
     async () => (emFoco ? repo.listarComandas(emFoco.id) : []),
     [emFoco?.id],
   )
 
-  if (!noites || !ajustes || !comandas) return <p className="app discreto">Carregando…</p>
+  if (!noites || !ajustes || !areas || !comandas) return <p className="app discreto">Carregando…</p>
 
   return (
     <>
-      {aba === 'noite' && <TelaNoite noites={noites} ajustes={ajustes} comandas={comandas} />}
+      {aba === 'noite' && <TelaNoite noites={noites} ajustes={ajustes} areas={areas} comandas={comandas} />}
       {aba === 'acerto' && <TelaAcerto noite={emFoco} noites={noites} comandas={comandas} />}
       <nav className="abas">
         {ABAS.map((a) => (

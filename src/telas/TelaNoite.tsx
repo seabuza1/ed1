@@ -3,21 +3,30 @@ import { calcularAcerto } from '../domain/acerto'
 import { dataDaNoite, formatarData } from '../domain/datas'
 import { formatarReais, lerReais, paraCampo } from '../domain/dinheiro'
 import { abrirNoite, editarValoresNoite, noiteAberta, reabrirNoite } from '../domain/noite'
-import type { Ajustes, Comanda, Noite } from '../domain/tipos'
+import type { Ajustes, Area, Comanda, Noite } from '../domain/tipos'
 import { novoId } from '../data/id'
 import { repo } from '../data/repo'
 import { BarraTotais } from '../ui/BarraTotais'
 import { CampoReais } from '../ui/CampoReais'
 import { mensagemDeErro } from '../ui/erro'
+import { LancarComanda } from './LancarComanda'
+import { ListasComandas } from './ListasComandas'
 
-export function TelaNoite(props: { noites: Noite[]; ajustes: Ajustes; comandas: Comanda[] }) {
+export function TelaNoite(props: {
+  noites: Noite[]
+  ajustes: Ajustes
+  areas: Area[]
+  comandas: Comanda[]
+}) {
   const aberta = noiteAberta(props.noites)
   if (!aberta) return <AbrirNoite noites={props.noites} ajustes={props.ajustes} />
   return (
     <>
       <BarraTotais acerto={calcularAcerto(aberta, props.comandas)} />
-      <main className="app">
+      <main className="app pilha">
         <ValoresNoite noite={aberta} />
+        <LancarComanda noite={aberta} areas={props.areas} comandas={props.comandas} />
+        <ListasComandas comandas={props.comandas} areas={props.areas} />
       </main>
     </>
   )

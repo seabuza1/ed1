@@ -220,3 +220,123 @@ button.armado {
 .nowrap {
   white-space: nowrap;
 }
+
+h2 {
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+.pequeno {
+  font-size: 0.85rem;
+}
+
+.so-leitor {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.pilha-curta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cartao-form {
+  background: var(--superficie);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.cartao-form input,
+.cartao-form select {
+  background: var(--fundo);
+}
+
+.chips {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.chip {
+  min-height: 52px;
+  padding: 6px 10px;
+  background: var(--fundo);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.chip[aria-pressed='true'] {
+  background: var(--cor);
+  border-color: var(--cor);
+  color: var(--cor-texto);
+}
+
+.chip-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.chip-area small {
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+button.link {
+  align-self: flex-start;
+  background: none;
+  border: 0;
+  padding: 0 4px;
+  color: var(--cor);
+  text-decoration: underline;
+  font-weight: 600;
+}
+
+.linha-pagamento {
+  display: grid;
+  grid-template-columns: 1fr 1fr 48px;
+  gap: 8px;
+  align-items: end;
+}
+
+.linha-pagamento select {
+  width: 100%;
+  padding: 0 8px;
+  border: 1px solid var(--borda);
+}
+
+button.remover {
+  padding: 0;
+}
+
+.lista {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.resumo-comanda {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+}
+
+.codigo {
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+.comanda {
+  border: 1px solid var(--borda);
+  border-radius: 12px;
+  padding: 10px 12px;
+}

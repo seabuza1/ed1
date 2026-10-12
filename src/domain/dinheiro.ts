@@ -1,4 +1,5 @@
-// Dinheiro sempre em centavos (inteiro). Exibição: "R$ 1.234,56".
+// Dinheiro sempre em centavos (inteiro). Exibição: "R$ 1.234,56", com espaço não separável
+// (\u00a0) para o valor não quebrar de linha longe do "R$".
 
 export function formatarReais(centavos: number): string {
   const sinal = centavos < 0 ? '-' : ''
@@ -7,7 +8,7 @@ export function formatarReais(centavos: number): string {
     .toString()
     .replace(/\B(?=(\d{3})+(?!\d))/g, '.')
   const cents = (abs % 100).toString().padStart(2, '0')
-  return `${sinal}R$ ${reais},${cents}`
+  return `${sinal}R$\u00a0${reais},${cents}`
 }
 
 /** Lê o que foi digitado ("80", "80,50", "1.234,56", "R$ 12.5") em centavos; null se inválido. */

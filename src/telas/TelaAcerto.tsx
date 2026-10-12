@@ -3,6 +3,7 @@ import { calcularAcerto } from '../domain/acerto'
 import { formatarData, formatarHora } from '../domain/datas'
 import { avisoAoFechar, fecharNoite, reabrirNoite } from '../domain/noite'
 import type { Comanda, Noite } from '../domain/tipos'
+import { agora } from '../data/id'
 import { repo } from '../data/repo'
 import { BarraTotais } from '../ui/BarraTotais'
 import { BotaoConfirmar } from '../ui/BotaoConfirmar'
@@ -42,7 +43,7 @@ export function TelaAcerto(props: { noite: Noite | undefined; noites: Noite[]; c
             <BotaoConfirmar
               className="primario"
               confirmacao="Toque de novo para fechar"
-              onConfirmar={() => salvar(fecharNoite(noite, new Date().toISOString()))}
+              onConfirmar={() => salvar(fecharNoite(noite, agora()))}
             >
               Fechar a noite
             </BotaoConfirmar>
