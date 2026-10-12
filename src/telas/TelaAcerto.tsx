@@ -22,6 +22,7 @@ import { BarraTotais } from '../ui/BarraTotais'
 import { BotaoConfirmar } from '../ui/BotaoConfirmar'
 import { CampoReais } from '../ui/CampoReais'
 import { mensagemDeErro } from '../ui/erro'
+import { Icone, type NomeIcone } from '../ui/Icone'
 import { ListasComandas } from './ListasComandas'
 
 /** Acerto de uma noite. Fechada = só leitura, com Reabrir. */
@@ -36,8 +37,13 @@ export function TelaAcerto(props: {
   if (!props.noite)
     return (
       <main className="app">
-        <h1>Acerto</h1>
-        <p className="discreto">Nenhuma noite ainda.</p>
+        <div className="vazio">
+          <span className="icone-grande">
+            <Icone nome="acerto" tamanho={28} />
+          </span>
+          <strong>Nenhuma noite ainda</strong>
+          <span className="pequeno">Abra a noite na aba Noite para começar.</span>
+        </div>
       </main>
     )
   return <ConteudoAcerto key={props.noite.id} {...props} noite={props.noite} />
@@ -76,15 +82,25 @@ function ConteudoAcerto(props: {
       <BarraTotais acerto={acerto} />
       <main className="app pilha">
         {props.voltar && (
-          <button type="button" className="link" onClick={props.voltar}>
-            ← Histórico
+          <button type="button" className="link alinha-inicio" onClick={props.voltar}>
+            <Icone nome="voltar" tamanho={18} />
+            Voltar ao histórico
           </button>
         )}
-        <div>
-          <h1>Acerto de {formatarData(noite.data)}</h1>
-          <p className="discreto">
-            {leitura ? `Fechada às ${formatarHora(noite.fechadaEm!)}. Só leitura.` : 'Noite aberta.'}
-          </p>
+        <div className="topo">
+          <div>
+            <h1>Acerto de {formatarData(noite.data)}</h1>
+            <div className="pilulas">
+              {leitura ? (
+                <span className="pilula fechada">
+                  <Icone nome="cadeado" tamanho={13} />
+                  Fechada às {formatarHora(noite.fechadaEm!)} · só leitura
+                </span>
+              ) : (
+                <span className="pilula aberta">Noite aberta</span>
+              )}
+            </div>
+          </div>
         </div>
 
         <Conta acerto={acerto} />
@@ -104,6 +120,7 @@ function ConteudoAcerto(props: {
               atualizar(r.ok ? { ok: true, valor: { fechadaEm: r.valor.fechadaEm } } : r)
             }}
           >
+            <Icone nome="cadeado" tamanho={18} />
             Reabrir
           </button>
         ) : (
@@ -118,7 +135,7 @@ function ConteudoAcerto(props: {
 
         {props.voltar && (
           <section className="pilha">
-            <h2>Comandas</h2>
+            <h2 className="titulo-secao">Comandas</h2>
             <ListasComandas comandas={comandas} areas={props.areas} somenteLeitura />
           </section>
         )}
@@ -127,19 +144,34 @@ function ConteudoAcerto(props: {
   )
 }
 
+const ESTILO_LINHA: Record<string, { classe: string; icone: NomeIcone }> = {
+  Devolver: { classe: 'devolver', icone: 'dinheiro' },
+  Maquininha: { classe: 'maquininha', icone: 'cartao' },
+  Receber: { classe: 'receber', icone: 'carteira' },
+  'Pix antecipado': { classe: 'antecipado', icone: 'check' },
+}
+
 function Conta({ acerto }: { acerto: Acerto }) {
   return (
     <section className="bloco">
-      <h2>Conta</h2>
-      {detalharAcerto(acerto).map((l) => (
-        <div key={l.rotulo} className="linha-conta">
-          <div className="linha-conta-topo">
-            <span>{l.rotulo}</span>
-            <strong>{formatarReais(l.valor)}</strong>
+      <h2 className="titulo-conta">Conta</h2>
+      {detalharAcerto(acerto).map((l) => {
+        const estilo = ESTILO_LINHA[l.rotulo] ?? ESTILO_LINHA['Pix antecipado']
+        return (
+          <div key={l.rotulo} className="linha-conta">
+            <span className={`marcador ${estilo.classe}`}>
+              <Icone nome={estilo.icone} tamanho={20} />
+            </span>
+            <div>
+              <div className="linha-conta-topo">
+                <span>{l.rotulo}</span>
+                <strong>{formatarReais(l.valor)}</strong>
+              </div>
+              <p className="discreto pequeno">{l.origem}</p>
+            </div>
           </div>
-          <p className="discreto pequeno">{l.origem}</p>
-        </div>
-      ))}
+        )
+      })}
     </section>
   )
 }
@@ -189,7 +221,7 @@ function Maquininha({ comandas, leitura }: { comandas: Comanda[]; leitura: boole
                   onClick={() => alternar(i.comandaId, i.indice, i.conferido)}
                 >
                   <span className="marca" aria-hidden>
-                    {i.conferido ? '✓' : ''}
+                    {i.conferido && <Icone nome="check" tamanho={16} />}
                   </span>
                   <span className="hora">{i.hora ? formatarHora(i.hora) : 'em rota'}</span>
                   <span className="codigo">{i.codigo}</span>

@@ -7,7 +7,9 @@ export function ChipsArea(props: {
   onChange: (areaId: string) => void
 }) {
   return (
-    <div className="chips" role="group" aria-label="Área">
+    <div className="pilha-curta">
+      <span className="rotulo-grupo">Área</span>
+      <div className="chips" role="group" aria-label="Área">
       {props.areas.map((a) => (
         <button
           key={a.id}
@@ -20,6 +22,7 @@ export function ChipsArea(props: {
           <small>{formatarReais(a.taxa)}</small>
         </button>
       ))}
+      </div>
     </div>
   )
 }

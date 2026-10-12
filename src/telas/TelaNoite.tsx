@@ -9,6 +9,7 @@ import { repo } from '../data/repo'
 import { BarraTotais } from '../ui/BarraTotais'
 import { CampoReais } from '../ui/CampoReais'
 import { mensagemDeErro } from '../ui/erro'
+import { Icone } from '../ui/Icone'
 import { LancarComanda } from './LancarComanda'
 import { ListasComandas } from './ListasComandas'
 
@@ -64,10 +65,16 @@ function AbrirNoite({ noites, ajustes }: { noites: Noite[]; ajustes: Ajustes }) 
   }
 
   return (
-    <main className="app">
-      <h1>Abrir noite</h1>
+    <main className="app pilha">
+      <div className="boas-vindas">
+        <span className="icone-grande">
+          <Icone nome="noite" tamanho={28} />
+        </span>
+        <h1>Abrir noite</h1>
+        <p className="discreto">Confira a data, o caixa de troco e a diária antes de sair.</p>
+      </div>
       <form
-        className="pilha"
+        className="cartao pilha"
         onSubmit={(e) => {
           e.preventDefault()
           if (!existente) abrir()
@@ -124,38 +131,40 @@ function ValoresNoite({ noite }: { noite: Noite }) {
 
   if (!editando)
     return (
-      <section className="cabecalho-noite">
-        <div>
+      <section>
+        <div className="topo">
           <h1>Noite de {formatarData(noite.data)}</h1>
-          <p className="discreto">
-            <span className="nowrap">Caixa {formatarReais(noite.caixaInicial)}</span> ·{' '}
-            <span className="nowrap">Diária {formatarReais(noite.diaria)}</span>
-          </p>
+          <button
+            type="button"
+            className="secundario pequeno-botao"
+            onClick={() => {
+              setCaixa(paraCampo(noite.caixaInicial))
+              setDiaria(paraCampo(noite.diaria))
+              setErro(null)
+              setEditando(true)
+            }}
+          >
+            <Icone nome="lapis" tamanho={16} />
+            Editar
+          </button>
         </div>
-        <button
-          type="button"
-          className="secundario"
-          onClick={() => {
-            setCaixa(paraCampo(noite.caixaInicial))
-            setDiaria(paraCampo(noite.diaria))
-            setErro(null)
-            setEditando(true)
-          }}
-        >
-          Editar
-        </button>
+        <div className="pilulas">
+          <span className="pilula aberta">Aberta</span>
+          <span className="pilula">Caixa {formatarReais(noite.caixaInicial)}</span>
+          <span className="pilula">Diária {formatarReais(noite.diaria)}</span>
+        </div>
       </section>
     )
 
   return (
     <form
-      className="pilha"
+      className="cartao pilha"
       onSubmit={(e) => {
         e.preventDefault()
         salvar()
       }}
     >
-      <h1>Noite de {formatarData(noite.data)}</h1>
+      <h2>Noite de {formatarData(noite.data)}</h2>
       <div className="lado-a-lado">
         <CampoReais rotulo="Caixa" valor={caixa} onChange={setCaixa} />
         <CampoReais rotulo="Diária" valor={diaria} onChange={setDiaria} />

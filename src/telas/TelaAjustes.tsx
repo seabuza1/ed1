@@ -9,6 +9,7 @@ import { novoId } from '../data/id'
 import { repo } from '../data/repo'
 import { CampoReais } from '../ui/CampoReais'
 import { mensagemDeErro } from '../ui/erro'
+import { Icone } from '../ui/Icone'
 
 export function TelaAjustes(props: { areas: Area[]; ajustes: Ajustes }) {
   return (
@@ -42,7 +43,12 @@ function Areas({ areas }: { areas: Area[] }) {
 
   return (
     <section className="bloco pilha-curta">
-      <h2>Áreas e taxas</h2>
+      <h2>
+        <span className="icone-titulo">
+          <Icone nome="local" tamanho={18} />
+        </span>
+        Áreas e taxas
+      </h2>
       <p className="discreto pequeno">Mudar a taxa vale para as próximas comandas; as já lançadas não mudam.</p>
       {areas.map((a) =>
         editando === a.id ? (
@@ -155,7 +161,12 @@ function ValoresPadrao({ ajustes }: { ajustes: Ajustes }) {
 
   return (
     <section className="bloco pilha-curta">
-      <h2>Valores padrão</h2>
+      <h2>
+        <span className="icone-titulo">
+          <Icone nome="dinheiro" tamanho={18} />
+        </span>
+        Valores padrão
+      </h2>
       <p className="discreto pequeno">Preenchem o "Abrir noite". A noite aberta muda pelo "Editar" dela.</p>
       <div className="lado-a-lado">
         <CampoReais rotulo="Caixa" valor={caixa} onChange={(t) => (setCaixa(t), setMsg(null))} />
@@ -179,7 +190,12 @@ function SobreApp() {
   const [msg, setMsg] = useState<string | null>(null)
   return (
     <section className="bloco pilha-curta">
-      <h2>App</h2>
+      <h2>
+        <span className="icone-titulo">
+          <Icone nome="atualizar" tamanho={18} />
+        </span>
+        App
+      </h2>
       <p className="discreto pequeno">
         Versão {__VERSAO__} de {formatarDataHora(__COMPILADO_EM__)}. O app se atualiza sozinho ao abrir ou ao voltar
         para ele.
@@ -192,6 +208,7 @@ function SobreApp() {
           setMsg(TEXTO_ATUALIZACAO[await procurarAtualizacao()])
         }}
       >
+        <Icone nome="atualizar" tamanho={18} />
         Procurar atualização
       </button>
       {msg && <p className="discreto">{msg}</p>}

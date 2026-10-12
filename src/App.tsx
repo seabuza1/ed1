@@ -6,14 +6,15 @@ import { TelaAcerto } from './telas/TelaAcerto'
 import { TelaAjustes } from './telas/TelaAjustes'
 import { NoiteDoHistorico, TelaHistorico } from './telas/TelaHistorico'
 import { TelaNoite } from './telas/TelaNoite'
+import { Icone, type NomeIcone } from './ui/Icone'
 
 type Aba = 'noite' | 'acerto' | 'historico' | 'ajustes'
 
-const ABAS: { id: Aba; rotulo: string }[] = [
-  { id: 'noite', rotulo: 'Noite' },
-  { id: 'acerto', rotulo: 'Acerto' },
-  { id: 'historico', rotulo: 'Histórico' },
-  { id: 'ajustes', rotulo: 'Ajustes' },
+const ABAS: { id: Aba; rotulo: string; icone: NomeIcone }[] = [
+  { id: 'noite', rotulo: 'Noite', icone: 'noite' },
+  { id: 'acerto', rotulo: 'Acerto', icone: 'acerto' },
+  { id: 'historico', rotulo: 'Histórico', icone: 'historico' },
+  { id: 'ajustes', rotulo: 'Ajustes', icone: 'ajustes' },
 ]
 
 export default function App() {
@@ -30,7 +31,7 @@ export default function App() {
 
   const noiteHistorico = noites?.find((n) => n.id === idHistorico)
 
-  if (!noites || !ajustes || !areas || !comandas) return <p className="app discreto">Carregando…</p>
+  if (!noites || !ajustes || !areas || !comandas) return <p className="carregando">Carregando…</p>
 
   return (
     <>
@@ -60,6 +61,9 @@ export default function App() {
               window.scrollTo(0, 0)
             }}
           >
+            <span className="pilula-icone">
+              <Icone nome={a.icone} tamanho={22} />
+            </span>
             {a.rotulo}
           </button>
         ))}

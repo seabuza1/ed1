@@ -20,6 +20,7 @@ export function EditorPagamento(props: {
 
   return (
     <div className="pilha-curta">
+      <span className="rotulo-grupo">{estado.dividido ? 'Pagou de mais de um jeito' : 'Forma de pagamento'}</span>
       {!estado.dividido ? (
         <>
           <div className="chips" role="group" aria-label="Forma de pagamento">

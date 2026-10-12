@@ -1,11 +1,12 @@
 import { useState, type ReactNode } from 'react'
-import { descreverPagamentos, marcarEntregue, marcarVoltou, saiuDeNovo, separarPorStatus } from '../domain/comanda'
+import { marcarEntregue, marcarVoltou, NOMES_FORMA, saiuDeNovo, separarPorStatus } from '../domain/comanda'
 import { formatarHora } from '../domain/datas'
 import { formatarReais } from '../domain/dinheiro'
 import type { Area, Comanda } from '../domain/tipos'
 import { agora, novoId } from '../data/id'
 import { repo } from '../data/repo'
 import { mensagemDeErro } from '../ui/erro'
+import { Icone } from '../ui/Icone'
 import { EditarComanda, TrocarForma } from './EditarComanda'
 
 type Aberta = { id: string; modo: 'editar' | 'trocar' } | null
@@ -30,7 +31,7 @@ export function ListasComandas(props: { comandas: Comanda[]; areas: Area[]; some
     const modo = aberta?.id === c.id ? aberta.modo : null
     const alternar = (m: 'editar' | 'trocar') => setAberta(modo === m ? null : { id: c.id, modo: m })
     return (
-      <article key={c.id} className="comanda">
+      <article key={c.id} className={`comanda status-${c.status}`}>
         {props.somenteLeitura ? (
           <ResumoComanda comanda={c} area={area?.nome ?? '—'} />
         ) : (
@@ -41,12 +42,15 @@ export function ListasComandas(props: { comandas: Comanda[]; areas: Area[]; some
         {!props.somenteLeitura && modo === null && c.status === 'em_rota' && (
           <div className="acoes">
             <button type="button" className="ok" onClick={() => gravar(marcarEntregue(c, agora()))}>
+              <Icone nome="check" tamanho={18} />
               Entregue
             </button>
             <button type="button" onClick={() => alternar('trocar')}>
+              <Icone nome="trocar" tamanho={16} />
               Trocou a forma
             </button>
             <button type="button" onClick={() => gravar(marcarVoltou(c, agora()))}>
+              <Icone nome="voltou" tamanho={16} />
               Voltou
             </button>
           </div>
@@ -61,6 +65,7 @@ export function ListasComandas(props: { comandas: Comanda[]; areas: Area[]; some
               gravar(r.valor)
             }}
           >
+            <Icone nome="denovo" tamanho={18} />
             Saiu de novo
           </button>
         )}
@@ -78,7 +83,15 @@ export function ListasComandas(props: { comandas: Comanda[]; areas: Area[]; some
       <Lista titulo="Em rota" comandas={emRota} cartao={cartao} />
       <Lista titulo="Entregues" comandas={entregues} cartao={cartao} />
       <Lista titulo="Voltaram" comandas={voltaram} cartao={cartao} />
-      {props.comandas.length === 0 && <p className="discreto">Nenhuma comanda lançada.</p>}
+      {props.comandas.length === 0 && (
+        <div className="vazio">
+          <span className="icone-grande">
+            <Icone nome="moto" tamanho={28} />
+          </span>
+          <strong>Nenhuma comanda ainda</strong>
+          {!props.somenteLeitura && <span className="pequeno">Lance a comanda quando sair para a entrega.</span>}
+        </div>
+      )}
     </>
   )
 }
@@ -87,8 +100,8 @@ function Lista(props: { titulo: string; comandas: Comanda[]; cartao: (c: Comanda
   if (props.comandas.length === 0) return null
   return (
     <section className="lista">
-      <h2>
-        {props.titulo} <span className="discreto">({props.comandas.length})</span>
+      <h2 className="titulo-secao">
+        {props.titulo} <span className="contador">{props.comandas.length}</span>
       </h2>
       {props.comandas.map(props.cartao)}
     </section>
@@ -97,17 +110,29 @@ function Lista(props: { titulo: string; comandas: Comanda[]; cartao: (c: Comanda
 
 export function ResumoComanda({ comanda: c, area }: { comanda: Comanda; area: string }) {
   return (
-    <div className="resumo-comanda">
-      <div>
+    <span className="resumo-comanda">
+      <span className="resumo-linha">
         <strong className="codigo">{c.codigo}</strong>
-        <span className="discreto"> · {area}</span>
-        <div className="discreto pequeno">
-          {descreverPagamentos(c.pagamentos)}
-          {c.troco > 0 && ` · troco por Pix ${formatarReais(c.troco)}`}
-          {c.finalizadaEm && ` · ${c.status === 'voltou' ? 'voltou' : 'entregue'} ${formatarHora(c.finalizadaEm)}`}
-        </div>
-      </div>
-      <strong className="nowrap">{formatarReais(c.total)}</strong>
-    </div>
+        <strong className="valor">{formatarReais(c.total)}</strong>
+      </span>
+      <span className="etiquetas">
+        <span className="etiqueta">
+          <Icone nome="local" tamanho={13} />
+          {area}
+        </span>
+        {c.pagamentos.map((p, i) => (
+          <span key={i} className={`etiqueta forma-${p.forma}`}>
+            {NOMES_FORMA[p.forma]}
+            {c.pagamentos.length > 1 && ` ${formatarReais(p.valor)}`}
+          </span>
+        ))}
+        {c.troco > 0 && <span className="etiqueta">troco por Pix {formatarReais(c.troco)}</span>}
+        {c.finalizadaEm && (
+          <span className="etiqueta hora">
+            {c.status === 'voltou' ? 'voltou' : 'entregue'} {formatarHora(c.finalizadaEm)}
+          </span>
+        )}
+      </span>
+    </span>
   )
 }

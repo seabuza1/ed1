@@ -8,6 +8,7 @@ import { CampoReais } from '../ui/CampoReais'
 import { ChipsArea } from '../ui/ChipsArea'
 import { EditorPagamento } from '../ui/EditorPagamento'
 import { mensagemDeErro } from '../ui/erro'
+import { Icone } from '../ui/Icone'
 import { lerPagamento, pagamentoVazio } from '../ui/pagamento'
 
 const STATUS: Record<Comanda['status'], string> = {
@@ -73,14 +74,20 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
   if (!aberto)
     return (
       <button type="button" className="primario" onClick={() => setAberto(true)}>
-        + Lançar comanda
+        <Icone nome="mais" tamanho={22} />
+        Lançar comanda
       </button>
     )
 
   return (
     <section className="pilha cartao-form">
       <div className="titulo-form">
-        <h2>Lançar comanda</h2>
+        <h2>
+          <span className="icone-titulo">
+            <Icone nome="mais" tamanho={18} />
+          </span>
+          Lançar comanda
+        </h2>
         <button type="button" className="link" onClick={() => setAberto(false)}>
           Recolher
         </button>
@@ -90,6 +97,7 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
           <span>Código</span>
           <input
             ref={refCodigo}
+            className="codigo-campo"
             inputMode="numeric"
             enterKeyHint="next"
             autoComplete="off"

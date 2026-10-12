@@ -34,8 +34,8 @@ export default defineConfig({
         start_url: '/',
         display: 'standalone',
         orientation: 'portrait',
-        theme_color: '#b91c1c',
-        background_color: '#ffffff',
+        theme_color: '#f3f3f5',
+        background_color: '#f3f3f5',
         icons: [
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
@@ -43,7 +43,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,webmanifest,woff2}'],
         // Versão nova assume na hora (sem esperar fechar o app); a página recarrega sozinha.
         skipWaiting: true,
         clientsClaim: true,

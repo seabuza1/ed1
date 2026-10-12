@@ -26,3 +26,16 @@ export function formatarDataHora(instante: string): string {
   const d = new Date(instante)
   return `${formatarData(iso(d))} às ${formatarHora(instante)}`
 }
+
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+const SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
+
+/** "2026-10-12" → { dia: '12', mes: 'out', semana: 'seg' } para o cartão do histórico. */
+export function partesData(data: string): { dia: string; mes: string; semana: string } {
+  const [a, m, d] = data.split('-').map(Number)
+  return {
+    dia: String(d).padStart(2, '0'),
+    mes: MESES[m - 1],
+    semana: SEMANA[new Date(a, m - 1, d).getDay()],
+  }
+}
