@@ -70,6 +70,7 @@ export function criarComanda(
       pagamentos: entrada.pagamentos.map((p) => ({ ...p })),
       criadaEm: ctx.agora,
       atualizadaEm: ctx.agora,
+      finalizadaEm: null,
     },
   }
 }
@@ -96,11 +97,12 @@ export function montarPagamentos(total: number, linhas: LinhaPagamento[]): Resul
 export const comandaRepetida = (codigo: string, comandas: Comanda[], ignorarId?: string) =>
   comandas.find((c) => c.codigo === codigo && c.status !== 'voltou' && c.id !== ignorarId)
 
-/** Em rota na ordem de lançamento; entregues e voltaram, a mais recente primeiro. */
+/** Em rota na ordem de lançamento; entregues e voltaram, a última entrega primeiro. */
 export function separarPorStatus(comandas: Comanda[]) {
   const porCriacao = [...comandas].sort((a, b) => a.criadaEm.localeCompare(b.criadaEm))
+  const hora = (c: Comanda) => c.finalizadaEm ?? c.atualizadaEm
   const recentes = (s: Comanda['status']) =>
-    porCriacao.filter((c) => c.status === s).sort((a, b) => b.atualizadaEm.localeCompare(a.atualizadaEm))
+    porCriacao.filter((c) => c.status === s).sort((a, b) => hora(b).localeCompare(hora(a)))
   return {
     emRota: porCriacao.filter((c) => c.status === 'em_rota'),
     entregues: recentes('entregue'),
@@ -120,12 +122,14 @@ export const marcarEntregue = (c: Comanda, agora: string): Comanda => ({
   ...c,
   status: 'entregue',
   atualizadaEm: agora,
+  finalizadaEm: agora,
 })
 
 export const marcarVoltou = (c: Comanda, agora: string): Comanda => ({
   ...c,
   status: 'voltou',
   atualizadaEm: agora,
+  finalizadaEm: agora,
 })
 
 /** "Trocou a forma": grava os novos pagamentos e marca entregue. */
@@ -144,6 +148,7 @@ export function trocarForma(
       troco: pagamento.troco,
       status: 'entregue',
       atualizadaEm: agora,
+      finalizadaEm: agora,
     },
   }
 }
@@ -165,9 +170,10 @@ export function saiuDeNovo(
       id: ctx.id,
       taxa,
       status: 'em_rota',
-      pagamentos: c.pagamentos.map((p) => ({ ...p })),
+      pagamentos: c.pagamentos.map((p) => ({ forma: p.forma, valor: p.valor })),
       criadaEm: ctx.agora,
       atualizadaEm: ctx.agora,
+      finalizadaEm: null,
     },
   }
 }
@@ -183,18 +189,49 @@ export function editarComanda(
   const taxa = area.id === c.areaId ? c.taxa : area.taxa
   const erro = validarComanda(entrada, taxa)
   if (erro) return { ok: false, erro }
+  // Hora da entrega: some se voltar para "em rota"; nasce agora se sair dele.
+  const finalizadaEm = status === 'em_rota' ? null : (c.finalizadaEm ?? agora)
+  // Parte igual à de antes (mesma forma e valor) continua conferida.
+  const pagamentos = entrada.pagamentos.map((p, i) => {
+    const antes = c.pagamentos[i]
+    const igual = antes && antes.forma === p.forma && antes.valor === p.valor
+    return igual && antes.conferido
+      ? { forma: p.forma, valor: p.valor, conferido: true }
+      : { forma: p.forma, valor: p.valor }
+  })
   return {
     ok: true,
     valor: {
       ...c,
       codigo: entrada.codigo,
       total: entrada.total,
-      pagamentos: entrada.pagamentos.map((p) => ({ ...p })),
+      pagamentos,
       troco: entrada.troco,
       areaId: area.id,
       taxa,
       status,
       atualizadaEm: agora,
+      finalizadaEm,
     },
   }
 }
+
+/** Marca ou desmarca o comprovante de uma parte (cartão ou Pix na máquina) como conferido. */
+export function marcarConferido(c: Comanda, indice: number, conferido: boolean, agora: string): Comanda {
+  return {
+    ...c,
+    pagamentos: c.pagamentos.map((p, i) => (i === indice ? { ...p, conferido } : p)),
+    atualizadaEm: agora,
+  }
+}
+
+/**
+ * Comanda gravada antes de existir a hora da entrega (banco antigo ou backup antigo):
+ * a última atualização é o melhor palpite para as entregues e as que voltaram.
+ */
+export const comHoraDeEntrega = (
+  c: Omit<Comanda, 'finalizadaEm'> & { finalizadaEm?: string | null },
+): Comanda => ({
+  ...c,
+  finalizadaEm: c.finalizadaEm !== undefined ? c.finalizadaEm : c.status === 'em_rota' ? null : c.atualizadaEm,
+})

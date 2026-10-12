@@ -444,19 +444,6 @@ button.perigo.armado {
   white-space: nowrap;
 }
 
-.tabela {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.tabela td {
-  padding: 8px 4px;
-  border-top: 1px solid var(--borda);
-}
-
-.tabela tr:first-child td {
-  border-top: 0;
-}
 
 .direita {
   text-align: right;
@@ -612,5 +599,58 @@ h2.subtitulo {
 }
 
 .abas button {
+  font-size: 0.9rem;
+}
+
+.grupo-maquininha {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 6px;
+}
+
+.grupo-maquininha + .grupo-maquininha {
+  border-top: 1px solid var(--borda);
+  margin-top: 4px;
+  padding-top: 10px;
+}
+
+button.item-maquininha {
+  display: grid;
+  grid-template-columns: 32px 66px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 10px;
+  background: var(--fundo);
+  text-align: left;
+}
+
+button.item-maquininha .marca {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--borda);
+  border-radius: 6px;
+  font-weight: 700;
+}
+
+button.item-maquininha[aria-pressed='true'] {
+  border-color: #15803d;
+}
+
+button.item-maquininha[aria-pressed='true'] .marca {
+  background: #15803d;
+  border-color: #15803d;
+  color: #fff;
+}
+
+button.item-maquininha .hora {
+  font-variant-numeric: tabular-nums;
+  color: var(--discreto);
+  white-space: nowrap;
   font-size: 0.9rem;
 }

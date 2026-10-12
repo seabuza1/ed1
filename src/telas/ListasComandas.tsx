@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { descreverPagamentos, marcarEntregue, marcarVoltou, saiuDeNovo, separarPorStatus } from '../domain/comanda'
+import { formatarHora } from '../domain/datas'
 import { formatarReais } from '../domain/dinheiro'
 import type { Area, Comanda } from '../domain/tipos'
 import { agora, novoId } from '../data/id'
@@ -103,6 +104,7 @@ export function ResumoComanda({ comanda: c, area }: { comanda: Comanda; area: st
         <div className="discreto pequeno">
           {descreverPagamentos(c.pagamentos)}
           {c.troco > 0 && ` · troco por Pix ${formatarReais(c.troco)}`}
+          {c.finalizadaEm && ` · ${c.status === 'voltou' ? 'voltou' : 'entregue'} ${formatarHora(c.finalizadaEm)}`}
         </div>
       </div>
       <strong className="nowrap">{formatarReais(c.total)}</strong>

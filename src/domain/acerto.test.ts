@@ -6,13 +6,16 @@ import {
   diferencaLuan,
   itensMaquininha,
   registrarContado,
+  resumoMaquininha,
   registrarLuan,
   seloLuan,
   tipoDiferenca,
 } from './acerto'
 import {
+  comHoraDeEntrega,
   criarComanda,
   editarComanda,
+  marcarConferido,
   marcarEntregue,
   marcarVoltou,
   saiuDeNovo,
@@ -324,5 +327,95 @@ describe('tela de acerto', () => {
     expect(registrarLuan(noiteCompleta(), dados)).toEqual({ ok: true, valor: { ...dados, obs: '' } })
     expect(registrarLuan(noiteCompleta(), { ...dados, minutosAcerto: 1.5 }).ok).toBe(false)
     expect(registrarLuan(noiteCompleta({ fechadaEm: 'x' }), dados).ok).toBe(false)
+  })
+})
+
+describe('hora da entrega e comprovantes da maquininha', () => {
+  const ctx = (id: string, agora: string) => ({ id, noiteId: 'n1', agora })
+  const areas = areasPadrao()
+  const nova = (codigo: string, total: number, pag: [Forma, number][], criada: string) => {
+    const r = criarComanda(
+      { codigo, total: R(total), pagamentos: pag.map(([forma, valor]) => ({ forma, valor: R(valor) })), troco: 0 },
+      areas[1],
+      ctx(codigo, criada),
+    )
+    if (!r.ok) throw new Error(r.erro)
+    return r.valor
+  }
+
+  it('grava a hora ao marcar entregue, trocar a forma ou voltar', () => {
+    const c = nova('1111', 50, [['cartao', 50]], '20:00')
+    expect(c.finalizadaEm).toBeNull()
+    expect(marcarEntregue(c, '21:41').finalizadaEm).toBe('21:41')
+    expect(marcarVoltou(c, '21:50').finalizadaEm).toBe('21:50')
+    const t = trocarForma(c, { pagamentos: [{ forma: 'pix_maquina', valor: R(50) }], troco: 0 }, '21:55')
+    expect(t.ok && t.valor.finalizadaEm).toBe('21:55')
+    const s = saiuDeNovo({ ...marcarVoltou(c, '21:50'), pagamentos: [{ forma: 'cartao', valor: R(50), conferido: true }] }, areas[1], ctx('x', '22:00'))
+    expect(s.ok && [s.valor.finalizadaEm, s.valor.pagamentos[0].conferido]).toEqual([null, undefined])
+  })
+
+  it('editar: a hora some ao voltar para em rota e é mantida se já entregue', () => {
+    const c = marcarEntregue(nova('1111', 50, [['cartao', 50]], '20:00'), '21:41')
+    const entrada = { codigo: '1111', total: R(50), pagamentos: [{ forma: 'cartao' as const, valor: R(50) }], troco: 0 }
+    const mantem = editarComanda(c, entrada, areas[1], 'entregue', '23:00')
+    expect(mantem.ok && mantem.valor.finalizadaEm).toBe('21:41')
+    const emRota = editarComanda(c, entrada, areas[1], 'em_rota', '23:00')
+    expect(emRota.ok && emRota.valor.finalizadaEm).toBeNull()
+    const deRota = editarComanda(nova('2222', 50, [['cartao', 50]], '20:00'), entrada, areas[1], 'entregue', '23:00')
+    expect(deRota.ok && deRota.valor.finalizadaEm).toBe('23:00')
+  })
+
+  it('conferido: marca, desmarca e só continua se a parte não mudou na edição', () => {
+    const c = marcarEntregue(nova('1111', 50, [['cartao', 20], ['pix_maquina', 30]], '20:00'), '21:41')
+    const marcada = marcarConferido(marcarConferido(c, 0, true, '23:00'), 1, true, '23:00')
+    expect(marcada.pagamentos.map((p) => p.conferido)).toEqual([true, true])
+    expect(marcarConferido(marcada, 0, false, '23:01').pagamentos[0].conferido).toBe(false)
+    const editada = editarComanda(
+      marcada,
+      { codigo: '1111', total: R(50), pagamentos: [{ forma: 'cartao', valor: R(20) }, { forma: 'pix_maquina', valor: R(30) }], troco: 0 },
+      areas[1],
+      'entregue',
+      '23:02',
+    )
+    expect(editada.ok && editada.valor.pagamentos.map((p) => p.conferido)).toEqual([true, true])
+    const mudou = editarComanda(
+      marcada,
+      { codigo: '1111', total: R(50), pagamentos: [{ forma: 'cartao', valor: R(25) }, { forma: 'pix_maquina', valor: R(25) }], troco: 0 },
+      areas[1],
+      'entregue',
+      '23:02',
+    )
+    expect(mudou.ok && mudou.valor.pagamentos.map((p) => p.conferido)).toEqual([undefined, undefined])
+  })
+
+  it('lista em ordem de horário, separada por forma, com totais e o que falta conferir', () => {
+    const a = marcarEntregue(nova('0910', 72, [['pix_maquina', 72]], '20:00'), '2026-10-12T21:55')
+    const b = marcarConferido(marcarEntregue(nova('2672', 90, [['cartao', 90]], '20:01'), '2026-10-12T21:41'), 0, true, 'x')
+    const c = marcarEntregue(nova('1111', 40, [['cartao', 15], ['dinheiro', 25]], '20:02'), '2026-10-12T21:30')
+    const emRota = nova('2222', 30, [['cartao', 30]], '2026-10-12T20:03')
+    const voltou = marcarVoltou(nova('3333', 30, [['cartao', 30]], '20:04'), '2026-10-12T21:00')
+
+    const itens = itensMaquininha([a, b, c, emRota, voltou])
+    expect(itens.map((i) => [i.codigo, i.hora])).toEqual([
+      ['1111', '2026-10-12T21:30'],
+      ['2672', '2026-10-12T21:41'],
+      ['0910', '2026-10-12T21:55'],
+      ['2222', null],
+    ])
+
+    const r = resumoMaquininha([a, b, c, emRota, voltou])
+    expect(r.grupos.map((g) => [g.nome, g.itens.map((i) => i.codigo), g.total, g.conferidos])).toEqual([
+      ['Cartão', ['1111', '2672', '2222'], R(15 + 90 + 30), 1],
+      ['Pix na máquina', ['0910'], R(72), 0],
+    ])
+    expect(r.faltamConferir).toBe(3)
+    expect(resumoMaquininha([]).grupos).toEqual([])
+  })
+
+  it('comanda antiga sem hora: usa a última atualização (em rota fica sem hora)', () => {
+    const { finalizadaEm: _, ...antiga } = marcarEntregue(nova('1111', 50, [['cartao', 50]], '20:00'), '21:41')
+    expect(comHoraDeEntrega(antiga).finalizadaEm).toBe('21:41')
+    const { finalizadaEm: __, ...antigaEmRota } = nova('2222', 50, [['cartao', 50]], '20:00')
+    expect(comHoraDeEntrega(antigaEmRota).finalizadaEm).toBeNull()
   })
 })

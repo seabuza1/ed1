@@ -91,7 +91,7 @@ Noite base:
    - Listas "Entregues" e "Voltaram". Tocar abre editar ou excluir (excluir com dois toques). Comanda que voltou tem a ação **Saiu de novo**, que cria a cópia em rota.
 2. **Acerto**
    - Conta detalhada, mostrando de onde vem cada número (ex.: "80 de caixa + 160 em dinheiro + 3 de troco por Pix").
-   - Lista do que a maquininha deve mostrar (código, forma, valor), para bater com o relatório.
+   - Lista do que a maquininha deve mostrar (hora da entrega, código, forma, valor), separada em cartão e Pix na máquina com o total de cada, em ordem de horário, para bater com o relatório. Cada linha é marcada como conferida quando o comprovante impresso é achado.
    - Dinheiro contado: bate, falta ou sobra; quanto receber; quanto completar.
    - Comparação com o Luan: "Quanto o Luan te pagou", "Falta ou sobra que o Luan achou", tempo do acerto em minutos e observação. Mostrar se bateu com o app.
    - Fechar a noite (avisa se há comanda em rota). Noite fechada fica só para leitura, com botão "Reabrir".
@@ -118,7 +118,7 @@ interface Noite {
   obs: string
 }
 
-interface Pagamento { forma: Forma; valor: number }
+interface Pagamento { forma: Forma; valor: number; conferido?: boolean }  // comprovante conferido no acerto
 
 interface Comanda {
   id: string; noiteId: string; codigo: string
@@ -126,6 +126,7 @@ interface Comanda {
   status: Status; troco: number
   pagamentos: Pagamento[]
   criadaEm: string; atualizadaEm: string
+  finalizadaEm: string | null         // hora em que foi marcada entregue (ou voltou)
 }
 ```
 Na versão com Supabase entram `motoboy_id` em `noites` e uma tabela `pagamentos`.

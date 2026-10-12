@@ -4,14 +4,14 @@ import {
   compararComLuan,
   detalharAcerto,
   diferencaLuan,
-  itensMaquininha,
   registrarContado,
   registrarLuan,
+  resumoMaquininha,
   tipoDiferenca,
   type Acerto,
   type TipoDiferenca,
 } from '../domain/acerto'
-import type { Resultado } from '../domain/comanda'
+import { marcarConferido, type Resultado } from '../domain/comanda'
 import { formatarData, formatarHora } from '../domain/datas'
 import { formatarReais, lerReais, paraCampo } from '../domain/dinheiro'
 import { avisoAoFechar, fecharNoite, reabrirNoite } from '../domain/noite'
@@ -89,7 +89,7 @@ function ConteudoAcerto(props: {
 
         <Conta acerto={acerto} />
         {aviso && <p className="aviso">{aviso}</p>}
-        <Maquininha comandas={comandas} />
+        <Maquininha comandas={comandas} leitura={leitura} />
         <Conferencia noite={noite} acerto={acerto} leitura={leitura} atualizar={atualizar} />
         <ComparacaoLuan noite={noite} acerto={acerto} leitura={leitura} atualizar={atualizar} />
 
@@ -144,26 +144,68 @@ function Conta({ acerto }: { acerto: Acerto }) {
   )
 }
 
-function Maquininha({ comandas }: { comandas: Comanda[] }) {
-  const itens = itensMaquininha(comandas)
+/** O que o relatório da maquininha deve mostrar; tocar numa linha marca o comprovante como conferido. */
+function Maquininha({ comandas, leitura }: { comandas: Comanda[]; leitura: boolean }) {
+  const { grupos, faltamConferir } = resumoMaquininha(comandas)
+  const [erro, setErro] = useState<string | null>(null)
+
+  async function alternar(comandaId: string, indice: number, conferido: boolean) {
+    const c = comandas.find((x) => x.id === comandaId)
+    if (!c) return
+    try {
+      await repo.salvarComanda(marcarConferido(c, indice, !conferido, agora()))
+      setErro(null)
+    } catch (e) {
+      setErro(mensagemDeErro(e))
+    }
+  }
+
   return (
-    <section className="bloco">
+    <section className="bloco pilha-curta">
       <h2>A maquininha deve mostrar</h2>
-      {itens.length === 0 ? (
+      {grupos.length === 0 ? (
         <p className="discreto">Nada na maquininha.</p>
       ) : (
-        <table className="tabela">
-          <tbody>
-            {itens.map((i, n) => (
-              <tr key={n}>
-                <td className="codigo">{i.codigo}</td>
-                <td>{i.nomeForma}</td>
-                <td className="nowrap direita">{formatarReais(i.valor)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <>
+          {!leitura && <p className="discreto pequeno">Toque na linha quando achar o comprovante.</p>}
+          {grupos.map((g) => (
+            <div key={g.forma} className="grupo-maquininha">
+              <div className="linha-conta-topo">
+                <strong>{g.nome}</strong>
+                <span>
+                  <span className="discreto pequeno">
+                    {g.conferidos} de {g.itens.length} ·{' '}
+                  </span>
+                  <strong>{formatarReais(g.total)}</strong>
+                </span>
+              </div>
+              {g.itens.map((i) => (
+                <button
+                  key={`${i.comandaId}-${i.indice}`}
+                  type="button"
+                  className="item-maquininha"
+                  aria-pressed={i.conferido}
+                  disabled={leitura}
+                  onClick={() => alternar(i.comandaId, i.indice, i.conferido)}
+                >
+                  <span className="marca" aria-hidden>
+                    {i.conferido ? '✓' : ''}
+                  </span>
+                  <span className="hora">{i.hora ? formatarHora(i.hora) : 'em rota'}</span>
+                  <span className="codigo">{i.codigo}</span>
+                  <span className="nowrap direita">{formatarReais(i.valor)}</span>
+                </button>
+              ))}
+            </div>
+          ))}
+          <p className={faltamConferir === 0 ? 'sucesso' : 'discreto'}>
+            {faltamConferir === 0
+              ? 'Todos os comprovantes conferidos.'
+              : `Falta conferir ${faltamConferir} ${faltamConferir === 1 ? 'comprovante' : 'comprovantes'}.`}
+          </p>
+        </>
       )}
+      {erro && <p className="erro">{erro}</p>}
     </section>
   )
 }

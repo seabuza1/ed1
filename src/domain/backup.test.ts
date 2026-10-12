@@ -11,7 +11,7 @@ const noite = (id: string, data: string, extra: Partial<Noite> = {}): Noite => (
 })
 const comanda = (id: string, noiteId: string, extra: Partial<Comanda> = {}): Comanda => ({
   id, noiteId, codigo: '1234', total: 5000, areaId: 'a1', taxa: 1000, status: 'entregue', troco: 0,
-  pagamentos: [{ forma: 'dinheiro', valor: 5000 }], criadaEm: 'x', atualizadaEm: 'x', ...extra,
+  pagamentos: [{ forma: 'dinheiro', valor: 5000 }], criadaEm: 'x', atualizadaEm: 'x', finalizadaEm: 'x', ...extra,
 })
 const dados = (): Dados => ({
   noites: [noite('n1', '2026-10-11'), noite('n2', '2026-10-12', { fechadaEm: null })],
@@ -25,6 +25,14 @@ describe('backup', () => {
     const b = montarBackup(dados(), '2026-10-12T23:59:00Z')
     expect(lerBackup(JSON.stringify(b))).toEqual({ ok: true, valor: b })
     expect(resumoBackup(b)).toBe('2 noites, 2 comandas, 1 área')
+  })
+
+  it('aceita backup antigo, sem a hora da entrega', () => {
+    const b = montarBackup(dados(), 'x')
+    const antigo = JSON.parse(JSON.stringify(b))
+    for (const c of antigo.comandas) delete c.finalizadaEm
+    const r = lerBackup(JSON.stringify(antigo))
+    expect(r.ok && r.valor.comandas.map((c) => c.finalizadaEm)).toEqual(['x', 'x']) // = atualizadaEm
   })
 
   it('nome do arquivo com data e hora', () => {

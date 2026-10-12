@@ -139,22 +139,70 @@ export function detalharAcerto(a: Acerto): LinhaConta[] {
 }
 
 export interface ItemMaquininha {
+  comandaId: string
+  indice: number // qual parte do pagamento da comanda
   codigo: string
   forma: Forma
   nomeForma: string
   valor: number
+  hora: string | null // quando foi entregue; null se ainda em rota
+  conferido: boolean
 }
 
-/** O que o relatório da maquininha deve mostrar: cartão e Pix na máquina das entregues. */
+/** Cartão e Pix na máquina das entregues, em ordem de horário (em rota no fim). */
 export function itensMaquininha(comandas: Comanda[]): ItemMaquininha[] {
+  const chave = (c: Comanda) => [c.finalizadaEm === null ? 1 : 0, c.finalizadaEm ?? c.criadaEm] as const
   return [...comandas]
     .filter((c) => c.status !== 'voltou')
-    .sort((a, b) => a.criadaEm.localeCompare(b.criadaEm))
+    .sort((a, b) => {
+      const [ea, ha] = chave(a)
+      const [eb, hb] = chave(b)
+      return ea - eb || ha.localeCompare(hb)
+    })
     .flatMap((c) =>
-      c.pagamentos
-        .filter((p) => p.forma === 'cartao' || p.forma === 'pix_maquina')
-        .map((p) => ({ codigo: c.codigo, forma: p.forma, nomeForma: NOMES_FORMA[p.forma], valor: p.valor })),
+      c.pagamentos.flatMap((p, indice) =>
+        p.forma === 'cartao' || p.forma === 'pix_maquina'
+          ? [
+              {
+                comandaId: c.id,
+                indice,
+                codigo: c.codigo,
+                forma: p.forma,
+                nomeForma: NOMES_FORMA[p.forma],
+                valor: p.valor,
+                hora: c.finalizadaEm,
+                conferido: p.conferido === true,
+              },
+            ]
+          : [],
+      ),
     )
+}
+
+export interface GrupoMaquininha {
+  forma: Forma
+  nome: string
+  itens: ItemMaquininha[]
+  total: number
+  conferidos: number
+}
+
+/** Como o relatório da maquininha: cartão e Pix separados, com total e quantos já foram conferidos. */
+export function resumoMaquininha(comandas: Comanda[]) {
+  const itens = itensMaquininha(comandas)
+  const grupos: GrupoMaquininha[] = (['cartao', 'pix_maquina'] as const)
+    .map((forma) => {
+      const doGrupo = itens.filter((i) => i.forma === forma)
+      return {
+        forma,
+        nome: NOMES_FORMA[forma],
+        itens: doGrupo,
+        total: doGrupo.reduce((s, i) => s + i.valor, 0),
+        conferidos: doGrupo.filter((i) => i.conferido).length,
+      }
+    })
+    .filter((g) => g.itens.length > 0)
+  return { grupos, faltamConferir: itens.filter((i) => !i.conferido).length }
 }
 
 // Conferência e acerto com o Luan. Só com a noite aberta; devolvem só os campos que mudam.

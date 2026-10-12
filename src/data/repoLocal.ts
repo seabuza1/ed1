@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie'
+import { comHoraDeEntrega } from '../domain/comanda'
 import { AJUSTES_PADRAO, AREAS_PADRAO } from '../domain/padroes'
 import type { Ajustes, Area, Comanda, Noite } from '../domain/tipos'
 import { novoId } from './id'
@@ -13,12 +14,19 @@ type Banco = Dexie & {
 
 export function criarRepoLocal(nome: string): Repo {
   const db = new Dexie(nome) as Banco
-  db.version(1).stores({
-    noites: 'id, data',
-    comandas: 'id, noiteId',
-    areas: 'id',
-    ajustes: 'id',
-  })
+  const tabelas = { noites: 'id, data', comandas: 'id, noiteId', areas: 'id', ajustes: 'id' }
+  db.version(1).stores(tabelas)
+  // v2: hora da entrega (finalizadaEm) nas comandas já gravadas.
+  db.version(2)
+    .stores(tabelas)
+    .upgrade((tx) =>
+      tx
+        .table('comandas')
+        .toCollection()
+        .modify((c: Comanda) => {
+          c.finalizadaEm = comHoraDeEntrega(c).finalizadaEm
+        }),
+    )
   // Primeira abertura: áreas e valores padrão.
   db.on('populate', async (tx) => {
     await tx.table('areas').bulkAdd(AREAS_PADRAO.map((a) => ({ id: novoId(), ...a, ativa: true })))

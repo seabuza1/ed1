@@ -27,6 +27,8 @@ export interface Noite {
 export interface Pagamento {
   forma: Forma
   valor: number
+  /** Comprovante da maquininha conferido no acerto (cartão e Pix na máquina). */
+  conferido?: boolean
 }
 
 export interface Comanda {
@@ -41,6 +43,8 @@ export interface Comanda {
   pagamentos: Pagamento[]
   criadaEm: string
   atualizadaEm: string
+  /** Quando foi marcada entregue (ou voltou): o horário que bate com o comprovante. */
+  finalizadaEm: string | null
 }
 
 export interface Ajustes {

@@ -1,5 +1,4 @@
-import type { Resultado } from './comanda'
-import { FORMAS } from './comanda'
+import { comHoraDeEntrega, FORMAS, type Resultado } from './comanda'
 import type { Ajustes, Area, Comanda, Noite } from './tipos'
 
 export interface Dados {
@@ -67,9 +66,16 @@ const comandaValida = (c: unknown): c is Comanda =>
   ['em_rota', 'entregue', 'voltou'].includes(c.status as string) &&
   ehCentavos(c.troco) &&
   Array.isArray(c.pagamentos) &&
-  c.pagamentos.every((p) => ehObj(p) && FORMAS.includes(p.forma as never) && ehCentavos(p.valor)) &&
+  c.pagamentos.every(
+    (p) =>
+      ehObj(p) &&
+      FORMAS.includes(p.forma as never) &&
+      ehCentavos(p.valor) &&
+      (p.conferido === undefined || typeof p.conferido === 'boolean'),
+  ) &&
   ehTexto(c.criadaEm) &&
-  ehTexto(c.atualizadaEm)
+  ehTexto(c.atualizadaEm) &&
+  (c.finalizadaEm === undefined || c.finalizadaEm === null || ehTexto(c.finalizadaEm)) // ausente em backup antigo
 
 const areaValida = (a: unknown): a is Area =>
   ehObj(a) && ehTexto(a.id) && ehTexto(a.nome) && ehCentavos(a.taxa) && typeof a.ativa === 'boolean'
@@ -97,5 +103,6 @@ export function lerBackup(texto: string): Resultado<Backup> {
     return { ok: false, erro: 'Backup com comanda sem noite.' }
   if (noites.filter((n) => n.fechadaEm === null).length > 1)
     return { ok: false, erro: 'Backup com mais de uma noite aberta.' }
-  return { ok: true, valor: b as unknown as Backup }
+  const backup = b as unknown as Backup
+  return { ok: true, valor: { ...backup, comandas: backup.comandas.map(comHoraDeEntrega) } }
 }

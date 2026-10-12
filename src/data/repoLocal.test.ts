@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto'
+import Dexie from 'dexie'
 import { expect, it, vi } from 'vitest'
 import { abrirNoite } from '../domain/noite'
 import type { Comanda } from '../domain/tipos'
@@ -35,7 +36,7 @@ it('grava e lê noites e comandas, e avisa a cada gravação', async () => {
 
   const comanda = (codigo: string, criadaEm: string, noiteId = r.valor.id): Comanda => ({
     id: novoId(), noiteId, codigo, total: 5000, areaId: 'a', taxa: 1000, status: 'em_rota',
-    troco: 0, pagamentos: [{ forma: 'dinheiro', valor: 5000 }], criadaEm, atualizadaEm: criadaEm,
+    troco: 0, pagamentos: [{ forma: 'dinheiro', valor: 5000 }], criadaEm, atualizadaEm: criadaEm, finalizadaEm: null,
   })
   const b = comanda('2222', '2026-10-12T21:00:00Z')
   const a = comanda('1111', '2026-10-12T20:00:00Z')
@@ -73,4 +74,23 @@ it('backup: lê tudo e substitui tudo', async () => {
   expect(await destino.listarNoites()).toEqual(dados.noites)
   expect((await destino.listarAreas()).map((a) => a.id).sort()).toEqual(dados.areas.map((a) => a.id).sort())
   expect(await destino.listarTodasComandas()).toEqual([])
+})
+
+it('migra o banco v1: comandas ganham a hora da entrega', async () => {
+  const nome = 'teste-v1'
+  const v1 = new Dexie(nome)
+  v1.version(1).stores({ noites: 'id, data', comandas: 'id, noiteId', areas: 'id', ajustes: 'id' })
+  const base = { noiteId: 'n1', codigo: '1111', total: 5000, areaId: 'a', taxa: 1000, troco: 0, pagamentos: [], criadaEm: '20:00' }
+  await v1.table('comandas').bulkAdd([
+    { ...base, id: 'c1', status: 'entregue', atualizadaEm: '21:41' },
+    { ...base, id: 'c2', status: 'em_rota', atualizadaEm: '20:00' },
+  ])
+  v1.close()
+
+  const repo = criarRepoLocal(nome)
+  const comandas = await repo.listarComandas('n1')
+  expect(comandas.map((c) => [c.id, c.finalizadaEm])).toEqual([
+    ['c1', '21:41'],
+    ['c2', null],
+  ])
 })
