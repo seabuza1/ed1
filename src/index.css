@@ -576,3 +576,41 @@ label.botao {
   color: #15803d;
   font-weight: 600;
 }
+
+.linha-area {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0;
+  border-top: 1px solid var(--borda);
+}
+
+.linha-area button {
+  padding: 0 12px;
+  font-weight: 600;
+}
+
+.linha-area.inativa strong {
+  color: var(--discreto);
+  text-decoration: line-through;
+}
+
+.linha-form-area {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 8px;
+}
+
+.form-area {
+  border-top: 1px solid var(--borda);
+  padding-top: 8px;
+}
+
+h2.subtitulo {
+  margin-top: 8px;
+}
+
+.abas button {
+  font-size: 0.9rem;
+}

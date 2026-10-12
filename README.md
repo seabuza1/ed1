@@ -5,6 +5,23 @@ App de celular (PWA offline) para o motoboy lançar as comandas da noite e ter a
 ```sh
 npm install
 npm run dev     # desenvolvimento
-npm test        # testes do cálculo (T1 a T9)
-npm run build   # build de produção com service worker
+npm test        # testes (cálculo T1 a T9, regras, repositório)
+npm run build   # build de produção com service worker (pasta dist)
 ```
+
+## Estrutura
+- `src/domain/`: regras e contas, funções puras com testes (`acerto.ts`, `comanda.ts`, `noite.ts`, `backup.ts`, `ajustes.ts`).
+- `src/data/repo.ts`: interface de dados; hoje IndexedDB (`repoLocal.ts`, Dexie), depois Supabase.
+- `src/telas/` e `src/ui/`: telas e componentes. Não fazem conta.
+
+## Deploy (Vercel)
+Projeto Vite: a Vercel detecta sozinha (build `npm run build`, saída `dist`).
+
+## Instalar no celular (Android, Chrome)
+1. Abra o endereço do app no Chrome.
+2. Menu ⋮ → **Instalar app** (ou **Adicionar à tela inicial**).
+3. Abra uma vez com internet; depois funciona em modo avião.
+
+No iPhone (Safari): Compartilhar → **Adicionar à Tela de Início**.
+
+Os dados ficam só no aparelho. Exporte o backup no Histórico de vez em quando; os arquivos `acerto-backup-*.json` não vão para o repositório.

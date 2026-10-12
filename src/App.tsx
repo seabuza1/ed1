@@ -3,15 +3,17 @@ import { noiteAberta, ordenarNoites } from './domain/noite'
 import { repo } from './data/repo'
 import { useConsulta } from './data/useConsulta'
 import { TelaAcerto } from './telas/TelaAcerto'
+import { TelaAjustes } from './telas/TelaAjustes'
 import { NoiteDoHistorico, TelaHistorico } from './telas/TelaHistorico'
 import { TelaNoite } from './telas/TelaNoite'
 
-type Aba = 'noite' | 'acerto' | 'historico'
+type Aba = 'noite' | 'acerto' | 'historico' | 'ajustes'
 
 const ABAS: { id: Aba; rotulo: string }[] = [
   { id: 'noite', rotulo: 'Noite' },
   { id: 'acerto', rotulo: 'Acerto' },
   { id: 'historico', rotulo: 'Histórico' },
+  { id: 'ajustes', rotulo: 'Ajustes' },
 ]
 
 export default function App() {
@@ -45,6 +47,7 @@ export default function App() {
         ) : (
           <TelaHistorico noites={noites} onAbrir={setIdHistorico} />
         ))}
+      {aba === 'ajustes' && <TelaAjustes areas={areas} ajustes={ajustes} />}
       <nav className="abas">
         {ABAS.map((a) => (
           <button
