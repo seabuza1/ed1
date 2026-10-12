@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dataDaNoite, formatarData } from './datas'
+import { dataDaNoite, formatarData, formatarDataHora } from './datas'
 import { lerReais, paraCampo } from './dinheiro'
 import { abrirNoite, avisoAoFechar, editarValoresNoite, fecharNoite, noiteAberta, reabrirNoite } from './noite'
 import type { Comanda, Noite } from './tipos'
@@ -20,6 +20,8 @@ describe('R13 dataDaNoite', () => {
     expect(dataDaNoite(new Date(2026, 9, 13, 6, 0))).toBe('2026-10-13')
   })
   it('formata a data', () => expect(formatarData('2026-10-12')).toBe('12/10/2026'))
+  it('data e hora no horário do aparelho', () =>
+    expect(formatarDataHora(new Date(2026, 9, 12, 23, 40).toISOString())).toBe('12/10/2026 às 23:40'))
 })
 
 describe('lerReais', () => {

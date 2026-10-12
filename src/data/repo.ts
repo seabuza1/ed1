@@ -1,3 +1,4 @@
+import type { Dados } from '../domain/backup'
 import type { Ajustes, Area, Comanda, Noite } from '../domain/tipos'
 import { criarRepoLocal } from './repoLocal'
 
@@ -12,6 +13,7 @@ export interface Repo {
   atualizarNoite(id: string, mudancas: Partial<Omit<Noite, 'id'>>): Promise<void>
 
   listarComandas(noiteId: string): Promise<Comanda[]>
+  listarTodasComandas(): Promise<Comanda[]>
   salvarComanda(comanda: Comanda): Promise<void>
   excluirComanda(id: string): Promise<void>
 
@@ -21,6 +23,11 @@ export interface Repo {
 
   obterAjustes(): Promise<Ajustes>
   salvarAjustes(ajustes: Ajustes): Promise<void>
+
+  /** Backup: tudo o que está guardado. */
+  lerTudo(): Promise<Dados>
+  /** Importar backup: apaga tudo e grava os dados, de uma vez só. */
+  substituirTudo(dados: Dados): Promise<void>
 
   /** Chama o ouvinte depois de cada gravação. Devolve a função que para de ouvir. */
   aoMudar(ouvinte: () => void): () => void

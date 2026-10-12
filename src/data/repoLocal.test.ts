@@ -57,3 +57,20 @@ it('grava e lê noites e comandas, e avisa a cada gravação', async () => {
 it('id é um UUID', () => {
   expect(novoId()).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
 })
+
+it('backup: lê tudo e substitui tudo', async () => {
+  const origem = novoRepo()
+  const r = abrirNoite({ data: '2026-10-12', caixaInicial: 8000, diaria: 3000 }, [], novoId())
+  if (!r.ok) throw new Error(r.erro)
+  await origem.salvarNoite(r.valor)
+  const dados = await origem.lerTudo()
+  expect(dados.noites).toHaveLength(1)
+  expect(dados.areas).toHaveLength(4)
+
+  const destino = novoRepo()
+  await destino.salvarNoite({ ...r.valor, id: 'outra', data: '2026-01-01' })
+  await destino.substituirTudo(dados)
+  expect(await destino.listarNoites()).toEqual(dados.noites)
+  expect((await destino.listarAreas()).map((a) => a.id).sort()).toEqual(dados.areas.map((a) => a.id).sort())
+  expect(await destino.listarTodasComandas()).toEqual([])
+})

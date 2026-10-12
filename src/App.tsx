@@ -3,17 +3,20 @@ import { noiteAberta, ordenarNoites } from './domain/noite'
 import { repo } from './data/repo'
 import { useConsulta } from './data/useConsulta'
 import { TelaAcerto } from './telas/TelaAcerto'
+import { NoiteDoHistorico, TelaHistorico } from './telas/TelaHistorico'
 import { TelaNoite } from './telas/TelaNoite'
 
-type Aba = 'noite' | 'acerto'
+type Aba = 'noite' | 'acerto' | 'historico'
 
 const ABAS: { id: Aba; rotulo: string }[] = [
   { id: 'noite', rotulo: 'Noite' },
   { id: 'acerto', rotulo: 'Acerto' },
+  { id: 'historico', rotulo: 'Histórico' },
 ]
 
 export default function App() {
   const [aba, setAba] = useState<Aba>('noite')
+  const [idHistorico, setIdHistorico] = useState<string | null>(null)
   const noites = useConsulta(async () => ordenarNoites(await repo.listarNoites()), [])
   const ajustes = useConsulta(() => repo.obterAjustes(), [])
   const areas = useConsulta(() => repo.listarAreas(), [])
@@ -23,19 +26,36 @@ export default function App() {
     [emFoco?.id],
   )
 
+  const noiteHistorico = noites?.find((n) => n.id === idHistorico)
+
   if (!noites || !ajustes || !areas || !comandas) return <p className="app discreto">Carregando…</p>
 
   return (
     <>
       {aba === 'noite' && <TelaNoite noites={noites} ajustes={ajustes} areas={areas} comandas={comandas} />}
       {aba === 'acerto' && <TelaAcerto noite={emFoco} noites={noites} comandas={comandas} areas={areas} />}
+      {aba === 'historico' &&
+        (noiteHistorico ? (
+          <NoiteDoHistorico
+            noite={noiteHistorico}
+            noites={noites}
+            areas={areas}
+            voltar={() => setIdHistorico(null)}
+          />
+        ) : (
+          <TelaHistorico noites={noites} onAbrir={setIdHistorico} />
+        ))}
       <nav className="abas">
         {ABAS.map((a) => (
           <button
             key={a.id}
             type="button"
             aria-current={aba === a.id ? 'page' : undefined}
-            onClick={() => setAba(a.id)}
+            onClick={() => {
+              setAba(a.id)
+              setIdHistorico(null)
+              window.scrollTo(0, 0)
+            }}
           >
             {a.rotulo}
           </button>

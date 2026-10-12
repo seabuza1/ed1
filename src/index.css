@@ -510,3 +510,69 @@ textarea:disabled,
 button:disabled {
   opacity: 0.6;
 }
+
+button.item-historico {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--fundo);
+  text-align: left;
+}
+
+.numeros-historico {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+.numeros-historico strong {
+  white-space: nowrap;
+}
+
+.selos {
+  display: flex;
+  gap: 6px;
+}
+
+.selo {
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
+.selo.bateu {
+  background: #dcfce7;
+  color: #14532d;
+}
+
+.selo.diferenca {
+  background: #fee2e2;
+  color: #7f1d1d;
+}
+
+.selo.neutro {
+  background: var(--superficie);
+  color: var(--discreto);
+  border: 1px solid var(--borda);
+}
+
+label.botao {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  background: var(--superficie);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sucesso {
+  color: #15803d;
+  font-weight: 600;
+}

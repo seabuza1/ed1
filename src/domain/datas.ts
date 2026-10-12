@@ -20,3 +20,9 @@ export function formatarHora(instante: string): string {
   const d = new Date(instante)
   return `${doisDig(d.getHours())}:${doisDig(d.getMinutes())}`
 }
+
+/** ISO → "12/10/2026 às 23:40" no horário do aparelho. */
+export function formatarDataHora(instante: string): string {
+  const d = new Date(instante)
+  return `${formatarData(iso(d))} às ${formatarHora(instante)}`
+}

@@ -225,3 +225,35 @@ export function seloLuan(c: ComparacaoLuan): string {
   const dif = c.diferencaPago !== 0 ? c.diferencaPago : (c.diferencaFaltaSobra ?? 0)
   return `Diferença de ${formatarReais(Math.abs(dif))}`
 }
+
+export interface ResumoNoite {
+  noite: Noite
+  qtdComandas: number
+  devolver: number
+  receber: number
+  pago: number | null // o que o Luan pagou
+  selo: string | null // "Bateu com o Luan" / "Diferença de R$ x"; null sem acerto do Luan
+  bateu: boolean | null
+}
+
+/** Histórico: uma linha por noite, a mais recente primeiro. */
+export function resumirNoites(noites: Noite[], comandas: Comanda[]): ResumoNoite[] {
+  const porNoite = new Map<string, Comanda[]>()
+  for (const c of comandas) porNoite.set(c.noiteId, [...(porNoite.get(c.noiteId) ?? []), c])
+  return [...noites]
+    .sort((a, b) => b.data.localeCompare(a.data))
+    .map((noite) => {
+      const doDia = porNoite.get(noite.id) ?? []
+      const a = calcularAcerto(noite, doDia)
+      const comp = compararComLuan(noite, a)
+      return {
+        noite,
+        qtdComandas: doDia.length,
+        devolver: a.devolver,
+        receber: a.receber,
+        pago: noite.luanPagou,
+        selo: comp ? seloLuan(comp) : null,
+        bateu: comp ? comp.bateu : null,
+      }
+    })
+}

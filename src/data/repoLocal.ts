@@ -37,6 +37,7 @@ export function criarRepoLocal(nome: string): Repo {
     atualizarNoite: (id, mudancas) => gravar(() => db.noites.update(id, mudancas)),
 
     listarComandas: (noiteId) => db.comandas.where('noiteId').equals(noiteId).sortBy('criadaEm'),
+    listarTodasComandas: () => db.comandas.toArray(),
     salvarComanda: (comanda) => gravar(() => db.comandas.put(comanda)),
     excluirComanda: (id) => gravar(() => db.comandas.delete(id)),
 
@@ -46,6 +47,24 @@ export function criarRepoLocal(nome: string): Repo {
 
     obterAjustes: async () => (await db.ajustes.get('padrao')) ?? AJUSTES_PADRAO,
     salvarAjustes: (ajustes) => gravar(() => db.ajustes.put(ajustes)),
+
+    lerTudo: () =>
+      db.transaction('r', [db.noites, db.comandas, db.areas, db.ajustes], async () => ({
+        noites: await db.noites.toArray(),
+        comandas: await db.comandas.toArray(),
+        areas: await db.areas.toArray(),
+        ajustes: (await db.ajustes.get('padrao')) ?? AJUSTES_PADRAO,
+      })),
+    substituirTudo: (dados) =>
+      gravar(() =>
+        db.transaction('rw', [db.noites, db.comandas, db.areas, db.ajustes], async () => {
+          await Promise.all([db.noites.clear(), db.comandas.clear(), db.areas.clear(), db.ajustes.clear()])
+          await db.noites.bulkAdd(dados.noites)
+          await db.comandas.bulkAdd(dados.comandas)
+          await db.areas.bulkAdd(dados.areas)
+          await db.ajustes.add(dados.ajustes)
+        }),
+      ),
 
     aoMudar(ouvinte) {
       ouvintes.add(ouvinte)
