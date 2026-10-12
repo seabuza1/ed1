@@ -1,0 +1,56 @@
+import 'fake-indexeddb/auto'
+import { expect, it, vi } from 'vitest'
+import { abrirNoite } from '../domain/noite'
+import type { Comanda } from '../domain/tipos'
+import { novoId } from './id'
+import { criarRepoLocal } from './repoLocal'
+
+let n = 0
+const novoRepo = () => criarRepoLocal(`teste-${++n}`)
+
+it('primeira abertura cria as áreas e os valores padrão', async () => {
+  const repo = novoRepo()
+  const areas = await repo.listarAreas()
+  expect(areas.map((a) => [a.nome, a.taxa, a.ativa])).toEqual([
+    ['Aragarças', 500, true],
+    ['Pontal', 1000, true],
+    ['Barra', 1200, true],
+    ['Parque de Exposições', 1500, true],
+  ])
+  expect(await repo.obterAjustes()).toMatchObject({ caixaPadrao: 8000, diariaPadrao: 3000 })
+})
+
+it('grava e lê noites e comandas, e avisa a cada gravação', async () => {
+  const repo = novoRepo()
+  const ouvinte = vi.fn()
+  const parar = repo.aoMudar(ouvinte)
+
+  const r = abrirNoite({ data: '2026-10-12', caixaInicial: 8000, diaria: 3000 }, [], novoId())
+  if (!r.ok) throw new Error(r.erro)
+  await repo.salvarNoite(r.valor)
+  expect(await repo.listarNoites()).toEqual([r.valor])
+
+  const comanda = (codigo: string, criadaEm: string, noiteId = r.valor.id): Comanda => ({
+    id: novoId(), noiteId, codigo, total: 5000, areaId: 'a', taxa: 1000, status: 'em_rota',
+    troco: 0, pagamentos: [{ forma: 'dinheiro', valor: 5000 }], criadaEm, atualizadaEm: criadaEm,
+  })
+  const b = comanda('2222', '2026-10-12T21:00:00Z')
+  const a = comanda('1111', '2026-10-12T20:00:00Z')
+  await repo.salvarComanda(b)
+  await repo.salvarComanda(a)
+  await repo.salvarComanda(comanda('9999', '2026-10-12T20:30:00Z', 'outra'))
+  expect((await repo.listarComandas(r.valor.id)).map((c) => c.codigo)).toEqual(['1111', '2222'])
+
+  await repo.excluirComanda(a.id)
+  expect((await repo.listarComandas(r.valor.id)).map((c) => c.codigo)).toEqual(['2222'])
+
+  expect(ouvinte).toHaveBeenCalledTimes(5)
+  parar()
+  await repo.salvarAjustes({ id: 'padrao', caixaPadrao: 10000, diariaPadrao: 3000 })
+  expect(ouvinte).toHaveBeenCalledTimes(5)
+  expect((await repo.obterAjustes()).caixaPadrao).toBe(10000)
+})
+
+it('id é um UUID', () => {
+  expect(novoId()).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+})

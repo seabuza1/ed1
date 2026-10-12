@@ -42,3 +42,9 @@ export interface Comanda {
   criadaEm: string
   atualizadaEm: string
 }
+
+export interface Ajustes {
+  id: 'padrao'
+  caixaPadrao: number
+  diariaPadrao: number
+}
