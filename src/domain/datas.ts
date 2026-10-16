@@ -39,3 +39,33 @@ export function partesData(data: string): { dia: string; mes: string; semana: st
     semana: SEMANA[new Date(a, m - 1, d).getDay()],
   }
 }
+
+const MESES_LONGOS = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+]
+
+const deData = (data: string) => {
+  const [a, m, d] = data.split('-').map(Number)
+  return new Date(a, m - 1, d)
+}
+
+/** Segunda-feira da semana da data ("2026-10-16" → "2026-10-12"). */
+export function inicioDaSemana(data: string): string {
+  const d = deData(data)
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+  return iso(d)
+}
+
+/** Domingo da semana que começa na data. */
+export function fimDaSemana(inicio: string): string {
+  const d = deData(inicio)
+  d.setDate(d.getDate() + 6)
+  return iso(d)
+}
+
+/** "2026-10" → "Outubro de 2026" */
+export function nomeDoMes(mes: string): string {
+  const [a, m] = mes.split('-').map(Number)
+  return `${MESES_LONGOS[m - 1]} de ${a}`
+}

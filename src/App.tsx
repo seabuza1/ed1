@@ -61,6 +61,7 @@ export default function App() {
           <TelaHistorico
             noites={noites}
             acertos={acertos}
+            areas={areas}
             onAbrir={setIdHistorico}
             onAjustes={() => setAjustesAbertos(true)}
           />

@@ -84,42 +84,49 @@ export function Conta({ acerto }: { acerto: Acerto }) {
 
 /** R17: entregues, que voltaram e taxas por área. */
 export function EntregasPorCidade({ porArea, areas }: { porArea: Acerto['porArea']; areas: Area[] }) {
-  const { linhas, total } = entregasPorCidade(porArea, areas)
-  if (linhas.length === 0) return null
+  if (Object.keys(porArea).length === 0) return null
   return (
     <section className="bloco">
       <h2>Entregas por cidade</h2>
-      <table className="tabela">
-        <thead>
-          <tr>
-            <th>Área</th>
-            <th>Entregues</th>
-            <th>Voltou</th>
-            <th>Taxas</th>
-          </tr>
-        </thead>
-        <tbody>
-          {linhas.map((l) => (
-            <tr key={l.areaId}>
-              <td>{l.nome}</td>
-              <td>{l.entregues}</td>
-              <td>{l.voltaram}</td>
-              <td>{formatarReais(l.taxas)}</td>
-            </tr>
-          ))}
-        </tbody>
-        {linhas.length > 1 && (
-          <tfoot>
-            <tr>
-              <td>Total</td>
-              <td>{total.entregues}</td>
-              <td>{total.voltaram}</td>
-              <td>{formatarReais(total.taxas)}</td>
-            </tr>
-          </tfoot>
-        )}
-      </table>
+      <TabelaCidades porArea={porArea} areas={areas} />
     </section>
+  )
+}
+
+export function TabelaCidades({ porArea, areas }: { porArea: Acerto['porArea']; areas: Area[] }) {
+  const { linhas, total } = entregasPorCidade(porArea, areas)
+  if (linhas.length === 0) return null
+  return (
+    <table className="tabela">
+      <thead>
+        <tr>
+          <th>Área</th>
+          <th>Entregues</th>
+          <th>Voltou</th>
+          <th>Taxas</th>
+        </tr>
+      </thead>
+      <tbody>
+        {linhas.map((l) => (
+          <tr key={l.areaId}>
+            <td>{l.nome}</td>
+            <td>{l.entregues}</td>
+            <td>{l.voltaram}</td>
+            <td>{formatarReais(l.taxas)}</td>
+          </tr>
+        ))}
+      </tbody>
+      {linhas.length > 1 && (
+        <tfoot>
+          <tr>
+            <td>Total</td>
+            <td>{total.entregues}</td>
+            <td>{total.voltaram}</td>
+            <td>{formatarReais(total.taxas)}</td>
+          </tr>
+        </tfoot>
+      )}
+    </table>
   )
 }
 

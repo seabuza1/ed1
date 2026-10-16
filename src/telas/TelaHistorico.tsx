@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { resumirNoites } from '../domain/acerto'
+import { resumirPorPeriodo, type Periodo, type ResumoPeriodo } from '../domain/periodo'
 import { lerBackup, montarBackup, resumoBackup, type Backup } from '../domain/backup'
 import { formatarData, formatarDataHora, partesData } from '../domain/datas'
 import { formatarReais } from '../domain/dinheiro'
@@ -8,6 +9,7 @@ import { baixarBackup } from '../data/arquivo'
 import { agora } from '../data/id'
 import { repo } from '../data/repo'
 import { useConsulta } from '../data/useConsulta'
+import { TabelaCidades } from '../ui/BlocosAcerto'
 import { BotaoConfirmar } from '../ui/BotaoConfirmar'
 import { mensagemDeErro } from '../ui/erro'
 import { Icone } from '../ui/Icone'
@@ -15,12 +17,20 @@ import { IndicadorNuvem } from '../ui/IndicadorNuvem'
 import { EnviarHistorico } from './EnviarHistorico'
 import { TelaAcerto } from './TelaAcerto'
 
+const VISTAS: { id: 'noites' | Periodo; rotulo: string }[] = [
+  { id: 'noites', rotulo: 'Noites' },
+  { id: 'semana', rotulo: 'Semanas' },
+  { id: 'mes', rotulo: 'Meses' },
+]
+
 export function TelaHistorico(props: {
   noites: Noite[]
   acertos: AcertoConfirmado[]
+  areas: Area[]
   onAbrir: (id: string) => void
   onAjustes: () => void
 }) {
+  const [vista, setVista] = useState<'noites' | Periodo>('noites')
   const comandas = useConsulta(() => repo.listarTodasComandas(), [])
   if (!comandas) return <p className="carregando">Carregando…</p>
   const resumo = resumirNoites(props.noites, comandas, props.acertos)
@@ -37,13 +47,26 @@ export function TelaHistorico(props: {
         </button>
       </header>
       <EnviarHistorico />
+      {resumo.length > 0 && (
+        <div className="chips chips-3" role="group" aria-label="Ver por">
+          {VISTAS.map((v) => (
+            <button key={v.id} type="button" className="chip" aria-pressed={vista === v.id} onClick={() => setVista(v.id)}>
+              {v.rotulo}
+            </button>
+          ))}
+        </div>
+      )}
+      {vista !== 'noites' &&
+        resumirPorPeriodo(props.noites, comandas, props.acertos, vista).map((p) => (
+          <ResumoDoPeriodo key={p.chave} periodo={p} areas={props.areas} />
+        ))}
       {resumo.length === 0 && (
         <div className="vazio">
           <Icone nome="historico" tamanho={28} />
           <strong>Nenhuma noite ainda</strong>
         </div>
       )}
-      {resumo.map((r) => {
+      {vista === 'noites' && resumo.map((r) => {
         const d = partesData(r.noite.data)
         return (
           <button
@@ -87,6 +110,47 @@ export function TelaHistorico(props: {
       })}
       <BackupDados />
     </main>
+  )
+}
+
+/** Semana ou mês: noites trabalhadas, entregas por cidade, diárias, taxas e total recebido. */
+function ResumoDoPeriodo({ periodo: p, areas }: { periodo: ResumoPeriodo; areas: Area[] }) {
+  return (
+    <section className="bloco">
+      <div className="linha-conta-topo">
+        <h2>{p.rotulo}</h2>
+        <span className="discreto pequeno">
+          {p.noites} {p.noites === 1 ? 'noite' : 'noites'}
+        </span>
+      </div>
+      <dl className="liquidacao">
+        <div>
+          <dt>Entregas</dt>
+          <dd>
+            {p.entregues}
+            {p.voltaram > 0 && <span className="discreto"> + {p.voltaram} voltaram</span>}
+          </dd>
+        </div>
+        <div>
+          <dt>Diárias</dt>
+          <dd>{formatarReais(p.diarias)}</dd>
+        </div>
+        <div>
+          <dt>Taxas</dt>
+          <dd>{formatarReais(p.taxas)}</dd>
+        </div>
+        <div>
+          <dt>Total recebido</dt>
+          <dd>{formatarReais(p.recebido)}</dd>
+        </div>
+      </dl>
+      {p.semAcerto > 0 && (
+        <p className="discreto pequeno">
+          {p.semAcerto} {p.semAcerto === 1 ? 'noite ainda sem' : 'noites ainda sem'} acerto do Luan: entra a conta do app.
+        </p>
+      )}
+      <TabelaCidades porArea={p.porArea} areas={areas} />
+    </section>
   )
 }
 
