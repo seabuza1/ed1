@@ -4,6 +4,7 @@ import { calcularAcerto } from '../domain/acerto'
 import { dataDaNoite, formatarData, formatarHora } from '../domain/datas'
 import { formatarNumero, formatarReais, lerReais, paraCampo } from '../domain/dinheiro'
 import {
+  colunaPix,
   montarAcerto,
   montarFolha,
   resumirNoiteDaEquipe,
@@ -17,6 +18,7 @@ import { sair, type Usuario } from '../data/sessao'
 import { AcertoDoLuan, Conta, EntregasPorCidade, Maquininha, Papeis } from '../ui/BlocosAcerto'
 import { BotaoConfirmar } from '../ui/BotaoConfirmar'
 import { CampoReais } from '../ui/CampoReais'
+import { useAviso } from '../ui/desfazer'
 import { mensagemDeErro } from '../ui/erro'
 import { Icone, type NomeIcone } from '../ui/Icone'
 
@@ -31,6 +33,22 @@ export function Painel({ sb, usuario }: { sb: SupabaseClient; usuario: Usuario }
   const acoes = useMemo(() => acoesPainel(sb), [sb])
   const colunas = useMemo(() => (dados ? montarFolha(dados.caixas, dados.comandas, dados.acertos) : []), [dados])
   const aberta = colunas.find((c) => c.caixa.noite.id === caixaId)
+  const aviso = useAviso()
+
+  /** Coluna PIX: tocar marca que o Pix caiu (pix_confirmado), com desfazer. */
+  async function marcarPix(c: Comanda) {
+    const caiu = !c.pixConfirmado
+    try {
+      await acoes.marcarPix(c.id, caiu)
+      recarregar()
+      aviso(`Pix da ${c.codigo} ${caiu ? 'caiu' : 'desmarcado'}`, async () => {
+        await acoes.marcarPix(c.id, !caiu)
+        recarregar()
+      })
+    } catch (e) {
+      aviso(mensagemDeErro(e))
+    }
+  }
 
   return (
     <main className="app painel pilha">
@@ -79,7 +97,7 @@ export function Painel({ sb, usuario }: { sb: SupabaseClient; usuario: Usuario }
               <span className="pequeno">As colunas aparecem quando os motoboys abrem a noite no app.</span>
             </div>
           ) : vista === 'folha' ? (
-            <Folha colunas={colunas} abrir={setCaixaId} />
+            <Folha colunas={colunas} abrir={setCaixaId} marcarPix={marcarPix} />
           ) : (
             <Resumo resumo={resumirNoiteDaEquipe(colunas)} areas={dados.areas} />
           )}
@@ -105,7 +123,10 @@ export function Painel({ sb, usuario }: { sb: SupabaseClient; usuario: Usuario }
 const ICONE_STATUS: Record<Comanda['status'], NomeIcone> = { em_rota: 'moto', entregue: 'check', voltou: 'voltou' }
 
 /** Como a folha de papel: uma coluna por motoboy, na ordem de chegada. */
-function Folha({ colunas, abrir }: { colunas: ColunaFolha[]; abrir: (id: string) => void }) {
+function Folha(props: { colunas: ColunaFolha[]; abrir: (id: string) => void; marcarPix: (c: Comanda) => void }) {
+  const { colunas, abrir } = props
+  const pix = colunaPix(colunas)
+  const caiu = pix.filter((p) => p.comanda.pixConfirmado).length
   return (
     <div className="folha">
       {colunas.map((col) => (
@@ -150,6 +171,37 @@ function Folha({ colunas, abrir }: { colunas: ColunaFolha[]; abrir: (id: string)
           </span>
         </button>
       ))}
+      <section className="coluna-folha coluna-pix" aria-label="PIX">
+        <span className="coluna-titulo">PIX</span>
+        <span className="itens-folha">
+          {pix.map((p) => (
+            <button
+              key={p.comanda.id}
+              type="button"
+              className="item-pix"
+              aria-pressed={p.comanda.pixConfirmado === true}
+              onClick={() => props.marcarPix(p.comanda)}
+            >
+              <span className="codigo">{p.comanda.codigo}</span>
+              <span className="estado-pix">{p.comanda.pixConfirmado ? 'caiu ✓' : 'conferir'}</span>
+              <span className="quem">
+                {p.nome} · <span className="num">{formatarNumero(p.valor)}</span>
+              </span>
+            </button>
+          ))}
+          {pix.length === 0 && <span className="discreto pequeno">Nenhum Pix antecipado</span>}
+        </span>
+        {pix.length > 0 && (
+          <span className="rodape-folha">
+            <span>
+              {caiu} de {pix.length} {pix.length === 1 ? 'caiu' : 'caíram'}
+            </span>
+            <span className="linha-valor">
+              Total <span className="num">{formatarNumero(pix.reduce((s, p) => s + p.valor, 0))}</span>
+            </span>
+          </span>
+        )}
+      </section>
     </div>
   )
 }

@@ -259,3 +259,12 @@ export const marcarPapel = (c: Comanda, papelConferido: boolean, agora: string):
   papelConferido,
   atualizadaEm: agora,
 })
+
+/** Pix antecipados confirmados agora (não estavam entre os já vistos), para avisar o motoboy. */
+export const pixQueCairam = (vistos: Set<string>, comandas: Comanda[]) =>
+  comandas.filter((c) => c.pixConfirmado && !vistos.has(c.id))
+
+export function textoPixCaiu(comandas: Comanda[]): string {
+  if (comandas.length === 1) return `Pix da ${comandas[0].codigo} caiu`
+  return `Pix caiu: ${comandas.map((c) => c.codigo).join(', ')}`
+}

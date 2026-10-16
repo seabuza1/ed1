@@ -1428,3 +1428,59 @@ button.coluna-folha {
 .rodape-painel > * {
   padding: 0 16px;
 }
+
+.coluna-pix {
+  flex: 1 0 172px;
+  max-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--raio);
+  background: var(--superficie);
+  scroll-snap-align: start;
+}
+
+button.item-pix {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    'codigo estado'
+    'quem quem';
+  align-items: baseline;
+  justify-content: stretch;
+  gap: 0 8px;
+  min-height: 52px;
+  padding: 6px 10px;
+  border: 1.5px solid var(--alerta);
+  background: transparent;
+  text-align: left;
+  font-weight: inherit;
+}
+
+button.item-pix[aria-pressed='true'] {
+  border-color: var(--ok);
+  background: var(--ok-suave);
+}
+
+.item-pix .codigo {
+  grid-area: codigo;
+  font-size: 1.05rem;
+}
+
+.estado-pix {
+  grid-area: estado;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--alerta);
+}
+
+.item-pix[aria-pressed='true'] .estado-pix {
+  color: var(--ok);
+}
+
+.item-pix .quem {
+  grid-area: quem;
+  font-size: 0.78rem;
+  color: var(--discreto);
+}

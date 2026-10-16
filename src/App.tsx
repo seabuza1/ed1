@@ -7,6 +7,7 @@ import { TelaAjustes } from './telas/TelaAjustes'
 import { NoiteDoHistorico, TelaHistorico } from './telas/TelaHistorico'
 import { TelaNoite } from './telas/TelaNoite'
 import { Icone, type NomeIcone } from './ui/Icone'
+import { useAvisoPix } from './ui/useAvisoPix'
 
 type Aba = 'noite' | 'acerto' | 'historico'
 
@@ -29,6 +30,8 @@ export default function App() {
     async () => (emFoco ? repo.listarComandas(emFoco.id) : []),
     [emFoco?.id],
   )
+
+  useAvisoPix(comandas, emFoco?.id)
 
   const noiteHistorico = noites?.find((n) => n.id === idHistorico)
 

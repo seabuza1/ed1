@@ -7,7 +7,9 @@ import {
   marcarPapel,
   montarPagamentos,
   nomesFormas,
+  pixQueCairam,
   separarPorStatus,
+  textoPixCaiu,
 } from './comanda'
 import type { Comanda } from './tipos'
 import { r$ } from '../teste/r$'
@@ -112,4 +114,13 @@ describe('lançar com menos toques', () => {
     const c = com('2672', 'pontal', '1')
     expect(marcarPapel(c, true, 'agora')).toMatchObject({ papelConferido: true, atualizadaEm: 'agora' })
   })
+})
+
+it('avisa o Pix que o Luan confirmou', () => {
+  const c = (id: string, codigo: string, pixConfirmado?: boolean) => ({ id, codigo, pixConfirmado }) as Comanda
+  const comandas = [c('a', '0017', true), c('b', '8498', true), c('c', '3557')]
+  const novos = pixQueCairam(new Set(['a']), comandas)
+  expect(novos.map((x) => x.codigo)).toEqual(['8498'])
+  expect(textoPixCaiu(novos)).toBe('Pix da 8498 caiu')
+  expect(textoPixCaiu(comandas.slice(0, 2))).toBe('Pix caiu: 0017, 8498')
 })
