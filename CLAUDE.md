@@ -7,6 +7,8 @@ Sistema para a pizzaria onde trabalho como motoboy, construído aos poucos. O MV
 - `docs/SPEC-mvp-acerto.md`: o MVP já feito, base da v1 (regras R1 a R13, testes T1 a T9).
 - `docs/requisitos.md`: levantamento completo da operação. Só contexto: não implementar nada fora da spec.
 - `supabase/001_schema.sql`: tabelas, regras de acesso (RLS) e realtime.
+- `supabase/002_v1_app.sql`: complemento do app (hora da entrega, nome da expedição para o motoboy, área sugerida, ordem de chegada). Rodar depois do 001.
+- `supabase/teste/`: teste das regras de acesso num Postgres local.
 
 ## Stack
 Vite + React + TypeScript, PWA offline. Supabase (Postgres, Auth, Realtime). Local-first: IndexedDB (Dexie) com fila de sincronização, atrás de `src/data/repo.ts`. Testes com Vitest. Deploy na Vercel. No front só a anon key; a service role nunca.

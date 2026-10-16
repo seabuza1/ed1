@@ -58,9 +58,16 @@ function guardar(u: Usuario | null) {
   }
 }
 
+/** Nome e papel; sem internet (ou demorando), fica com o que já sabia. */
 async function buscarPerfil(id: string): Promise<{ nome: string; papel: Papel } | null> {
-  const { data } = await supabase!.from('perfis').select('nome, papel').eq('id', id).maybeSingle()
-  return data
+  if (!navigator.onLine) return null
+  const busca = supabase!
+    .from('perfis')
+    .select('nome, papel')
+    .eq('id', id)
+    .maybeSingle()
+    .then((r) => r.data)
+  return Promise.race([busca, new Promise<null>((ok) => setTimeout(() => ok(null), 4000))])
 }
 
 function entrarComo(u: Usuario) {
@@ -86,13 +93,22 @@ async function usuarioDaSessao(id: string, email: string): Promise<Usuario> {
 
 export async function iniciarSessao(): Promise<void> {
   if (!supabase) return
+  const guardado = lerGuardado()
+  // Sem internet, abre na hora com o último usuário: renovar a sessão pode levar até 30 s.
+  if (guardado && !navigator.onLine) entrarComo(guardado)
   const { data, error } = await supabase.auth.getSession()
   const sessao = data.session
-  const guardado = lerGuardado()
-  if (sessao) entrarComo(await usuarioDaSessao(sessao.user.id, sessao.user.email ?? ''))
-  // Sem internet a sessão pode não renovar: segue com o último usuário, só no aparelho.
-  else if (guardado && (error || !navigator.onLine)) entrarComo(guardado)
-  else definir({ fase: 'fora' })
+  if (sessao) {
+    if (estado.fase !== 'dentro' || estado.usuario.id !== sessao.user.id)
+      entrarComo(await usuarioDaSessao(sessao.user.id, sessao.user.email ?? ''))
+  }
+  // A sessão não renovou por falta de internet: segue com o último usuário, só no aparelho.
+  else if (guardado && (error || !navigator.onLine)) {
+    if (estado.fase !== 'dentro') entrarComo(guardado)
+  } else {
+    if (estado.fase === 'dentro') estado.repo.parar()
+    definir({ fase: 'fora' })
+  }
 
   supabase.auth.onAuthStateChange((evento, s) => {
     // Fora do callback: chamar o Supabase aqui dentro trava o cliente.
