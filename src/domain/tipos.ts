@@ -56,3 +56,30 @@ export interface Ajustes {
   caixaPadrao: number
   diariaPadrao: number
 }
+
+export type Papel = 'motoboy' | 'expedicao' | 'admin'
+
+export interface Perfil {
+  id: string
+  nome: string
+  papel: Papel
+  ativo: boolean
+}
+
+/** Acerto confirmado pelo Luan: fotografia dos valores na hora da confirmação (tabela acertos). */
+export interface AcertoConfirmado {
+  caixaId: string
+  confirmadoPor: string
+  /** Nome de quem confirmou, quando conhecido. */
+  confirmadoPorNome: string | null
+  confirmadoEm: string
+  dinheiroContado: number
+  falta: number
+  sobra: number
+  pagoAoMotoboy: number
+  pagoDoCaixaDele: number
+  retiradoCaixaEmpresa: number
+  vaiParaEmpresa: number
+  completadoDoBolso: number
+  obs: string
+}

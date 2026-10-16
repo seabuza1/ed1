@@ -3,13 +3,15 @@ import { calcularAcerto } from '../domain/acerto'
 import { dataDaNoite, formatarData } from '../domain/datas'
 import { formatarReais, lerReais, paraCampo } from '../domain/dinheiro'
 import { abrirNoite, editarValoresNoite, noiteAberta, reabrirNoite } from '../domain/noite'
-import type { Ajustes, Area, Comanda, Noite } from '../domain/tipos'
+import type { AcertoConfirmado, Ajustes, Area, Comanda, Noite } from '../domain/tipos'
 import { novoId } from '../data/id'
 import { repo } from '../data/repo'
 import { BarraTotais } from '../ui/BarraTotais'
 import { CampoReais } from '../ui/CampoReais'
 import { mensagemDeErro } from '../ui/erro'
 import { Icone } from '../ui/Icone'
+import { IndicadorNuvem } from '../ui/IndicadorNuvem'
+import { EnviarHistorico } from './EnviarHistorico'
 import { LancarComanda } from './LancarComanda'
 import { ListasComandas } from './ListasComandas'
 
@@ -18,27 +20,35 @@ export function TelaNoite(props: {
   ajustes: Ajustes
   areas: Area[]
   comandas: Comanda[]
+  acertos: AcertoConfirmado[]
 }) {
   const aberta = noiteAberta(props.noites)
-  if (!aberta) return <AbrirNoite noites={props.noites} ajustes={props.ajustes} />
+  if (!aberta) return <AbrirNoite noites={props.noites} ajustes={props.ajustes} acertos={props.acertos} />
+  // Confirmado pelo Luan antes de fechar: a nuvem já não aceita mudanças.
+  const travada = props.acertos.some((a) => a.caixaId === aberta.id)
   return (
     <>
       <BarraTotais acerto={calcularAcerto(aberta, props.comandas)} />
       <main className="app pilha">
-        <ValoresNoite noite={aberta} />
-        <LancarComanda noite={aberta} areas={props.areas} comandas={props.comandas} />
-        <ListasComandas comandas={props.comandas} areas={props.areas} />
+        <ValoresNoite noite={aberta} travada={travada} />
+        {travada ? (
+          <p className="aviso">O Luan já confirmou o acerto desta noite. Não dá mais para lançar nem editar.</p>
+        ) : (
+          <LancarComanda noite={aberta} areas={props.areas} comandas={props.comandas} />
+        )}
+        <ListasComandas comandas={props.comandas} areas={props.areas} somenteLeitura={travada} />
       </main>
     </>
   )
 }
 
-function AbrirNoite({ noites, ajustes }: { noites: Noite[]; ajustes: Ajustes }) {
+function AbrirNoite({ noites, ajustes, acertos }: { noites: Noite[]; ajustes: Ajustes; acertos: AcertoConfirmado[] }) {
   const [data, setData] = useState(() => dataDaNoite(new Date()))
   const [caixa, setCaixa] = useState(paraCampo(ajustes.caixaPadrao))
   const [diaria, setDiaria] = useState(paraCampo(ajustes.diariaPadrao))
   const [erro, setErro] = useState<string | null>(null)
   const existente = noites.find((n) => n.data === data)
+  const confirmada = existente && acertos.some((a) => a.caixaId === existente.id)
 
   async function abrir() {
     const caixaInicial = lerReais(caixa)
@@ -69,7 +79,9 @@ function AbrirNoite({ noites, ajustes }: { noites: Noite[]; ajustes: Ajustes }) 
       <div className="boas-vindas">
         <h1>Abrir noite</h1>
         <p className="discreto">Confira a data, o caixa de troco e a diária antes de sair.</p>
+        <IndicadorNuvem />
       </div>
+      <EnviarHistorico />
       <form
         className="pilha"
         onSubmit={(e) => {
@@ -81,7 +93,9 @@ function AbrirNoite({ noites, ajustes }: { noites: Noite[]; ajustes: Ajustes }) 
           <span>Data</span>
           <input type="date" value={data} onChange={(e) => (setData(e.target.value), setErro(null))} />
         </label>
-        {existente ? (
+        {existente && confirmada ? (
+          <p className="aviso">O acerto de {formatarData(existente.data)} já foi confirmado. Só o admin reabre.</p>
+        ) : existente ? (
           <>
             <p className="aviso">Já existe a noite de {formatarData(existente.data)}.</p>
             <button type="button" className="primario" onClick={() => reabrir(existente)}>
@@ -105,7 +119,7 @@ function AbrirNoite({ noites, ajustes }: { noites: Noite[]; ajustes: Ajustes }) 
   )
 }
 
-function ValoresNoite({ noite }: { noite: Noite }) {
+function ValoresNoite({ noite, travada }: { noite: Noite; travada: boolean }) {
   const [editando, setEditando] = useState(false)
   const [caixa, setCaixa] = useState('')
   const [diaria, setDiaria] = useState('')
@@ -135,20 +149,23 @@ function ValoresNoite({ noite }: { noite: Noite }) {
             Caixa <span className="num">{formatarReais(noite.caixaInicial)}</span> · Diária{' '}
             <span className="num">{formatarReais(noite.diaria)}</span>
           </p>
+          <IndicadorNuvem />
         </div>
-        <button
-          type="button"
-          className="link"
-          onClick={() => {
-            setCaixa(paraCampo(noite.caixaInicial))
-            setDiaria(paraCampo(noite.diaria))
-            setErro(null)
-            setEditando(true)
-          }}
-        >
-          <Icone nome="lapis" tamanho={16} />
-          Editar
-        </button>
+        {!travada && (
+          <button
+            type="button"
+            className="link"
+            onClick={() => {
+              setCaixa(paraCampo(noite.caixaInicial))
+              setDiaria(paraCampo(noite.diaria))
+              setErro(null)
+              setEditando(true)
+            }}
+          >
+            <Icone nome="lapis" tamanho={16} />
+            Editar
+          </button>
+        )}
       </header>
     )
 

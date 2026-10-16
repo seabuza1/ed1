@@ -3,7 +3,7 @@ import { resumirNoites } from '../domain/acerto'
 import { lerBackup, montarBackup, resumoBackup, type Backup } from '../domain/backup'
 import { formatarData, formatarDataHora, partesData } from '../domain/datas'
 import { formatarReais } from '../domain/dinheiro'
-import type { Area, Noite } from '../domain/tipos'
+import type { AcertoConfirmado, Area, Noite } from '../domain/tipos'
 import { baixarBackup } from '../data/arquivo'
 import { agora } from '../data/id'
 import { repo } from '../data/repo'
@@ -11,21 +11,32 @@ import { useConsulta } from '../data/useConsulta'
 import { BotaoConfirmar } from '../ui/BotaoConfirmar'
 import { mensagemDeErro } from '../ui/erro'
 import { Icone } from '../ui/Icone'
+import { IndicadorNuvem } from '../ui/IndicadorNuvem'
+import { EnviarHistorico } from './EnviarHistorico'
 import { TelaAcerto } from './TelaAcerto'
 
-export function TelaHistorico(props: { noites: Noite[]; onAbrir: (id: string) => void; onAjustes: () => void }) {
+export function TelaHistorico(props: {
+  noites: Noite[]
+  acertos: AcertoConfirmado[]
+  onAbrir: (id: string) => void
+  onAjustes: () => void
+}) {
   const comandas = useConsulta(() => repo.listarTodasComandas(), [])
   if (!comandas) return <p className="carregando">Carregando…</p>
-  const resumo = resumirNoites(props.noites, comandas)
+  const resumo = resumirNoites(props.noites, comandas, props.acertos)
 
   return (
     <main className="app pilha">
       <header className="topo">
-        <h1>Histórico</h1>
-        <button type="button" className="icone-botao" aria-label="Ajustes" onClick={props.onAjustes}>
+        <div>
+          <h1>Histórico</h1>
+          <IndicadorNuvem />
+        </div>
+        <button type="button" className="icone-botao" aria-label="Ajustes e sair" onClick={props.onAjustes}>
           <Icone nome="ajustes" tamanho={22} />
         </button>
       </header>
+      <EnviarHistorico />
       {resumo.length === 0 && (
         <div className="vazio">
           <Icone nome="historico" tamanho={28} />
@@ -67,7 +78,7 @@ export function TelaHistorico(props: { noites: Noite[]; onAbrir: (id: string) =>
               <span className="selos">
                 {r.noite.fechadaEm === null && <span className="selo neutro">Aberta</span>}
                 <span className={`selo ${r.bateu === null ? 'neutro' : r.bateu ? 'bateu' : 'diferenca'}`}>
-                  {r.selo ?? 'Sem acerto do Luan'}
+                  {r.selo ?? (repo.nuvem ? 'Aguardando o Luan' : 'Sem acerto do Luan')}
                 </span>
               </span>
             </span>
@@ -80,10 +91,25 @@ export function TelaHistorico(props: { noites: Noite[]; onAbrir: (id: string) =>
 }
 
 /** Noite antiga aberta pelo histórico: acerto e comandas. */
-export function NoiteDoHistorico(props: { noite: Noite; noites: Noite[]; areas: Area[]; voltar: () => void }) {
+export function NoiteDoHistorico(props: {
+  noite: Noite
+  noites: Noite[]
+  areas: Area[]
+  acerto: AcertoConfirmado | null
+  voltar: () => void
+}) {
   const comandas = useConsulta(() => repo.listarComandas(props.noite.id), [props.noite.id])
   if (!comandas) return <p className="carregando">Carregando…</p>
-  return <TelaAcerto noite={props.noite} noites={props.noites} comandas={comandas} areas={props.areas} voltar={props.voltar} />
+  return (
+    <TelaAcerto
+      noite={props.noite}
+      noites={props.noites}
+      comandas={comandas}
+      areas={props.areas}
+      acerto={props.acerto}
+      voltar={props.voltar}
+    />
+  )
 }
 
 function BackupDados() {
@@ -123,25 +149,31 @@ function BackupDados() {
       <h2>
         Backup
       </h2>
-      <p className="discreto pequeno">Os dados ficam só neste celular. Exporte de vez em quando e guarde o arquivo.</p>
+      <p className="discreto pequeno">
+        {repo.nuvem
+          ? 'Os dados ficam no celular e na nuvem. O arquivo é uma cópia a mais, se quiser guardar.'
+          : 'Os dados ficam só neste celular. Exporte de vez em quando e guarde o arquivo.'}
+      </p>
       <button type="button" className="secundario" onClick={exportar}>
         <Icone nome="baixar" tamanho={18} />
         Exportar backup
       </button>
-      <label className="botao secundario">
-        <Icone nome="subir" tamanho={18} />
-        Importar backup
-        <input
-          type="file"
-          accept=".json,application/json"
-          className="so-leitor"
-          onChange={(e) => {
-            const arquivo = e.target.files?.[0]
-            e.target.value = ''
-            if (arquivo) escolher(arquivo)
-          }}
-        />
-      </label>
+      {!repo.nuvem && (
+        <label className="botao secundario">
+          <Icone nome="subir" tamanho={18} />
+          Importar backup
+          <input
+            type="file"
+            accept=".json,application/json"
+            className="so-leitor"
+            onChange={(e) => {
+              const arquivo = e.target.files?.[0]
+              e.target.value = ''
+              if (arquivo) escolher(arquivo)
+            }}
+          />
+        </label>
+      )}
       {pendente && (
         <div className="aviso pilha-curta">
           <p>

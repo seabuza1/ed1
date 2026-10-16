@@ -23,6 +23,7 @@ export default function App() {
   const noites = useConsulta(async () => ordenarNoites(await repo.listarNoites()), [])
   const ajustes = useConsulta(() => repo.obterAjustes(), [])
   const areas = useConsulta(() => repo.listarAreas(), [])
+  const acertos = useConsulta(() => repo.listarAcertos(), [])
   const emFoco = noites && (noiteAberta(noites) ?? noites[0])
   const comandas = useConsulta(
     async () => (emFoco ? repo.listarComandas(emFoco.id) : []),
@@ -31,12 +32,17 @@ export default function App() {
 
   const noiteHistorico = noites?.find((n) => n.id === idHistorico)
 
-  if (!noites || !ajustes || !areas || !comandas) return <p className="carregando">Carregando…</p>
+  if (!noites || !ajustes || !areas || !comandas || !acertos) return <p className="carregando">Carregando…</p>
+  const acertoDe = (id: string | undefined) => acertos.find((a) => a.caixaId === id) ?? null
 
   return (
     <>
-      {aba === 'noite' && <TelaNoite noites={noites} ajustes={ajustes} areas={areas} comandas={comandas} />}
-      {aba === 'acerto' && <TelaAcerto noite={emFoco} noites={noites} comandas={comandas} areas={areas} />}
+      {aba === 'noite' && (
+        <TelaNoite noites={noites} ajustes={ajustes} areas={areas} comandas={comandas} acertos={acertos} />
+      )}
+      {aba === 'acerto' && (
+        <TelaAcerto noite={emFoco} noites={noites} comandas={comandas} areas={areas} acerto={acertoDe(emFoco?.id)} />
+      )}
       {aba === 'historico' &&
         (ajustesAbertos ? (
           <TelaAjustes areas={areas} ajustes={ajustes} voltar={() => setAjustesAbertos(false)} />
@@ -45,10 +51,16 @@ export default function App() {
             noite={noiteHistorico}
             noites={noites}
             areas={areas}
+            acerto={acertoDe(noiteHistorico.id)}
             voltar={() => setIdHistorico(null)}
           />
         ) : (
-          <TelaHistorico noites={noites} onAbrir={setIdHistorico} onAjustes={() => setAjustesAbertos(true)} />
+          <TelaHistorico
+            noites={noites}
+            acertos={acertos}
+            onAbrir={setIdHistorico}
+            onAjustes={() => setAjustesAbertos(true)}
+          />
         ))}
       <nav className="abas">
         {ABAS.map((a) => (

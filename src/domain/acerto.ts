@@ -1,6 +1,6 @@
 import { NOMES_FORMA, type Resultado } from './comanda'
 import { formatarReais } from './dinheiro'
-import type { Area, Comanda, Forma, Noite } from './tipos'
+import type { AcertoConfirmado, Area, Comanda, Forma, Noite } from './tipos'
 
 export interface Conferencia {
   situacao: 'bateu' | 'falta' | 'sobra'
@@ -347,8 +347,9 @@ export interface ResumoNoite {
   bateu: boolean | null
 }
 
-/** Histórico: uma linha por noite, a mais recente primeiro. */
-export function resumirNoites(noites: Noite[], comandas: Comanda[]): ResumoNoite[] {
+/** Histórico: uma linha por noite, a mais recente primeiro. Com nuvem, vale o acerto confirmado. */
+export function resumirNoites(noites: Noite[], comandas: Comanda[], acertos: AcertoConfirmado[] = []): ResumoNoite[] {
+  const confirmados = new Map(acertos.map((a) => [a.caixaId, a]))
   const porNoite = new Map<string, Comanda[]>()
   for (const c of comandas) porNoite.set(c.noiteId, [...(porNoite.get(c.noiteId) ?? []), c])
   return [...noites]
@@ -356,6 +357,17 @@ export function resumirNoites(noites: Noite[], comandas: Comanda[]): ResumoNoite
     .map((noite) => {
       const doDia = porNoite.get(noite.id) ?? []
       const a = calcularAcerto(noite, doDia)
+      const confirmado = confirmados.get(noite.id)
+      if (confirmado)
+        return {
+          noite,
+          qtdComandas: doDia.length,
+          devolver: a.devolver,
+          receber: a.receber,
+          pago: confirmado.pagoAoMotoboy,
+          selo: 'Confirmado pelo Luan',
+          bateu: true,
+        }
       const comp = compararComLuan(noite, a)
       return {
         noite,

@@ -7,6 +7,8 @@ import type { Ajustes, Area } from '../domain/tipos'
 import { procurarAtualizacao } from '../data/atualizacao'
 import { novoId } from '../data/id'
 import { repo } from '../data/repo'
+import { ehEquipe, sair, useUsuario, type Usuario } from '../data/sessao'
+import { BotaoConfirmar } from '../ui/BotaoConfirmar'
 import { CampoReais } from '../ui/CampoReais'
 import { mensagemDeErro } from '../ui/erro'
 import { Icone } from '../ui/Icone'
@@ -44,6 +46,9 @@ function EscolherTema() {
 }
 
 export function TelaAjustes(props: { areas: Area[]; ajustes: Ajustes; voltar: () => void }) {
+  const usuario = useUsuario()
+  // Com nuvem, as áreas são da pizzaria: só a expedição e o admin mudam.
+  const editaAreas = !repo.nuvem || ehEquipe(usuario)
   return (
     <main className="app pilha">
       <button type="button" className="link alinha-inicio" onClick={props.voltar}>
@@ -51,11 +56,68 @@ export function TelaAjustes(props: { areas: Area[]; ajustes: Ajustes; voltar: ()
         Histórico
       </button>
       <h1>Ajustes</h1>
+      {usuario && <Conta usuario={usuario} />}
       <EscolherTema />
-      <Areas areas={props.areas} />
+      {editaAreas ? <Areas areas={props.areas} /> : <AreasSoLeitura areas={props.areas} />}
       <ValoresPadrao key={`${props.ajustes.caixaPadrao}-${props.ajustes.diariaPadrao}`} ajustes={props.ajustes} />
       <SobreApp />
     </main>
+  )
+}
+
+const NOMES_PAPEL = { motoboy: 'Motoboy', expedicao: 'Expedição', admin: 'Admin' }
+
+function Conta({ usuario }: { usuario: Usuario }) {
+  const pendentes = repo.sync?.obter().pendentes ?? 0
+  return (
+    <section className="bloco">
+      <h2>Conta</h2>
+      <p>
+        <strong>{usuario.nome}</strong> · {NOMES_PAPEL[usuario.papel]}
+        <br />
+        <span className="discreto pequeno">{usuario.email}</span>
+      </p>
+      {ehEquipe(usuario) && (
+        <a className="botao secundario" href="/painel">
+          <Icone nome="painel" tamanho={18} />
+          Painel da expedição
+        </a>
+      )}
+      {pendentes > 0 ? (
+        <>
+          <p className="aviso">
+            {pendentes} {pendentes === 1 ? 'alteração ainda não subiu' : 'alterações ainda não subiram'} para a nuvem. Elas
+            ficam guardadas neste celular e sobem quando você entrar de novo.
+          </p>
+          <BotaoConfirmar className="perigo" confirmacao="Toque de novo para sair" onConfirmar={sair}>
+            <Icone nome="sair" tamanho={18} />
+            Sair
+          </BotaoConfirmar>
+        </>
+      ) : (
+        <button type="button" className="perigo" onClick={sair}>
+          <Icone nome="sair" tamanho={18} />
+          Sair
+        </button>
+      )}
+    </section>
+  )
+}
+
+function AreasSoLeitura({ areas }: { areas: Area[] }) {
+  return (
+    <section className="bloco">
+      <h2>Áreas e taxas</h2>
+      <p className="discreto pequeno">Definidas pela expedição.</p>
+      {areas
+        .filter((a) => a.ativa)
+        .map((a) => (
+          <div key={a.id} className="linha-area">
+            <strong>{a.nome}</strong>
+            <span className="num">{formatarReais(a.taxa)}</span>
+          </div>
+        ))}
+    </section>
   )
 }
 

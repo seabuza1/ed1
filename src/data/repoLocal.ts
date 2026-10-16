@@ -40,6 +40,7 @@ export function criarRepoLocal(nome: string): Repo {
   }
 
   return {
+    nuvem: false,
     listarNoites: () => db.noites.toArray(),
     salvarNoite: (noite) => gravar(() => db.noites.put(noite)),
     atualizarNoite: (id, mudancas) => gravar(() => db.noites.update(id, mudancas)),
@@ -56,6 +57,9 @@ export function criarRepoLocal(nome: string): Repo {
 
     obterAjustes: async () => (await db.ajustes.get('padrao')) ?? AJUSTES_PADRAO,
     salvarAjustes: (ajustes) => gravar(() => db.ajustes.put(ajustes)),
+
+    obterAcerto: async () => null,
+    listarAcertos: async () => [],
 
     lerTudo: () =>
       db.transaction('r', [db.noites, db.comandas, db.areas, db.ajustes], async () => ({

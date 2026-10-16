@@ -1243,3 +1243,35 @@ button.item-papel .codigo {
   font-weight: 700;
   white-space: nowrap;
 }
+
+/* ---------- Nuvem ---------- */
+
+.indicador-nuvem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--discreto);
+}
+
+.indicador-nuvem.pendente {
+  color: var(--alerta);
+}
+
+.entrar {
+  padding-top: calc(32px + env(safe-area-inset-top));
+}
+
+a.botao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  border-radius: 12px;
+  background: var(--tonal);
+  color: var(--texto);
+  font-weight: 600;
+  text-decoration: none;
+}

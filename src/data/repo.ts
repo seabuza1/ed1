@@ -1,12 +1,33 @@
 import type { Dados } from '../domain/backup'
-import type { Ajustes, Area, Comanda, Noite } from '../domain/tipos'
+import type { AcertoConfirmado, Ajustes, Area, Comanda, Noite } from '../domain/tipos'
 import { criarRepoLocal } from './repoLocal'
 
+/** Situação da sincronização com a nuvem, para o indicador discreto. */
+export interface EstadoSync {
+  pendentes: number // alterações esperando internet
+  enviando: boolean
+  online: boolean
+  /** Última alteração recusada pela nuvem (ex.: acerto já confirmado). */
+  recusa: string | null
+}
+
+export interface FonteSync {
+  obter(): EstadoSync
+  aoMudar(ouvinte: () => void): () => void
+  sincronizar(): Promise<void>
+  limparRecusa(): void
+}
+
 /**
- * Acesso aos dados. As telas só falam com esta interface; hoje a implementação é
- * IndexedDB (Dexie), na próxima versão será Supabase.
+ * Acesso aos dados. As telas só falam com esta interface. Sem nuvem configurada, é o
+ * IndexedDB (Dexie) do aparelho; com nuvem, o mesmo IndexedDB com uma fila que sobe
+ * para o Supabase quando há internet.
  */
 export interface Repo {
+  readonly nuvem: boolean
+  /** Só com nuvem. */
+  readonly sync?: FonteSync
+
   listarNoites(): Promise<Noite[]>
   salvarNoite(noite: Noite): Promise<void>
   /** Grava só os campos informados (evita sobrescrever o que mudou em outra gravação). */
@@ -26,6 +47,10 @@ export interface Repo {
   obterAjustes(): Promise<Ajustes>
   salvarAjustes(ajustes: Ajustes): Promise<void>
 
+  /** Acerto confirmado pelo Luan (só existe com nuvem). */
+  obterAcerto(noiteId: string): Promise<AcertoConfirmado | null>
+  listarAcertos(): Promise<AcertoConfirmado[]>
+
   /** Backup: tudo o que está guardado. */
   lerTudo(): Promise<Dados>
   /** Importar backup: apaga tudo e grava os dados, de uma vez só. */
@@ -35,4 +60,48 @@ export interface Repo {
   aoMudar(ouvinte: () => void): () => void
 }
 
-export const repo: Repo = criarRepoLocal('acerto')
+/** Banco da versão local (e do MVP). Com nuvem, só é lido para enviar o histórico. */
+export const NOME_BANCO_LOCAL = 'acerto'
+
+let atual: Repo | null = null
+const usar = () => (atual ??= criarRepoLocal(NOME_BANCO_LOCAL))
+const ouvintes = new Set<() => void>()
+let pararAtual: (() => void) | null = null
+
+/** Troca a implementação (no login); as telas continuam usando `repo`. */
+export function usarRepo(novo: Repo): void {
+  pararAtual?.()
+  atual = novo
+  pararAtual = novo.aoMudar(() => ouvintes.forEach((o) => o()))
+  ouvintes.forEach((o) => o())
+}
+
+export const repo: Repo = {
+  get nuvem() {
+    return usar().nuvem
+  },
+  get sync() {
+    return usar().sync
+  },
+  listarNoites: () => usar().listarNoites(),
+  salvarNoite: (n) => usar().salvarNoite(n),
+  atualizarNoite: (id, m) => usar().atualizarNoite(id, m),
+  listarComandas: (id) => usar().listarComandas(id),
+  listarTodasComandas: () => usar().listarTodasComandas(),
+  salvarComanda: (c) => usar().salvarComanda(c),
+  excluirComanda: (id) => usar().excluirComanda(id),
+  sugerirArea: (codigo) => usar().sugerirArea(codigo),
+  listarAreas: () => usar().listarAreas(),
+  salvarArea: (a) => usar().salvarArea(a),
+  obterAjustes: () => usar().obterAjustes(),
+  salvarAjustes: (a) => usar().salvarAjustes(a),
+  obterAcerto: (id) => usar().obterAcerto(id),
+  listarAcertos: () => usar().listarAcertos(),
+  lerTudo: () => usar().lerTudo(),
+  substituirTudo: (d) => usar().substituirTudo(d),
+  aoMudar(ouvinte) {
+    if (!pararAtual) usarRepo(usar())
+    ouvintes.add(ouvinte)
+    return () => ouvintes.delete(ouvinte)
+  },
+}

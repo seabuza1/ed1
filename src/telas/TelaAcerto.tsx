@@ -17,7 +17,7 @@ import { marcarConferido, marcarPapel, nomesFormas, type Resultado } from '../do
 import { formatarData, formatarHora } from '../domain/datas'
 import { formatarReais, lerReais, paraCampo } from '../domain/dinheiro'
 import { avisoAoFechar, fecharNoite, reabrirNoite } from '../domain/noite'
-import type { Area, Comanda, Noite } from '../domain/tipos'
+import type { AcertoConfirmado, Area, Comanda, Noite } from '../domain/tipos'
 import { agora } from '../data/id'
 import { repo } from '../data/repo'
 import { BarraTotais } from '../ui/BarraTotais'
@@ -33,6 +33,8 @@ export function TelaAcerto(props: {
   noites: Noite[]
   comandas: Comanda[]
   areas: Area[]
+  /** Confirmado pelo Luan (com nuvem): trava a noite. */
+  acerto: AcertoConfirmado | null
   /** Aberta pelo histórico: mostra as comandas e o botão de voltar. */
   voltar?: () => void
 }) {
@@ -60,10 +62,12 @@ function ConteudoAcerto(props: {
   noites: Noite[]
   comandas: Comanda[]
   areas: Area[]
+  acerto: AcertoConfirmado | null
   voltar?: () => void
 }) {
   const { noite, comandas } = props
-  const leitura = noite.fechadaEm !== null
+  const confirmado = props.acerto
+  const leitura = noite.fechadaEm !== null || confirmado !== null
   const acerto = calcularAcerto(noite, comandas)
   const [erro, setErro] = useState<string | null>(null)
 
@@ -93,14 +97,24 @@ function ConteudoAcerto(props: {
           <div>
             <h1>Acerto de {formatarData(noite.data)}</h1>
             <div className="pilulas">
-              {leitura ? (
+              {noite.fechadaEm !== null ? (
                 <span className="pilula fechada">
                   <Icone nome="cadeado" tamanho={13} />
-                  Fechada às {formatarHora(noite.fechadaEm!)} · só leitura
+                  Fechada às {formatarHora(noite.fechadaEm)}
                 </span>
               ) : (
                 <span className="pilula aberta">Noite aberta</span>
               )}
+              {repo.nuvem &&
+                (confirmado ? (
+                  <span className="pilula confirmado">
+                    <Icone nome="check" tamanho={13} />
+                    Confirmado{confirmado.confirmadoPorNome ? ` por ${confirmado.confirmadoPorNome}` : ''} às{' '}
+                    {formatarHora(confirmado.confirmadoEm)}
+                  </span>
+                ) : (
+                  <span className="pilula aguardando">Aguardando o Luan</span>
+                ))}
             </div>
           </div>
         </div>
@@ -111,11 +125,15 @@ function ConteudoAcerto(props: {
         <EntregasPorCidade acerto={acerto} areas={props.areas} />
         <Papeis comandas={comandas} areas={props.areas} leitura={leitura} />
         <Maquininha comandas={comandas} leitura={leitura} />
-        <ComparacaoLuan noite={noite} acerto={acerto} leitura={leitura} atualizar={atualizar} />
+        {confirmado ? (
+          <AcertoDoLuan confirmado={confirmado} />
+        ) : (
+          !repo.nuvem && <ComparacaoLuan noite={noite} acerto={acerto} leitura={leitura} atualizar={atualizar} />
+        )}
 
         {erro && <p className="erro">{erro}</p>}
 
-        {leitura ? (
+        {confirmado ? null : leitura ? (
           <button
             type="button"
             className="secundario"
@@ -145,6 +163,60 @@ function ConteudoAcerto(props: {
         )}
       </main>
     </>
+  )
+}
+
+/** O que o Luan gravou ao confirmar (vale mesmo se a conta mudar depois). */
+function AcertoDoLuan({ confirmado: a }: { confirmado: AcertoConfirmado }) {
+  return (
+    <section className="bloco">
+      <h2>Acerto confirmado</h2>
+      <p className="discreto pequeno">
+        {a.confirmadoPorNome ? `Por ${a.confirmadoPorNome}` : 'Pela expedição'} em {formatarData(a.confirmadoEm.slice(0, 10))} às{' '}
+        {formatarHora(a.confirmadoEm)}. A noite fica travada; só o admin reabre.
+      </p>
+      <dl className="liquidacao">
+        <div>
+          <dt>Dinheiro contado</dt>
+          <dd>{formatarReais(a.dinheiroContado)}</dd>
+        </div>
+        {a.falta > 0 && (
+          <div>
+            <dt>Faltou</dt>
+            <dd>{formatarReais(a.falta)}</dd>
+          </div>
+        )}
+        {a.sobra > 0 && (
+          <div>
+            <dt>Sobrou</dt>
+            <dd>{formatarReais(a.sobra)}</dd>
+          </div>
+        )}
+        <div>
+          <dt>Você recebeu</dt>
+          <dd>{formatarReais(a.pagoAoMotoboy)}</dd>
+        </div>
+        <div>
+          <dt>Do seu caixa</dt>
+          <dd>{formatarReais(a.pagoDoCaixaDele)}</dd>
+        </div>
+        <div>
+          <dt>Do caixa da empresa</dt>
+          <dd>{formatarReais(a.retiradoCaixaEmpresa)}</dd>
+        </div>
+        <div>
+          <dt>Foi para a empresa</dt>
+          <dd>{formatarReais(a.vaiParaEmpresa)}</dd>
+        </div>
+        {a.completadoDoBolso > 0 && (
+          <div>
+            <dt>Completou do bolso</dt>
+            <dd>{formatarReais(a.completadoDoBolso)}</dd>
+          </div>
+        )}
+      </dl>
+      {a.obs && <p className="discreto">{a.obs}</p>}
+    </section>
   )
 }
 
@@ -249,7 +321,8 @@ function Papeis({ comandas, areas, leitura }: { comandas: Comanda[]; areas: Area
             <span className="detalhe">
               {areas.find((a) => a.id === c.areaId)?.nome ?? '—'} · {nomesFormas(c.pagamentos)}
               {c.troco > 0 && <> · troco Pix {formatarReais(c.troco)}</>} ·{' '}
-              {c.status === 'voltou' ? 'voltou' : 'entregue'} {formatarHora(c.finalizadaEm ?? c.criadaEm)}
+              {c.status === 'em_rota' ? 'lançada' : c.status === 'voltou' ? 'voltou' : 'entregue'}{' '}
+              {formatarHora(c.finalizadaEm ?? c.criadaEm)}
             </span>
           </span>
           <strong className="valor">{formatarReais(c.total)}</strong>

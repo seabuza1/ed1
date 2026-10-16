@@ -11,6 +11,7 @@ import {
   registrarContado,
   resumoMaquininha,
   registrarLuan,
+  resumirNoites,
   seloLuan,
   tipoDiferenca,
 } from './acerto'
@@ -25,7 +26,7 @@ import {
   trocarForma,
   type EntradaComanda,
 } from './comanda'
-import type { Area, Comanda, Forma, Noite, Status } from './tipos'
+import type { AcertoConfirmado, Area, Comanda, Forma, Noite, Status } from './tipos'
 import { r$ } from '../teste/r$'
 
 const R = (reais: number) => reais * 100
@@ -438,6 +439,17 @@ describe('tela de acerto', () => {
     const faltaDiferente = comparar(noiteCompleta({ dinheiroContado: R(243), luanPagou: R(86), luanDiferenca: -R(5) }))!
     expect(faltaDiferente.bateu).toBe(false)
     expect(seloLuan(faltaDiferente)).toBe(r$('Diferença de R$ 5,00'))
+  })
+
+  it('histórico com nuvem: vale o acerto confirmado pelo Luan', () => {
+    const n1 = noiteCompleta({ id: 'n1', data: '2026-10-12' })
+    const n2 = noiteCompleta({ id: 'n2', data: '2026-10-13' })
+    const confirmado = { caixaId: 'n1', pagoAoMotoboy: R(83) } as AcertoConfirmado
+    const r = resumirNoites([n1, n2], noiteBase(), [confirmado])
+    expect(r.map((x) => [x.noite.id, x.pago, x.selo, x.bateu])).toEqual([
+      ['n2', null, null, null],
+      ['n1', R(83), 'Confirmado pelo Luan', true],
+    ])
   })
 
   it('conferência e Luan só com a noite aberta', () => {
