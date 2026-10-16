@@ -1,6 +1,6 @@
 import { NOMES_FORMA, type Resultado } from './comanda'
 import { formatarReais } from './dinheiro'
-import type { Comanda, Forma, Noite } from './tipos'
+import type { Area, Comanda, Forma, Noite } from './tipos'
 
 export interface Conferencia {
   situacao: 'bateu' | 'falta' | 'sobra'
@@ -124,6 +124,31 @@ export function entregasPorArea(comandas: Comanda[]): Record<string, PorArea> {
 
 /** R16: comandas cujo papel não foi entregue ao Luan. */
 export const papelFaltando = (comandas: Comanda[]) => comandas.filter((c) => !c.papelConferido)
+
+export interface LinhaCidade extends PorArea {
+  areaId: string
+  nome: string
+}
+
+/** R17 para a tela: uma linha por área (na ordem da tabela de áreas) e o total. */
+export function entregasPorCidade(porArea: Record<string, PorArea>, areas: Area[]) {
+  const ordem = new Map(areas.map((a, i) => [a.id, i]))
+  const linhas: LinhaCidade[] = Object.entries(porArea)
+    .map(([areaId, p]) => ({ areaId, nome: areas.find((a) => a.id === areaId)?.nome ?? 'Área removida', ...p }))
+    .sort((a, b) => (ordem.get(a.areaId) ?? Infinity) - (ordem.get(b.areaId) ?? Infinity))
+  const total = linhas.reduce(
+    (t, l) => ({ entregues: t.entregues + l.entregues, voltaram: t.voltaram + l.voltaram, taxas: t.taxas + l.taxas }),
+    { entregues: 0, voltaram: 0, taxas: 0 },
+  )
+  return { linhas, total }
+}
+
+/** Conferência de papéis: as que faltam no topo; dentro de cada grupo, na ordem de lançamento. */
+export function papeisParaConferir(comandas: Comanda[]) {
+  const porCriacao = [...comandas].sort((a, b) => a.criadaEm.localeCompare(b.criadaEm))
+  const faltando = porCriacao.filter((c) => !c.papelConferido)
+  return { lista: [...faltando, ...porCriacao.filter((c) => c.papelConferido)], faltando: faltando.length }
+}
 
 export interface LinhaConta {
   rotulo: string

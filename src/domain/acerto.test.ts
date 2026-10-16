@@ -5,7 +5,9 @@ import {
   type Conferencia,
   detalharAcerto,
   diferencaLuan,
+  entregasPorCidade,
   itensMaquininha,
+  papeisParaConferir,
   registrarContado,
   resumoMaquininha,
   registrarLuan,
@@ -245,6 +247,23 @@ describe('v1: entregas por cidade (R17) e papéis (R16)', () => {
     expect(faltando.map((c) => c.codigo)).toEqual(['2672'])
     // com os dados para refazer a comanda
     expect(faltando[0]).toMatchObject({ total: R(90), areaId: 'pontal', pagamentos: [{ forma: 'cartao', valor: R(90) }] })
+  })
+
+  it('entregas por cidade na ordem das áreas, com total', () => {
+    const { linhas, total } = entregasPorCidade(calcularAcerto(noite(), noiteBase()).porArea, areasPadrao())
+    expect(linhas.map((l) => [l.nome, l.entregues, l.voltaram, l.taxas])).toEqual([
+      ['Aragarças', 2, 0, R(10)],
+      ['Pontal', 1, 0, R(10)],
+      ['Barra', 2, 1, R(36)],
+    ])
+    expect(total).toEqual({ entregues: 5, voltaram: 1, taxas: R(56) })
+  })
+
+  it('papéis: as que faltam no topo', () => {
+    const comandas = noiteBase().map((c, i) => ({ ...c, criadaEm: `20:0${i}`, papelConferido: c.codigo !== '2672' && c.codigo !== '8094' }))
+    const r = papeisParaConferir(comandas)
+    expect(r.faltando).toBe(2)
+    expect(r.lista.map((c) => c.codigo)).toEqual(['2672', '8094', '3557', '0017', '0910', '3595'])
   })
 
   it('comanda antiga, sem o campo, conta como papel faltando', () => {

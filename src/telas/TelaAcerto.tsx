@@ -4,6 +4,8 @@ import {
   compararComLuan,
   detalharAcerto,
   diferencaLuan,
+  entregasPorCidade,
+  papeisParaConferir,
   registrarContado,
   registrarLuan,
   resumoMaquininha,
@@ -11,7 +13,7 @@ import {
   type Acerto,
   type TipoDiferenca,
 } from '../domain/acerto'
-import { marcarConferido, type Resultado } from '../domain/comanda'
+import { marcarConferido, marcarPapel, nomesFormas, type Resultado } from '../domain/comanda'
 import { formatarData, formatarHora } from '../domain/datas'
 import { formatarReais, lerReais, paraCampo } from '../domain/dinheiro'
 import { avisoAoFechar, fecharNoite, reabrirNoite } from '../domain/noite'
@@ -22,7 +24,7 @@ import { BarraTotais } from '../ui/BarraTotais'
 import { BotaoConfirmar } from '../ui/BotaoConfirmar'
 import { CampoReais } from '../ui/CampoReais'
 import { mensagemDeErro } from '../ui/erro'
-import { Icone, type NomeIcone } from '../ui/Icone'
+import { Icone } from '../ui/Icone'
 import { ListasComandas } from './ListasComandas'
 
 /** Acerto de uma noite. Fechada = só leitura, com Reabrir. */
@@ -105,8 +107,10 @@ function ConteudoAcerto(props: {
 
         <Conta acerto={acerto} />
         {aviso && <p className="aviso">{aviso}</p>}
-        <Maquininha comandas={comandas} leitura={leitura} />
         <Conferencia noite={noite} acerto={acerto} leitura={leitura} atualizar={atualizar} />
+        <EntregasPorCidade acerto={acerto} areas={props.areas} />
+        <Papeis comandas={comandas} areas={props.areas} leitura={leitura} />
+        <Maquininha comandas={comandas} leitura={leitura} />
         <ComparacaoLuan noite={noite} acerto={acerto} leitura={leitura} atualizar={atualizar} />
 
         {erro && <p className="erro">{erro}</p>}
@@ -144,34 +148,114 @@ function ConteudoAcerto(props: {
   )
 }
 
-const ESTILO_LINHA: Record<string, { classe: string; icone: NomeIcone }> = {
-  Devolver: { classe: 'devolver', icone: 'dinheiro' },
-  Maquininha: { classe: 'maquininha', icone: 'cartao' },
-  Receber: { classe: 'receber', icone: 'carteira' },
-  'Pix antecipado': { classe: 'antecipado', icone: 'check' },
-}
+const CLASSE_LINHA: Record<string, string> = { Devolver: 'devolver', Maquininha: 'maquininha', Receber: 'receber' }
 
 function Conta({ acerto }: { acerto: Acerto }) {
   return (
     <section className="bloco">
-      <h2 className="titulo-conta">Conta</h2>
-      {detalharAcerto(acerto).map((l) => {
-        const estilo = ESTILO_LINHA[l.rotulo] ?? ESTILO_LINHA['Pix antecipado']
-        return (
-          <div key={l.rotulo} className="linha-conta">
-            <span className={`marcador ${estilo.classe}`}>
-              <Icone nome={estilo.icone} tamanho={20} />
-            </span>
-            <div>
-              <div className="linha-conta-topo">
-                <span>{l.rotulo}</span>
-                <strong>{formatarReais(l.valor)}</strong>
-              </div>
-              <p className="discreto pequeno">{l.origem}</p>
-            </div>
+      <h2>Conta</h2>
+      {detalharAcerto(acerto).map((l) => (
+        <div key={l.rotulo} className={`linha-conta ${CLASSE_LINHA[l.rotulo] ?? ''}`}>
+          <div className="linha-conta-topo">
+            <span>{l.rotulo}</span>
+            <strong>{formatarReais(l.valor)}</strong>
           </div>
-        )
-      })}
+          <p className="discreto pequeno">{l.origem}</p>
+        </div>
+      ))}
+    </section>
+  )
+}
+
+/** R17: entregues, que voltaram e taxas por área. */
+function EntregasPorCidade({ acerto, areas }: { acerto: Acerto; areas: Area[] }) {
+  const { linhas, total } = entregasPorCidade(acerto.porArea, areas)
+  if (linhas.length === 0) return null
+  return (
+    <section className="bloco">
+      <h2>Entregas por cidade</h2>
+      <table className="tabela">
+        <thead>
+          <tr>
+            <th>Área</th>
+            <th>Entregues</th>
+            <th>Voltou</th>
+            <th>Taxas</th>
+          </tr>
+        </thead>
+        <tbody>
+          {linhas.map((l) => (
+            <tr key={l.areaId}>
+              <td>{l.nome}</td>
+              <td>{l.entregues}</td>
+              <td>{l.voltaram}</td>
+              <td>{formatarReais(l.taxas)}</td>
+            </tr>
+          ))}
+        </tbody>
+        {linhas.length > 1 && (
+          <tfoot>
+            <tr>
+              <td>Total</td>
+              <td>{total.entregues}</td>
+              <td>{total.voltaram}</td>
+              <td>{formatarReais(total.taxas)}</td>
+            </tr>
+          </tfoot>
+        )}
+      </table>
+    </section>
+  )
+}
+
+/** R16: tocar marca a comanda de papel como entregue ao Luan; as que faltam ficam no topo. */
+function Papeis({ comandas, areas, leitura }: { comandas: Comanda[]; areas: Area[]; leitura: boolean }) {
+  const { lista, faltando } = papeisParaConferir(comandas)
+  const [erro, setErro] = useState<string | null>(null)
+  if (lista.length === 0) return null
+
+  async function alternar(c: Comanda) {
+    try {
+      await repo.salvarComanda(marcarPapel(c, !c.papelConferido, agora()))
+      setErro(null)
+    } catch (e) {
+      setErro(mensagemDeErro(e))
+    }
+  }
+
+  return (
+    <section className="bloco">
+      <h2>Papéis</h2>
+      <p className={faltando === 0 ? 'sucesso' : 'discreto pequeno'}>
+        {faltando === 0
+          ? 'Todos os papéis conferidos.'
+          : `${faltando} ${faltando === 1 ? 'papel ainda não conferido' : 'papéis ainda não conferidos'}. Toque quando entregar ao Luan.`}
+      </p>
+      {lista.map((c) => (
+        <button
+          key={c.id}
+          type="button"
+          className="item-papel"
+          aria-pressed={c.papelConferido === true}
+          disabled={leitura}
+          onClick={() => alternar(c)}
+        >
+          <span className="marca" aria-hidden>
+            {c.papelConferido && <Icone nome="check" tamanho={16} />}
+          </span>
+          <span className="papel-meio">
+            <strong className="codigo">{c.codigo}</strong>
+            {/* Dados para refazer a comanda se o papel sumiu. */}
+            <span className="detalhe">
+              {areas.find((a) => a.id === c.areaId)?.nome ?? '—'} · {nomesFormas(c.pagamentos)}
+              {c.troco > 0 && <> · troco Pix {formatarReais(c.troco)}</>} ·{' '}
+              {c.status === 'voltou' ? 'voltou' : 'entregue'} {formatarHora(c.finalizadaEm ?? c.criadaEm)}
+            </span>
+          </span>
+          <strong className="valor">{formatarReais(c.total)}</strong>
+        </button>
+      ))}
+      {erro && <p className="erro">{erro}</p>}
     </section>
   )
 }
@@ -203,7 +287,7 @@ function Maquininha({ comandas, leitura }: { comandas: Comanda[]; leitura: boole
           {grupos.map((g) => (
             <div key={g.forma} className="grupo-maquininha">
               <div className="linha-conta-topo">
-                <strong>{g.nome}</strong>
+                <span>{g.nome}</span>
                 <span>
                   <span className="discreto pequeno">
                     {g.conferidos} de {g.itens.length} ·{' '}
@@ -278,6 +362,22 @@ function Conferencia(props: { noite: Noite; acerto: Acerto; leitura: boolean; at
             </p>
           )}
         </div>
+      )}
+      {conf && (
+        <dl className="liquidacao">
+          <div>
+            <dt>Do seu caixa</dt>
+            <dd>{formatarReais(conf.doCaixaDele)}</dd>
+          </div>
+          <div>
+            <dt>O Luan tira do caixa da empresa</dt>
+            <dd>{formatarReais(conf.retiradoCaixaEmpresa)}</dd>
+          </div>
+          <div>
+            <dt>Vai para a empresa</dt>
+            <dd>{formatarReais(conf.vaiParaEmpresa)}</dd>
+          </div>
+        </dl>
       )}
     </section>
   )

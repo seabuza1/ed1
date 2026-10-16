@@ -962,7 +962,7 @@ button.item-maquininha .codigo {
 }
 
 .tabela th {
-  padding: 4px 0;
+  padding: 4px 0 4px 10px;
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -973,11 +973,12 @@ button.item-maquininha .codigo {
 
 .tabela th:first-child,
 .tabela td:first-child {
+  padding-left: 0;
   text-align: left;
 }
 
 .tabela td {
-  padding: 8px 0;
+  padding: 8px 0 8px 10px;
   border-top: 1px solid var(--linha);
   text-align: right;
   font-family: var(--mono);
@@ -1166,4 +1167,79 @@ h2.subtitulo {
   justify-content: center;
   padding: 64px 16px;
   color: var(--discreto);
+}
+
+/* ---------- Papéis e liquidação ---------- */
+
+button.item-papel {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  align-items: center;
+  justify-content: stretch;
+  gap: 10px;
+  width: 100%;
+  min-height: 60px;
+  padding: 6px 12px;
+  border: 1.5px solid var(--alerta);
+  background: transparent;
+  text-align: left;
+  font-weight: inherit;
+}
+
+button.item-papel .marca {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--linha);
+  border-radius: 7px;
+  color: var(--fundo);
+}
+
+button.item-papel[aria-pressed='true'] {
+  border-color: var(--linha);
+}
+
+button.item-papel[aria-pressed='true'] .marca {
+  background: var(--ok);
+  border-color: var(--ok);
+}
+
+button.item-papel .codigo {
+  font-size: 1.1rem;
+}
+
+.papel-meio {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.liquidacao {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+
+.liquidacao > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--linha);
+}
+
+.liquidacao dt {
+  color: var(--texto-2);
+  font-weight: 600;
+}
+
+.liquidacao dd {
+  margin: 0;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  white-space: nowrap;
 }
