@@ -1275,3 +1275,156 @@ a.botao {
   font-weight: 600;
   text-decoration: none;
 }
+
+/* ---------- Painel do Luan ---------- */
+
+.app.painel {
+  max-width: 1400px;
+  padding-bottom: calc(32px + env(safe-area-inset-bottom));
+}
+
+.app.painel > section,
+.app.painel > .pilulas,
+.app.painel > .resultado,
+.app.painel > p,
+.app.painel > button:not(.link) {
+  width: 100%;
+  max-width: 640px;
+}
+
+.campo-data input {
+  min-height: 48px;
+  font-family: var(--mono);
+  font-size: 1rem;
+}
+
+.chips-2 {
+  grid-template-columns: 1fr 1fr;
+  max-width: 640px;
+}
+
+.segmentos .chip {
+  min-height: 48px;
+}
+
+/* Colunas: no celular rolam para o lado; em tela maior ficam lado a lado. */
+.folha {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding-bottom: 8px;
+  margin: 0 -16px;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+button.coluna-folha {
+  flex: 1 0 172px;
+  max-width: 280px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--raio);
+  background: var(--superficie);
+  text-align: left;
+  font-weight: inherit;
+  scroll-snap-align: start;
+}
+
+.coluna-titulo {
+  font-size: 1.05rem;
+  font-weight: 700;
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--texto);
+}
+
+.itens-folha {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.item-folha {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+}
+
+.item-folha .codigo {
+  font-size: 1.05rem;
+}
+
+.item-folha .forma {
+  color: var(--discreto);
+  font-size: 0.9rem;
+}
+
+.item-folha .troco {
+  color: var(--info);
+  font-size: 0.85rem;
+}
+
+.item-folha.status-voltou .codigo,
+.item-folha.status-voltou .forma {
+  text-decoration: line-through;
+  color: var(--discreto);
+}
+
+.papel-pendente {
+  color: var(--alerta);
+  font-weight: 800;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.rodape-folha {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 8px;
+  border-top: 2px solid var(--texto);
+  font-size: 0.9rem;
+}
+
+.linha-valor {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.estado-acerto {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.estado-acerto.pendente {
+  background: var(--alerta-suave);
+  color: var(--alerta);
+}
+
+.estado-acerto.confirmado {
+  background: var(--ok-suave);
+  color: var(--ok);
+}
+
+.rodape-painel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--linha);
+}
+
+.rodape-painel > * {
+  padding: 0 16px;
+}

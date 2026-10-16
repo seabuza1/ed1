@@ -6,6 +6,7 @@ export function BotaoConfirmar(props: {
   confirmacao: ReactNode
   onConfirmar: () => void
   className?: string
+  desabilitado?: boolean
 }) {
   const [armado, setArmado] = useState(false)
 
@@ -19,6 +20,7 @@ export function BotaoConfirmar(props: {
     <button
       type="button"
       className={`${props.className ?? ''} ${armado ? 'armado' : ''}`}
+      disabled={props.desabilitado}
       onClick={() => {
         if (!armado) return setArmado(true)
         setArmado(false)

@@ -11,6 +11,9 @@ export function formatarReais(centavos: number): string {
   return `${sinal}R$\u00a0${reais},${cents}`
 }
 
+/** Sem o "R$", para a folha do painel: "1.234,56". */
+export const formatarNumero = (centavos: number) => formatarReais(centavos).replace('R$\u00a0', '')
+
 /** Lê o que foi digitado ("80", "80,50", "1.234,56", "R$ 12.5") em centavos; null se inválido. */
 export function lerReais(texto: string): number | null {
   let t = texto.replace(/R\$|\s/g, '')

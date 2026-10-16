@@ -41,7 +41,7 @@ export interface Remoto {
   ouvir(aoEvento: (e: EventoRemoto) => void): () => void
 }
 
-const MOTIVOS: Record<string, string> = {
+export const MOTIVOS: Record<string, string> = {
   '42501': 'sem permissão (o acerto pode já ter sido confirmado)',
   '23505': 'já existe um registro igual na nuvem (ex.: noite com a mesma data)',
   '23503': 'falta o registro ligado a este na nuvem',
@@ -50,7 +50,7 @@ const MOTIVOS: Record<string, string> = {
 
 type Resposta<T> = { data: T | null; error: PostgrestError | null; status: number }
 
-function verificar<T>(r: Resposta<T>): T {
+export function verificar<T>(r: Resposta<T>): T {
   if (!r.error) return r.data as T
   // status 0 = sem resposta (sem internet); 401 = sessão vencida, renova sozinha.
   const transitorio = r.status === 0 || r.status === 401 || r.status === 408 || r.status === 429 || r.status >= 500

@@ -11,6 +11,8 @@ export function CampoReais({
   onChange: (texto: string) => void
   placeholder?: string
   desabilitado?: boolean
+  /** Ao sair do campo (ou Enter): para gravar uma vez só, e não a cada dígito. */
+  aoSair?: () => void
 }) {
   return (
     <label className="campo">
@@ -28,6 +30,7 @@ export function CampoReais({
           onChange={(e) => props.onChange(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
           onFocus={(e) => e.target.select()}
+          onBlur={props.aoSair}
         />
       </span>
     </label>
