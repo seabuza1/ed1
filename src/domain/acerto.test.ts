@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   calcularAcerto,
   compararComLuan,
+  type Conferencia,
   detalharAcerto,
   diferencaLuan,
   itensMaquininha,
@@ -34,10 +35,10 @@ const areasPadrao = (): Area[] => [
   { id: 'parque', nome: 'Parque de Exposições', taxa: R(15), ativa: true },
 ]
 
-const noite = (dinheiroContado: number | null = null): Pick<
-  Noite,
-  'caixaInicial' | 'diaria' | 'dinheiroContado'
-> => ({ caixaInicial: R(80), diaria: R(30), dinheiroContado })
+const noite = (
+  dinheiroContado: number | null = null,
+  caixaInicial = R(80),
+): Pick<Noite, 'caixaInicial' | 'diaria' | 'dinheiroContado'> => ({ caixaInicial, diaria: R(30), dinheiroContado })
 
 let seq = 0
 function lancar(
@@ -148,6 +149,106 @@ describe('calcularAcerto', () => {
     const areas = areasPadrao()
     const comandas = [...noiteBase(areas), lancar(areas, '7777', 30, 'pontal', [['dinheiro', 30]], { status: 'em_rota' })]
     expect(calcularAcerto(noite(), comandas).devolver).toBe(R(273))
+  })
+})
+
+/** T10: caixa 75, tudo no cartão: 10 em Barra de 50, 2 em Aragarças de 40, 1 em Pontal de 30. */
+function noiteT10(areas = areasPadrao()): Comanda[] {
+  return [
+    ...Array.from({ length: 10 }, (_, i) => lancar(areas, String(1000 + i), 50, 'barra', [['cartao', 50]])),
+    lancar(areas, '2000', 40, 'aragarcas', [['cartao', 40]]),
+    lancar(areas, '2001', 40, 'aragarcas', [['cartao', 40]]),
+    lancar(areas, '3000', 30, 'pontal', [['cartao', 30]]),
+  ]
+}
+
+const liquidacao = (c: Conferencia | null) => c && {
+  falta: c.falta / 100,
+  sobra: c.sobra / 100,
+  pagar: c.pagar / 100,
+  completa: c.completa / 100,
+  doCaixaDele: c.doCaixaDele / 100,
+  retiradoCaixaEmpresa: c.retiradoCaixaEmpresa / 100,
+  vaiParaEmpresa: c.vaiParaEmpresa / 100,
+}
+
+describe('v1: liquidação (R14)', () => {
+  it('T10 tudo no cartão: 75 do caixa dele e 95 do caixa da empresa', () => {
+    const a = calcularAcerto(noite(R(75), R(75)), noiteT10())
+    expect([a.devolver, a.maquininha, a.receber]).toEqual([R(75), R(610), R(170)])
+    expect(liquidacao(a.conferencia)).toMatchObject({ pagar: 170, doCaixaDele: 75, retiradoCaixaEmpresa: 95, vaiParaEmpresa: 0 })
+  })
+
+  it('T11 contado 243', () => {
+    expect(liquidacao(calcularAcerto(noite(R(243)), noiteBase()).conferencia)).toMatchObject({
+      pagar: 86, doCaixaDele: 80, retiradoCaixaEmpresa: 6, vaiParaEmpresa: 163,
+    })
+  })
+
+  it('T12 contado 240: falta 3', () => {
+    expect(liquidacao(calcularAcerto(noite(R(240)), noiteBase()).conferencia)).toMatchObject({
+      falta: 3, pagar: 83, doCaixaDele: 80, retiradoCaixaEmpresa: 3, vaiParaEmpresa: 160,
+    })
+  })
+
+  it('T13 contado 140: falta 103, completa 17', () => {
+    expect(liquidacao(calcularAcerto(noite(R(140)), noiteBase()).conferencia)).toMatchObject({
+      falta: 103, pagar: 0, completa: 17, doCaixaDele: 0, retiradoCaixaEmpresa: 0, vaiParaEmpresa: 157,
+    })
+  })
+
+  it('T14 contado 250: sobra 7', () => {
+    expect(liquidacao(calcularAcerto(noite(R(250)), noiteBase()).conferencia)).toMatchObject({
+      sobra: 7, pagar: 86, doCaixaDele: 80, retiradoCaixaEmpresa: 6, vaiParaEmpresa: 170,
+    })
+  })
+
+  it('T15 receber menor que o caixa: o resto do caixa vai para a empresa', () => {
+    const a = calcularAcerto(noite(R(120)), [lancar(areasPadrao(), '4321', 40, 'aragarcas', [['dinheiro', 40]])])
+    expect(a.receber).toBe(R(35))
+    expect(liquidacao(a.conferencia)).toMatchObject({ pagar: 35, doCaixaDele: 35, retiradoCaixaEmpresa: 0, vaiParaEmpresa: 85 })
+  })
+
+  it('contado menor que o caixa: o Luan só usa o que ele trouxe', () => {
+    expect(liquidacao(calcularAcerto(noite(R(50), R(75)), noiteT10()).conferencia)).toMatchObject({
+      falta: 25, pagar: 145, doCaixaDele: 50, retiradoCaixaEmpresa: 95, vaiParaEmpresa: 0,
+    })
+  })
+
+  it('sem falta: vaiParaEmpresa − retirado = devolver − receber + sobra', () => {
+    const casos = [
+      calcularAcerto(noite(R(75), R(75)), noiteT10()),
+      calcularAcerto(noite(R(243)), noiteBase()),
+      calcularAcerto(noite(R(250)), noiteBase()),
+      calcularAcerto(noite(R(120)), [lancar(areasPadrao(), '4321', 40, 'aragarcas', [['dinheiro', 40]])]),
+    ]
+    for (const a of casos) {
+      const c = a.conferencia!
+      expect(c.falta).toBe(0)
+      expect(c.vaiParaEmpresa - c.retiradoCaixaEmpresa).toBe(a.devolver - a.receber + c.sobra)
+    }
+  })
+})
+
+describe('v1: entregas por cidade (R17) e papéis (R16)', () => {
+  it('T16 porArea', () => {
+    expect(calcularAcerto(noite(), noiteBase()).porArea).toEqual({
+      barra: { entregues: 2, voltaram: 1, taxas: R(36) },
+      aragarcas: { entregues: 2, voltaram: 0, taxas: R(10) },
+      pontal: { entregues: 1, voltaram: 0, taxas: R(10) },
+    })
+  })
+
+  it('T17 papel conferido em todas menos 2672', () => {
+    const comandas = noiteBase().map((c) => ({ ...c, papelConferido: c.codigo !== '2672' }))
+    const faltando = calcularAcerto(noite(), comandas).papelFaltando
+    expect(faltando.map((c) => c.codigo)).toEqual(['2672'])
+    // com os dados para refazer a comanda
+    expect(faltando[0]).toMatchObject({ total: R(90), areaId: 'pontal', pagamentos: [{ forma: 'cartao', valor: R(90) }] })
+  })
+
+  it('comanda antiga, sem o campo, conta como papel faltando', () => {
+    expect(calcularAcerto(noite(), noiteBase()).papelFaltando).toHaveLength(6)
   })
 })
 

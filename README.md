@@ -1,11 +1,11 @@
 # Meu acerto
 
-App de celular (PWA offline) para o motoboy lançar as comandas da noite e ter a conta do acerto pronta. Veja `CLAUDE.md` e `docs/SPEC-mvp-acerto.md`.
+App de celular (PWA offline) para o motoboy lançar as comandas da noite e ter a conta do acerto pronta. Veja `CLAUDE.md`, `docs/SPEC-v1.md` (o que está sendo feito) e `docs/SPEC-mvp-acerto.md` (a base).
 
 ```sh
 npm install
 npm run dev     # desenvolvimento
-npm test        # testes (cálculo T1 a T9, regras, repositório)
+npm test        # testes (cálculo T1 a T17, regras, repositório)
 npm run build   # build de produção com service worker (pasta dist)
 ```
 

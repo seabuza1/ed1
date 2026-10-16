@@ -45,6 +45,8 @@ export interface Comanda {
   atualizadaEm: string
   /** Quando foi marcada entregue (ou voltou): o horário que bate com o comprovante. */
   finalizadaEm: string | null
+  /** R16: a comanda de papel foi entregue ao Luan no acerto. */
+  papelConferido?: boolean
 }
 
 export interface Ajustes {

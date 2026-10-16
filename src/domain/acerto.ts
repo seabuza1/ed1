@@ -10,6 +10,17 @@ export interface Conferencia {
   sobra: number
   pagar: number // o que o motoboy recebe depois de descontar a falta
   completa: number // o que ele põe do bolso se a falta passar do que recebe
+  // R14 Liquidação
+  doCaixaDele: number // parte do pagar que sai do caixa inicial dele
+  retiradoCaixaEmpresa: number // o resto do pagar: o Luan tira do caixa da empresa
+  vaiParaEmpresa: number // o que sobra do dinheiro dele + o que ele completou
+}
+
+/** R17: entregas de uma área na noite. */
+export interface PorArea {
+  entregues: number // em rota conta como entregue
+  voltaram: number
+  taxas: number // a taxa conta também nas que voltaram
 }
 
 export interface Acerto {
@@ -27,6 +38,8 @@ export interface Acerto {
   qtdComandas: number // todas, inclusive as que voltaram: cada uma gera uma taxa
   qtdEmRota: number
   conferencia: Conferencia | null
+  porArea: Record<string, PorArea> // chave: areaId
+  papelFaltando: Comanda[] // R16: possivelmente perdidas
 }
 
 type DadosNoite = Pick<Noite, 'caixaInicial' | 'diaria' | 'dinheiroContado'>
@@ -56,16 +69,24 @@ export function calcularAcerto(noite: DadosNoite, comandas: Comanda[]): Acerto {
 
   let conferencia: Conferencia | null = null
   if (noite.dinheiroContado !== null) {
-    const dif = noite.dinheiroContado - devolver
+    const contado = noite.dinheiroContado
+    const dif = contado - devolver
     const falta = Math.max(0, -dif)
+    const pagar = Math.max(0, receber - falta)
+    const completa = Math.max(0, falta - receber)
+    // R14: o Luan paga primeiro com o caixa inicial dele; o que passar sai do caixa da empresa.
+    const doCaixaDele = Math.min(noite.caixaInicial, pagar, contado)
     conferencia = {
       situacao: dif === 0 ? 'bateu' : dif < 0 ? 'falta' : 'sobra',
-      contado: noite.dinheiroContado,
+      contado,
       dif,
       falta,
       sobra: Math.max(0, dif),
-      pagar: Math.max(0, receber - falta),
-      completa: Math.max(0, falta - receber),
+      pagar,
+      completa,
+      doCaixaDele,
+      retiradoCaixaEmpresa: pagar - doCaixaDele,
+      vaiParaEmpresa: contado - doCaixaDele + completa,
     }
   }
 
@@ -84,8 +105,25 @@ export function calcularAcerto(noite: DadosNoite, comandas: Comanda[]): Acerto {
     qtdComandas: comandas.length,
     qtdEmRota: comandas.filter((c) => c.status === 'em_rota').length,
     conferencia,
+    porArea: entregasPorArea(comandas),
+    papelFaltando: papelFaltando(comandas),
   }
 }
+
+/** R17: por área, entregues, que voltaram e taxas. */
+export function entregasPorArea(comandas: Comanda[]): Record<string, PorArea> {
+  const porArea: Record<string, PorArea> = {}
+  for (const c of comandas) {
+    const a = (porArea[c.areaId] ??= { entregues: 0, voltaram: 0, taxas: 0 })
+    if (c.status === 'voltou') a.voltaram++
+    else a.entregues++
+    a.taxas += c.taxa
+  }
+  return porArea
+}
+
+/** R16: comandas cujo papel não foi entregue ao Luan. */
+export const papelFaltando = (comandas: Comanda[]) => comandas.filter((c) => !c.papelConferido)
 
 export interface LinhaConta {
   rotulo: string

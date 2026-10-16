@@ -18,3 +18,8 @@ acerto-backup-*.json
 .idea
 .DS_Store
 *.sw?
+
+# Segredos (Supabase): nunca no repositório
+.env
+.env.*
+!.env.example
