@@ -154,7 +154,8 @@ export async function cadastrar(
   const { data, error } = await supabase!.auth.signUp({
     email: email.trim(),
     password: senha,
-    options: { data: { nome: nome.trim() } },
+    // O link de confirmação do e-mail volta para este endereço (se estiver liberado no Supabase).
+    options: { data: { nome: nome.trim() }, emailRedirectTo: location.origin },
   })
   if (error) return { erro: traduzir(error.message), confirmarEmail: false }
   if (!data.session) return { erro: null, confirmarEmail: true }
