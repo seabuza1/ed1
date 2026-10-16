@@ -16,6 +16,8 @@ export interface Repo {
   listarTodasComandas(): Promise<Comanda[]>
   salvarComanda(comanda: Comanda): Promise<void>
   excluirComanda(id: string): Promise<void>
+  /** Área do último pedido com este código (para vir marcada no lançamento). */
+  sugerirArea(codigo: string): Promise<string | null>
 
   /** Ordenadas pela taxa. */
   listarAreas(): Promise<Area[]>

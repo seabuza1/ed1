@@ -6,10 +6,11 @@ import { agora, novoId } from '../data/id'
 import { repo } from '../data/repo'
 import { CampoReais } from '../ui/CampoReais'
 import { ChipsArea } from '../ui/ChipsArea'
+import { useAviso } from '../ui/desfazer'
 import { EditorPagamento } from '../ui/EditorPagamento'
 import { mensagemDeErro } from '../ui/erro'
 import { Icone } from '../ui/Icone'
-import { lerPagamento, pagamentoVazio } from '../ui/pagamento'
+import { lerPagamento, pagamentoVazio, type EstadoPagamento } from '../ui/pagamento'
 
 const STATUS: Record<Comanda['status'], string> = {
   em_rota: 'em rota',
@@ -17,34 +18,55 @@ const STATUS: Record<Comanda['status'], string> = {
   voltou: 'voltou',
 }
 
+interface Formulario {
+  codigo: string
+  total: string
+  areaId: string | null
+  pagamento: EstadoPagamento
+}
+
+const vazio = (): Formulario => ({ codigo: '', total: '', areaId: null, pagamento: pagamentoVazio() })
+
+/** Lançar comanda: tocar na forma de pagamento já lança; "Lançar" só no pagamento dividido. */
 export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Comanda[] }) {
-  const [codigo, setCodigo] = useState('')
-  const [total, setTotal] = useState('')
-  const [areaId, setAreaId] = useState<string | null>(null)
-  const [pagamento, setPagamento] = useState(pagamentoVazio)
+  const [f, setF] = useState(vazio)
+  const [sugerida, setSugerida] = useState<string | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [repetidaOk, setRepetidaOk] = useState(false)
   // Com comanda em rota, abre recolhido: na porta do cliente a lista "Em rota" fica à mão.
   const [aberto, setAberto] = useState(() => !props.comandas.some((c) => c.status === 'em_rota'))
   const refCodigo = useRef<HTMLInputElement>(null)
   const refTotal = useRef<HTMLInputElement>(null)
+  const aviso = useAviso()
 
-  const repetida = codigo.length === 4 ? comandaRepetida(codigo, props.comandas) : undefined
+  const repetida = f.codigo.length === 4 ? comandaRepetida(f.codigo, props.comandas) : undefined
   const ativas = props.areas.filter((a) => a.ativa)
-  const valorTotal = lerReais(total)
 
-  const mudou = <T,>(set: (v: T) => void) => (v: T) => {
-    set(v)
+  function mudar(parcial: Partial<Formulario>) {
+    setF((atual) => ({ ...atual, ...parcial }))
     setErro(null)
   }
 
-  async function lancar() {
-    if (valorTotal === null || valorTotal === 0) return setErro('Informe o total.')
-    const area = ativas.find((a) => a.id === areaId)
+  async function sugerirArea(codigo: string) {
+    try {
+      const id = await repo.sugerirArea(codigo)
+      if (!id || !ativas.some((a) => a.id === id)) return
+      // Só marca se o código não mudou e ninguém escolheu a área enquanto isso.
+      setF((atual) => (atual.codigo === codigo && atual.areaId === null ? { ...atual, areaId: id } : atual))
+      setSugerida(id)
+    } catch {
+      // sem sugestão
+    }
+  }
+
+  async function lancar(pagamento: EstadoPagamento) {
+    const total = lerReais(f.total)
+    if (total === null || total === 0) return setErro('Informe o total.')
+    const area = ativas.find((a) => a.id === f.areaId)
     if (!area) return setErro('Escolha a área.')
-    const p = lerPagamento(pagamento, valorTotal)
+    const p = lerPagamento(pagamento, total)
     if (!p.ok) return setErro(p.erro)
-    const r = criarComanda({ codigo, total: valorTotal, ...p.valor }, area, {
+    const r = criarComanda({ codigo: f.codigo, total, ...p.valor }, area, {
       id: novoId(),
       noiteId: props.noite.id,
       agora: agora(),
@@ -52,23 +74,22 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
     if (!r.ok) return setErro(r.erro)
     if (repetida && !repetidaOk) return setRepetidaOk(true) // R1: segundo toque
     // Limpa antes de salvar, para não apagar o que for digitado enquanto grava.
-    const anterior = { codigo, total, areaId, pagamento }
-    preencher({ codigo: '', total: '', areaId: null, pagamento: pagamentoVazio() })
+    const anterior = { ...f, pagamento }
+    setF(vazio())
+    setSugerida(null)
+    setRepetidaOk(false)
     refCodigo.current?.focus()
     try {
       await repo.salvarComanda(r.valor)
+      aviso(`${r.valor.codigo} lançada`, async () => {
+        await repo.excluirComanda(r.valor.id)
+        setF(anterior)
+        setAberto(true)
+      })
     } catch (e) {
-      preencher(anterior)
+      setF(anterior)
       setErro(mensagemDeErro(e))
     }
-  }
-
-  function preencher(v: { codigo: string; total: string; areaId: string | null; pagamento: typeof pagamento }) {
-    setCodigo(v.codigo)
-    setTotal(v.total)
-    setAreaId(v.areaId)
-    setPagamento(v.pagamento)
-    setRepetidaOk(false)
   }
 
   if (!aberto)
@@ -80,14 +101,9 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
     )
 
   return (
-    <section className="pilha cartao-form">
+    <section className="pilha form-lancar" aria-label="Lançar comanda">
       <div className="titulo-form">
-        <h2>
-          <span className="icone-titulo">
-            <Icone nome="mais" tamanho={18} />
-          </span>
-          Lançar comanda
-        </h2>
+        <h2>Lançar comanda</h2>
         <button type="button" className="link" onClick={() => setAberto(false)}>
           Recolher
         </button>
@@ -103,17 +119,20 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
             autoComplete="off"
             maxLength={4}
             placeholder="0000"
-            value={codigo}
+            value={f.codigo}
             onChange={(e) => {
               const v = e.target.value.replace(/\D/g, '').slice(0, 4)
-              setCodigo(v)
-              setErro(null)
+              mudar({ codigo: v, ...(sugerida && f.areaId === sugerida ? { areaId: null } : {}) })
+              setSugerida(null)
               setRepetidaOk(false)
-              if (v.length === 4) refTotal.current?.focus()
+              if (v.length === 4) {
+                refTotal.current?.focus()
+                sugerirArea(v)
+              }
             }}
           />
         </label>
-        <CampoReais rotulo="Total" valor={total} onChange={mudou(setTotal)} ref={refTotal} />
+        <CampoReais rotulo="Total" valor={f.total} onChange={(t) => mudar({ total: t })} ref={refTotal} />
       </div>
       {repetida && (
         <p className="aviso">
@@ -121,11 +140,23 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
           {repetidaOk ? ' Toque de novo para lançar mesmo assim.' : ''}
         </p>
       )}
-      <ChipsArea areas={ativas} selecionada={areaId} onChange={mudou(setAreaId)} />
-      <EditorPagamento estado={pagamento} onChange={mudou(setPagamento)} total={valorTotal} />
-      <button type="button" className={`primario ${repetidaOk ? 'armado' : ''}`} onClick={lancar}>
-        {repetidaOk ? 'Lançar mesmo assim' : 'Lançar'}
-      </button>
+      <ChipsArea
+        areas={ativas}
+        selecionada={f.areaId}
+        onChange={(id) => mudar({ areaId: id })}
+        dica={sugerida !== null && f.areaId === sugerida ? 'a do último pedido' : undefined}
+      />
+      <EditorPagamento
+        estado={f.pagamento}
+        onChange={(p) => mudar({ pagamento: p })}
+        total={lerReais(f.total)}
+        aoTocarForma={lancar}
+      />
+      {f.pagamento.dividido && (
+        <button type="button" className={`primario ${repetidaOk ? 'armado' : ''}`} onClick={() => lancar(f.pagamento)}>
+          {repetidaOk ? 'Lançar mesmo assim' : 'Lançar'}
+        </button>
+      )}
       {erro && <p className="erro">{erro}</p>}
     </section>
   )

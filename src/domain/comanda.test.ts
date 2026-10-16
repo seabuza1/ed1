@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { comandaRepetida, descreverPagamentos, montarPagamentos, separarPorStatus } from './comanda'
+import {
+  areaSugerida,
+  comandaRepetida,
+  descreverPagamentos,
+  filtrarPorCodigo,
+  marcarPapel,
+  montarPagamentos,
+  nomesFormas,
+  separarPorStatus,
+} from './comanda'
 import type { Comanda } from './tipos'
 import { r$ } from '../teste/r$'
 
@@ -76,4 +85,31 @@ it('descreve os pagamentos', () => {
       { forma: 'dinheiro', valor: 3000 },
     ]),
   ).toBe(r$('Pix antecipado R$ 20,00 + Dinheiro R$ 30,00'))
+})
+
+describe('lançar com menos toques', () => {
+  const com = (codigo: string, areaId: string, criadaEm: string) => ({ codigo, areaId, criadaEm }) as Comanda
+
+  it('área sugerida: a do último pedido com o código', () => {
+    const historico = [com('3557', 'barra', '2026-10-01T20:00'), com('3557', 'pontal', '2026-10-12T21:00'), com('0017', 'aragarcas', '2026-10-13T20:00')]
+    expect(areaSugerida('3557', historico)).toBe('pontal')
+    expect(areaSugerida('0017', historico)).toBe('aragarcas')
+    expect(areaSugerida('9999', historico)).toBeNull()
+  })
+
+  it('busca por código', () => {
+    const lista = [com('3557', 'a', '1'), com('0017', 'a', '2'), com('8094', 'a', '3')]
+    expect(filtrarPorCodigo(lista, '').map((c) => c.codigo)).toEqual(['3557', '0017', '8094'])
+    expect(filtrarPorCodigo(lista, '0').map((c) => c.codigo)).toEqual(['0017', '8094'])
+    expect(filtrarPorCodigo(lista, '55').map((c) => c.codigo)).toEqual(['3557'])
+  })
+
+  it('nomes das formas na linha', () => {
+    expect(nomesFormas([{ forma: 'pix_antecipado', valor: 1 }, { forma: 'dinheiro', valor: 2 }])).toBe('Pix antecipado + Dinheiro')
+  })
+
+  it('R16 marca o papel conferido', () => {
+    const c = com('2672', 'pontal', '1')
+    expect(marcarPapel(c, true, 'agora')).toMatchObject({ papelConferido: true, atualizadaEm: 'agora' })
+  })
 })

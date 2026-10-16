@@ -67,14 +67,11 @@ function AbrirNoite({ noites, ajustes }: { noites: Noite[]; ajustes: Ajustes }) 
   return (
     <main className="app pilha">
       <div className="boas-vindas">
-        <span className="icone-grande">
-          <Icone nome="noite" tamanho={28} />
-        </span>
         <h1>Abrir noite</h1>
         <p className="discreto">Confira a data, o caixa de troco e a diária antes de sair.</p>
       </div>
       <form
-        className="cartao pilha"
+        className="pilha"
         onSubmit={(e) => {
           e.preventDefault()
           if (!existente) abrir()
@@ -131,34 +128,33 @@ function ValoresNoite({ noite }: { noite: Noite }) {
 
   if (!editando)
     return (
-      <section>
-        <div className="topo">
-          <h1>Noite de {formatarData(noite.data)}</h1>
-          <button
-            type="button"
-            className="secundario pequeno-botao"
-            onClick={() => {
-              setCaixa(paraCampo(noite.caixaInicial))
-              setDiaria(paraCampo(noite.diaria))
-              setErro(null)
-              setEditando(true)
-            }}
-          >
-            <Icone nome="lapis" tamanho={16} />
-            Editar
-          </button>
+      <header className="topo">
+        <div>
+          <h1>Noite de {formatarData(noite.data).slice(0, 5)}</h1>
+          <p className="discreto pequeno">
+            Caixa <span className="num">{formatarReais(noite.caixaInicial)}</span> · Diária{' '}
+            <span className="num">{formatarReais(noite.diaria)}</span>
+          </p>
         </div>
-        <div className="pilulas">
-          <span className="pilula aberta">Aberta</span>
-          <span className="pilula">Caixa {formatarReais(noite.caixaInicial)}</span>
-          <span className="pilula">Diária {formatarReais(noite.diaria)}</span>
-        </div>
-      </section>
+        <button
+          type="button"
+          className="link"
+          onClick={() => {
+            setCaixa(paraCampo(noite.caixaInicial))
+            setDiaria(paraCampo(noite.diaria))
+            setErro(null)
+            setEditando(true)
+          }}
+        >
+          <Icone nome="lapis" tamanho={16} />
+          Editar
+        </button>
+      </header>
     )
 
   return (
     <form
-      className="cartao pilha"
+      className="bloco pilha"
       onSubmit={(e) => {
         e.preventDefault()
         salvar()

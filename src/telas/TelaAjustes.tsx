@@ -10,11 +10,48 @@ import { repo } from '../data/repo'
 import { CampoReais } from '../ui/CampoReais'
 import { mensagemDeErro } from '../ui/erro'
 import { Icone } from '../ui/Icone'
+import { lerTema, salvarTema, type Tema } from '../ui/tema'
 
-export function TelaAjustes(props: { areas: Area[]; ajustes: Ajustes }) {
+const TEMAS: { id: Tema; rotulo: string }[] = [
+  { id: 'sistema', rotulo: 'Sistema' },
+  { id: 'escuro', rotulo: 'Escuro' },
+  { id: 'claro', rotulo: 'Claro' },
+]
+
+function EscolherTema() {
+  const [tema, setTema] = useState(lerTema)
+  return (
+    <section className="bloco pilha-curta">
+      <h2>Tema</h2>
+      <div className="chips chips-3" role="group" aria-label="Tema">
+        {TEMAS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            className="chip"
+            aria-pressed={tema === t.id}
+            onClick={() => {
+              setTema(t.id)
+              salvarTema(t.id)
+            }}
+          >
+            {t.rotulo}
+          </button>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+export function TelaAjustes(props: { areas: Area[]; ajustes: Ajustes; voltar: () => void }) {
   return (
     <main className="app pilha">
+      <button type="button" className="link alinha-inicio" onClick={props.voltar}>
+        <Icone nome="voltar" tamanho={18} />
+        Histórico
+      </button>
       <h1>Ajustes</h1>
+      <EscolherTema />
       <Areas areas={props.areas} />
       <ValoresPadrao key={`${props.ajustes.caixaPadrao}-${props.ajustes.diariaPadrao}`} ajustes={props.ajustes} />
       <SobreApp />
@@ -44,9 +81,6 @@ function Areas({ areas }: { areas: Area[] }) {
   return (
     <section className="bloco pilha-curta">
       <h2>
-        <span className="icone-titulo">
-          <Icone nome="local" tamanho={18} />
-        </span>
         Áreas e taxas
       </h2>
       <p className="discreto pequeno">Mudar a taxa vale para as próximas comandas; as já lançadas não mudam.</p>
@@ -162,9 +196,6 @@ function ValoresPadrao({ ajustes }: { ajustes: Ajustes }) {
   return (
     <section className="bloco pilha-curta">
       <h2>
-        <span className="icone-titulo">
-          <Icone nome="dinheiro" tamanho={18} />
-        </span>
         Valores padrão
       </h2>
       <p className="discreto pequeno">Preenchem o "Abrir noite". A noite aberta muda pelo "Editar" dela.</p>
@@ -191,9 +222,6 @@ function SobreApp() {
   return (
     <section className="bloco pilha-curta">
       <h2>
-        <span className="icone-titulo">
-          <Icone nome="atualizar" tamanho={18} />
-        </span>
         App
       </h2>
       <p className="discreto pequeno">

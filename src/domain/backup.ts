@@ -73,6 +73,8 @@ const comandaValida = (c: unknown): c is Comanda =>
       ehCentavos(p.valor) &&
       (p.conferido === undefined || typeof p.conferido === 'boolean'),
   ) &&
+  (c.papelConferido === undefined || typeof c.papelConferido === 'boolean') &&
+  (c.pixConfirmado === undefined || typeof c.pixConfirmado === 'boolean') &&
   ehTexto(c.criadaEm) &&
   ehTexto(c.atualizadaEm) &&
   (c.finalizadaEm === undefined || c.finalizadaEm === null || ehTexto(c.finalizadaEm)) // ausente em backup antigo

@@ -4,9 +4,9 @@ import { lerReais, paraCampo } from '../domain/dinheiro'
 import type { Area, Comanda, Status } from '../domain/tipos'
 import { agora } from '../data/id'
 import { repo } from '../data/repo'
-import { BotaoConfirmar } from '../ui/BotaoConfirmar'
 import { CampoReais } from '../ui/CampoReais'
 import { ChipsArea } from '../ui/ChipsArea'
+import { useAviso } from '../ui/desfazer'
 import { EditorPagamento } from '../ui/EditorPagamento'
 import { mensagemDeErro } from '../ui/erro'
 import { estadoDe, lerPagamento } from '../ui/pagamento'
@@ -27,6 +27,7 @@ export function EditarComanda(props: {
   const [status, setStatus] = useState<Status>(c.status)
   const [pagamento, setPagamento] = useState(() => estadoDe(c.pagamentos, c.troco))
   const [erro, setErro] = useState<string | null>(null)
+  const aviso = useAviso()
 
   // Áreas ativas e, se estiver desativada, a da própria comanda.
   const areas = props.areas.filter((a) => a.ativa || a.id === c.areaId)
@@ -54,6 +55,7 @@ export function EditarComanda(props: {
     try {
       await repo.excluirComanda(c.id)
       props.onFechar()
+      aviso(`${c.codigo} excluída`, () => repo.salvarComanda(c))
     } catch (e) {
       setErro(mensagemDeErro(e))
     }
@@ -92,9 +94,9 @@ export function EditarComanda(props: {
           Salvar
         </button>
       </div>
-      <BotaoConfirmar className="perigo" confirmacao="Toque de novo para excluir" onConfirmar={excluir}>
+      <button type="button" className="perigo" onClick={excluir}>
         Excluir comanda
-      </BotaoConfirmar>
+      </button>
       {erro && <p className="erro">{erro}</p>}
     </div>
   )
@@ -105,6 +107,7 @@ export function TrocarForma(props: { comanda: Comanda; onFechar: () => void }) {
   const c = props.comanda
   const [pagamento, setPagamento] = useState(() => estadoDe(c.pagamentos, c.troco))
   const [erro, setErro] = useState<string | null>(null)
+  const aviso = useAviso()
 
   async function confirmar() {
     const p = lerPagamento(pagamento, c.total)
@@ -114,6 +117,7 @@ export function TrocarForma(props: { comanda: Comanda; onFechar: () => void }) {
     try {
       await repo.salvarComanda(r.valor)
       props.onFechar()
+      aviso(`${c.codigo} entregue`, () => repo.salvarComanda(c))
     } catch (e) {
       setErro(mensagemDeErro(e))
     }

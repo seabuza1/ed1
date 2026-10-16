@@ -235,3 +235,27 @@ export const comHoraDeEntrega = (
   ...c,
   finalizadaEm: c.finalizadaEm !== undefined ? c.finalizadaEm : c.status === 'em_rota' ? null : c.atualizadaEm,
 })
+
+/** "Dinheiro" ou "Pix antecipado + Dinheiro", para a linha da lista. */
+export const nomesFormas = (pagamentos: Pagamento[]) => pagamentos.map((p) => NOMES_FORMA[p.forma]).join(' + ')
+
+/** Área do último pedido com este código, para vir marcada no lançamento. */
+export function areaSugerida(codigo: string, comandas: Comanda[]): string | null {
+  let ultima: Comanda | null = null
+  for (const c of comandas)
+    if (c.codigo === codigo && (ultima === null || c.criadaEm > ultima.criadaEm)) ultima = c
+  return ultima?.areaId ?? null
+}
+
+/** Busca por código na noite: os dígitos digitados em qualquer parte do código. */
+export function filtrarPorCodigo(comandas: Comanda[], busca: string): Comanda[] {
+  const digitos = busca.replace(/\D/g, '')
+  return digitos === '' ? comandas : comandas.filter((c) => c.codigo.includes(digitos))
+}
+
+/** R16: marca ou desmarca a comanda de papel como entregue ao Luan. */
+export const marcarPapel = (c: Comanda, papelConferido: boolean, agora: string): Comanda => ({
+  ...c,
+  papelConferido,
+  atualizadaEm: agora,
+})

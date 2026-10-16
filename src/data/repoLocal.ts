@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie'
-import { comHoraDeEntrega } from '../domain/comanda'
+import { areaSugerida, comHoraDeEntrega } from '../domain/comanda'
 import { AJUSTES_PADRAO, AREAS_PADRAO } from '../domain/padroes'
 import type { Ajustes, Area, Comanda, Noite } from '../domain/tipos'
 import { novoId } from './id'
@@ -48,6 +48,7 @@ export function criarRepoLocal(nome: string): Repo {
     listarTodasComandas: () => db.comandas.toArray(),
     salvarComanda: (comanda) => gravar(() => db.comandas.put(comanda)),
     excluirComanda: (id) => gravar(() => db.comandas.delete(id)),
+    sugerirArea: async (codigo) => areaSugerida(codigo, await db.comandas.toArray()),
 
     listarAreas: async () =>
       (await db.areas.toArray()).sort((a, b) => a.taxa - b.taxa || a.nome.localeCompare(b.nome)),

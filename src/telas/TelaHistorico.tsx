@@ -13,19 +13,22 @@ import { mensagemDeErro } from '../ui/erro'
 import { Icone } from '../ui/Icone'
 import { TelaAcerto } from './TelaAcerto'
 
-export function TelaHistorico(props: { noites: Noite[]; onAbrir: (id: string) => void }) {
+export function TelaHistorico(props: { noites: Noite[]; onAbrir: (id: string) => void; onAjustes: () => void }) {
   const comandas = useConsulta(() => repo.listarTodasComandas(), [])
   if (!comandas) return <p className="carregando">Carregando…</p>
   const resumo = resumirNoites(props.noites, comandas)
 
   return (
     <main className="app pilha">
-      <h1>Histórico</h1>
+      <header className="topo">
+        <h1>Histórico</h1>
+        <button type="button" className="icone-botao" aria-label="Ajustes" onClick={props.onAjustes}>
+          <Icone nome="ajustes" tamanho={22} />
+        </button>
+      </header>
       {resumo.length === 0 && (
         <div className="vazio">
-          <span className="icone-grande">
-            <Icone nome="historico" tamanho={28} />
-          </span>
+          <Icone nome="historico" tamanho={28} />
           <strong>Nenhuma noite ainda</strong>
         </div>
       )}
@@ -118,9 +121,6 @@ function BackupDados() {
   return (
     <section className="bloco pilha-curta">
       <h2>
-        <span className="icone-titulo">
-          <Icone nome="baixar" tamanho={18} />
-        </span>
         Backup
       </h2>
       <p className="discreto pequeno">Os dados ficam só neste celular. Exporte de vez em quando e guarde o arquivo.</p>

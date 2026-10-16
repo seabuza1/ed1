@@ -1,93 +1,147 @@
 import { useState, type ReactNode } from 'react'
-import { marcarEntregue, marcarVoltou, NOMES_FORMA, saiuDeNovo, separarPorStatus } from '../domain/comanda'
+import { filtrarPorCodigo, marcarEntregue, marcarVoltou, nomesFormas, saiuDeNovo, separarPorStatus } from '../domain/comanda'
 import { formatarHora } from '../domain/datas'
 import { formatarReais } from '../domain/dinheiro'
 import type { Area, Comanda } from '../domain/tipos'
 import { agora, novoId } from '../data/id'
 import { repo } from '../data/repo'
+import { useAviso } from '../ui/desfazer'
 import { mensagemDeErro } from '../ui/erro'
-import { Icone } from '../ui/Icone'
+import { Icone, type NomeIcone } from '../ui/Icone'
 import { EditarComanda, TrocarForma } from './EditarComanda'
 
-type Aberta = { id: string; modo: 'editar' | 'trocar' } | null
+type Aberta = { id: string; modo: 'menu' | 'editar' | 'trocar' } | null
 
-/** Listas da noite. Sem `somenteLeitura`, com as ações e a edição. */
+const ICONE_STATUS: Record<Comanda['status'], NomeIcone> = {
+  em_rota: 'moto',
+  entregue: 'check',
+  voltou: 'voltou',
+}
+
+/** Listas da noite. Sem `somenteLeitura`, com as ações (desfazer no lugar de confirmar) e a edição. */
 export function ListasComandas(props: { comandas: Comanda[]; areas: Area[]; somenteLeitura?: boolean }) {
-  const { emRota, entregues, voltaram } = separarPorStatus(props.comandas)
+  const [busca, setBusca] = useState('')
   const [aberta, setAberta] = useState<Aberta>(null)
   const [erro, setErro] = useState<string | null>(null)
+  const aviso = useAviso()
+  const { emRota, entregues, voltaram } = separarPorStatus(filtrarPorCodigo(props.comandas, busca))
 
-  async function gravar(c: Comanda) {
+  /** Grava e oferece desfazer (volta a comanda como estava, ou apaga a nova). */
+  async function gravar(nova: Comanda, texto: string, anterior: Comanda | null) {
     setErro(null)
+    setAberta(null)
     try {
-      await repo.salvarComanda(c)
+      await repo.salvarComanda(nova)
+      aviso(texto, () => (anterior ? repo.salvarComanda(anterior) : repo.excluirComanda(nova.id)))
     } catch (e) {
       setErro(mensagemDeErro(e))
     }
   }
 
-  const cartao = (c: Comanda) => {
+  const linha = (c: Comanda) => {
     const area = props.areas.find((a) => a.id === c.areaId)
     const modo = aberta?.id === c.id ? aberta.modo : null
-    const alternar = (m: 'editar' | 'trocar') => setAberta(modo === m ? null : { id: c.id, modo: m })
+    const abrir = (m: 'menu' | 'editar' | 'trocar') => setAberta({ id: c.id, modo: m })
+    const resumo = <ResumoComanda comanda={c} area={area?.nome ?? '—'} />
+
     return (
-      <article key={c.id} className={`comanda status-${c.status}`}>
-        {props.somenteLeitura ? (
-          <ResumoComanda comanda={c} area={area?.nome ?? '—'} />
-        ) : (
-          <button type="button" className="resumo-botao" onClick={() => alternar('editar')}>
-            <ResumoComanda comanda={c} area={area?.nome ?? '—'} />
-          </button>
-        )}
-        {!props.somenteLeitura && modo === null && c.status === 'em_rota' && (
-          <div className="acoes">
-            <button type="button" className="ok" onClick={() => gravar(marcarEntregue(c, agora()))}>
+      <li key={c.id} className={`linha-comanda status-${c.status} ${modo ? 'aberta' : ''}`}>
+        <div className="linha-topo">
+          {props.somenteLeitura ? (
+            <div className="resumo-botao">{resumo}</div>
+          ) : (
+            <button
+              type="button"
+              className="resumo-botao"
+              aria-expanded={modo !== null}
+              onClick={() => (modo ? setAberta(null) : abrir('menu'))}
+            >
+              {resumo}
+            </button>
+          )}
+          {!props.somenteLeitura && c.status === 'em_rota' && modo === null && (
+            <button
+              type="button"
+              className="entregue-rapido"
+              onClick={() => gravar(marcarEntregue(c, agora()), `${c.codigo} entregue`, c)}
+            >
               <Icone nome="check" tamanho={18} />
               Entregue
             </button>
-            <button type="button" onClick={() => alternar('trocar')}>
-              <Icone nome="trocar" tamanho={16} />
-              Trocou a forma
-            </button>
-            <button type="button" onClick={() => gravar(marcarVoltou(c, agora()))}>
-              <Icone nome="voltou" tamanho={16} />
-              Voltou
+          )}
+        </div>
+        {modo === 'menu' && (
+          <div className="menu-comanda">
+            {c.status === 'em_rota' && (
+              <>
+                <button type="button" onClick={() => abrir('trocar')}>
+                  <Icone nome="trocar" tamanho={18} />
+                  Trocou a forma
+                </button>
+                <button type="button" onClick={() => gravar(marcarVoltou(c, agora()), `${c.codigo} voltou`, c)}>
+                  <Icone nome="voltou" tamanho={18} />
+                  Voltou
+                </button>
+              </>
+            )}
+            {c.status === 'voltou' && (
+              <button
+                type="button"
+                onClick={() => {
+                  const r = saiuDeNovo(c, area, { id: novoId(), agora: agora() })
+                  if (!r.ok) return setErro(r.erro)
+                  gravar(r.valor, `${c.codigo} saiu de novo`, null)
+                }}
+              >
+                <Icone nome="denovo" tamanho={18} />
+                Saiu de novo
+              </button>
+            )}
+            <button type="button" onClick={() => abrir('editar')}>
+              <Icone nome="lapis" tamanho={18} />
+              Editar ou excluir
             </button>
           </div>
-        )}
-        {!props.somenteLeitura && modo === null && c.status === 'voltou' && (
-          <button
-            type="button"
-            className="secundario largo"
-            onClick={() => {
-              const r = saiuDeNovo(c, area, { id: novoId(), agora: agora() })
-              if (!r.ok) return setErro(r.erro)
-              gravar(r.valor)
-            }}
-          >
-            <Icone nome="denovo" tamanho={18} />
-            Saiu de novo
-          </button>
         )}
         {modo === 'trocar' && <TrocarForma comanda={c} onFechar={() => setAberta(null)} />}
         {modo === 'editar' && (
           <EditarComanda comanda={c} areas={props.areas} comandas={props.comandas} onFechar={() => setAberta(null)} />
         )}
-      </article>
+      </li>
     )
   }
 
   return (
     <>
       {erro && <p className="erro">{erro}</p>}
-      <Lista titulo="Em rota" comandas={emRota} cartao={cartao} />
-      <Lista titulo="Entregues" comandas={entregues} cartao={cartao} />
-      <Lista titulo="Voltaram" comandas={voltaram} cartao={cartao} />
+      {props.comandas.length >= 4 && (
+        <label className="busca">
+          <Icone nome="buscar" tamanho={18} />
+          <span className="so-leitor">Buscar código</span>
+          <input
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="Buscar código"
+            maxLength={4}
+            value={busca}
+            onChange={(e) => setBusca(e.target.value.replace(/\D/g, ''))}
+          />
+          {busca && (
+            <button type="button" className="limpar" aria-label="Limpar busca" onClick={() => setBusca('')}>
+              ✕
+            </button>
+          )}
+        </label>
+      )}
+      <Lista titulo="Em rota" comandas={emRota} linha={linha} />
+      <Lista titulo="Entregues" comandas={entregues} linha={linha} />
+      <Lista titulo="Voltaram" comandas={voltaram} linha={linha} />
+      {busca && emRota.length + entregues.length + voltaram.length === 0 && (
+        <p className="discreto">Nenhuma comanda com {busca}.</p>
+      )}
       {props.comandas.length === 0 && (
         <div className="vazio">
-          <span className="icone-grande">
-            <Icone nome="moto" tamanho={28} />
-          </span>
+          <Icone nome="moto" tamanho={28} />
           <strong>Nenhuma comanda ainda</strong>
           {!props.somenteLeitura && <span className="pequeno">Lance a comanda quando sair para a entrega.</span>}
         </div>
@@ -96,42 +150,33 @@ export function ListasComandas(props: { comandas: Comanda[]; areas: Area[]; some
   )
 }
 
-function Lista(props: { titulo: string; comandas: Comanda[]; cartao: (c: Comanda) => ReactNode }) {
+function Lista(props: { titulo: string; comandas: Comanda[]; linha: (c: Comanda) => ReactNode }) {
   if (props.comandas.length === 0) return null
   return (
-    <section className="lista">
+    <section>
       <h2 className="titulo-secao">
         {props.titulo} <span className="contador">{props.comandas.length}</span>
       </h2>
-      {props.comandas.map(props.cartao)}
+      <ul className="lista-comandas">{props.comandas.map(props.linha)}</ul>
     </section>
   )
 }
 
+/** Código grande à esquerda, área e forma em cinza, valor à direita; status por cor e ícone. */
 export function ResumoComanda({ comanda: c, area }: { comanda: Comanda; area: string }) {
+  const temAntecipado = c.pagamentos.some((p) => p.forma === 'pix_antecipado')
   return (
     <span className="resumo-comanda">
-      <span className="resumo-linha">
-        <strong className="codigo">{c.codigo}</strong>
-        <strong className="valor">{formatarReais(c.total)}</strong>
+      <span className="icone-status" aria-label={c.status === 'em_rota' ? 'Em rota' : c.status === 'entregue' ? 'Entregue' : 'Voltou'}>
+        <Icone nome={ICONE_STATUS[c.status]} tamanho={18} />
       </span>
-      <span className="etiquetas">
-        <span className="etiqueta">
-          <Icone nome="local" tamanho={13} />
-          {area}
-        </span>
-        {c.pagamentos.map((p, i) => (
-          <span key={i} className={`etiqueta forma-${p.forma}`}>
-            {NOMES_FORMA[p.forma]}
-            {c.pagamentos.length > 1 && ` ${formatarReais(p.valor)}`}
-          </span>
-        ))}
-        {c.troco > 0 && <span className="etiqueta">troco por Pix {formatarReais(c.troco)}</span>}
-        {c.finalizadaEm && (
-          <span className="etiqueta hora">
-            {c.status === 'voltou' ? 'voltou' : 'entregue'} {formatarHora(c.finalizadaEm)}
-          </span>
-        )}
+      <strong className="codigo">{c.codigo}</strong>
+      <strong className="valor">{formatarReais(c.total)}</strong>
+      <span className="detalhe">
+        {area} · {nomesFormas(c.pagamentos)}
+        {c.troco > 0 && <> · troco Pix <span className="num">{formatarReais(c.troco)}</span></>}
+        {c.finalizadaEm && <> · <span className="num">{formatarHora(c.finalizadaEm)}</span></>}
+        {temAntecipado && c.pixConfirmado && <span className="selo-pix">Pix confirmado</span>}
       </span>
     </span>
   )

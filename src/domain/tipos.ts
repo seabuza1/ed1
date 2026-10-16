@@ -47,6 +47,8 @@ export interface Comanda {
   finalizadaEm: string | null
   /** R16: a comanda de papel foi entregue ao Luan no acerto. */
   papelConferido?: boolean
+  /** Pix antecipado: o Luan confirmou que o Pix caiu. */
+  pixConfirmado?: boolean
 }
 
 export interface Ajustes {

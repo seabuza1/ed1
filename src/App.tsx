@@ -8,18 +8,18 @@ import { NoiteDoHistorico, TelaHistorico } from './telas/TelaHistorico'
 import { TelaNoite } from './telas/TelaNoite'
 import { Icone, type NomeIcone } from './ui/Icone'
 
-type Aba = 'noite' | 'acerto' | 'historico' | 'ajustes'
+type Aba = 'noite' | 'acerto' | 'historico'
 
 const ABAS: { id: Aba; rotulo: string; icone: NomeIcone }[] = [
   { id: 'noite', rotulo: 'Noite', icone: 'noite' },
   { id: 'acerto', rotulo: 'Acerto', icone: 'acerto' },
   { id: 'historico', rotulo: 'Histórico', icone: 'historico' },
-  { id: 'ajustes', rotulo: 'Ajustes', icone: 'ajustes' },
 ]
 
 export default function App() {
   const [aba, setAba] = useState<Aba>('noite')
   const [idHistorico, setIdHistorico] = useState<string | null>(null)
+  const [ajustesAbertos, setAjustesAbertos] = useState(false)
   const noites = useConsulta(async () => ordenarNoites(await repo.listarNoites()), [])
   const ajustes = useConsulta(() => repo.obterAjustes(), [])
   const areas = useConsulta(() => repo.listarAreas(), [])
@@ -38,7 +38,9 @@ export default function App() {
       {aba === 'noite' && <TelaNoite noites={noites} ajustes={ajustes} areas={areas} comandas={comandas} />}
       {aba === 'acerto' && <TelaAcerto noite={emFoco} noites={noites} comandas={comandas} areas={areas} />}
       {aba === 'historico' &&
-        (noiteHistorico ? (
+        (ajustesAbertos ? (
+          <TelaAjustes areas={areas} ajustes={ajustes} voltar={() => setAjustesAbertos(false)} />
+        ) : noiteHistorico ? (
           <NoiteDoHistorico
             noite={noiteHistorico}
             noites={noites}
@@ -46,9 +48,8 @@ export default function App() {
             voltar={() => setIdHistorico(null)}
           />
         ) : (
-          <TelaHistorico noites={noites} onAbrir={setIdHistorico} />
+          <TelaHistorico noites={noites} onAbrir={setIdHistorico} onAjustes={() => setAjustesAbertos(true)} />
         ))}
-      {aba === 'ajustes' && <TelaAjustes areas={areas} ajustes={ajustes} />}
       <nav className="abas">
         {ABAS.map((a) => (
           <button
@@ -58,12 +59,11 @@ export default function App() {
             onClick={() => {
               setAba(a.id)
               setIdHistorico(null)
+              setAjustesAbertos(false)
               window.scrollTo(0, 0)
             }}
           >
-            <span className="pilula-icone">
-              <Icone nome={a.icone} tamanho={22} />
-            </span>
+            <Icone nome={a.icone} tamanho={22} />
             {a.rotulo}
           </button>
         ))}
