@@ -1,5 +1,7 @@
 # Acerto dos motoboys
 
+Nuvem: projeto Supabase `acerto-motoboys` (São Paulo), com 001, 002 e 003 já aplicados; as variáveis estão na Vercel.
+
 App de celular (PWA offline) para o motoboy lançar as comandas da noite e ter a conta do acerto pronta, e painel para o Luan acompanhar a folha da noite e confirmar os acertos. Veja `CLAUDE.md`, `docs/SPEC-v1.md` (o que está sendo feito) e `docs/SPEC-mvp-acerto.md` (a base).
 
 ```sh
@@ -14,7 +16,7 @@ Sem o `.env` do Supabase o app funciona como no MVP: tudo só no aparelho.
 ## Nuvem (Supabase)
 
 1. Crie um projeto no [Supabase](https://supabase.com).
-2. No SQL Editor, rode `supabase/001_schema.sql` e depois `supabase/002_v1_app.sql` (uma vez cada).
+2. No SQL Editor, rode `supabase/001_schema.sql`, depois `supabase/002_v1_app.sql` e `supabase/003_v1_avisos.sql` (uma vez cada, nessa ordem).
 3. Em Authentication, deixe o login por e-mail e senha. Se a confirmação de e-mail estiver ligada, o cadastro pede para confirmar pelo link; ponha o endereço do app em Authentication → URL Configuration → Site URL.
 4. Copie `.env.example` para `.env` e preencha `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` (Project Settings → API). Na Vercel, as mesmas duas variáveis em Settings → Environment Variables, e faça um novo deploy. Só a anon key; a service role nunca vai para o app.
 5. Cada um cria a conta pelo app (entra como motoboy). Depois defina os papéis no SQL Editor, com os `update` do fim do `001_schema.sql` (admin e expedição).

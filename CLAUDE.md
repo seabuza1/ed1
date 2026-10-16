@@ -8,6 +8,7 @@ Sistema para a pizzaria onde trabalho como motoboy, construído aos poucos. O MV
 - `docs/requisitos.md`: levantamento completo da operação. Só contexto: não implementar nada fora da spec.
 - `supabase/001_schema.sql`: tabelas, regras de acesso (RLS) e realtime.
 - `supabase/002_v1_app.sql`: complemento do app (hora da entrega, nome da expedição para o motoboy, área sugerida, ordem de chegada). Rodar depois do 001.
+- `supabase/003_v1_avisos.sql`: correções dos avisos do Supabase (search_path, EXECUTE das funções, políticas mais leves). Rodar depois do 002.
 - `supabase/teste/`: teste das regras de acesso num Postgres local.
 
 ## Stack

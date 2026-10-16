@@ -9,8 +9,8 @@ sh supabase/teste/rodar.sh
 ```
 
 Cria o banco `acerto_teste` com `stub-supabase.sql` (o mínimo do Supabase: `auth.users`,
-`auth.uid()`, papéis `anon` e `authenticated`), roda `001_schema.sql`, `002_v1_app.sql` e
-`rls.sql`. Termina com `RLS ok`, ou para no primeiro erro. Confere, com duas contas de
+`auth.uid()`, papéis `anon` e `authenticated`), roda `001_schema.sql`, `002_v1_app.sql`,
+`003_v1_avisos.sql` e `rls.sql`. Termina com `RLS ok`, ou para no primeiro erro. Confere, com duas contas de
 motoboy, a do Luan e a do admin:
 
 - um motoboy não vê nem altera o caixa do outro;
