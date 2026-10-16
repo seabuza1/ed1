@@ -57,6 +57,9 @@ Campos vistos na comanda fotografada:
 - [C] A forma de pagamento sempre está escrita: cartão, Pix ou dinheiro.
 - [C] O total já inclui a taxa de entrega (ex.: pizza R$ 60 + taxa R$ 12 = R$ 72).
 - [C] Retirada no balcão e mesas usam a mesma comanda e também são identificadas pelo telefone.
+- [C] A comanda é escrita à mão, por duas pessoas.
+- [C] Comanda sem local escrito geralmente é de Aragarças, mas às vezes é de Barra sem estar escrito. "Arag." = Aragarças.
+- [C] Na comanda 3557 (com asterisco, G meio a meio Filé Mignon / Calabresa e Coca Zero 2 L, entregue em Aragarças), a pizza foi cobrada cheia pelo preço premium: 93 + 15 + 5 = 113.
 - [L] A comanda é levada à mão pelo atendente até a cozinha.
 - [C] A comanda vai com o motoboy e volta com ele: é entregue ao Luan no acerto.
 
@@ -257,7 +260,10 @@ O 8094 voltou e saiu de novo: a taxa de Barra conta duas vezes (12 + 12) e o val
 | 5 | Caixa geral (abertura, sangria, fechamento) | Fechamento manual do caixa |
 | 6 | Pedido automático por link (opcional para o cliente) | Nada: canal a mais |
 
-A leitura de comanda por foto saiu do plano: quando o pedido nasce digitado (fase 2), não há manuscrito para ler.
+A leitura de comanda por foto voltou em 16/10 como fase de transição: vale enquanto o pedido é escrito à mão e sai quando ele nascer digitado (fase 2). Ver 8.3.
+
+### 8.3 Leitura da comanda por foto (16/10)
+[C] O Felipe quer digitalizar as comandas por foto e usar no fechamento de caixa, enquanto o pedido ainda é escrito à mão. [S] A IA só transcreve. A conferência (itens pelo cardápio + taxa = total) é feita no app, e o motoboy confirma a área com um toque. Especificação em `SPEC-leitura.md`; cardápio em `supabase/functions/_shared/cardapio-mel.json`.
 
 ### 8.2 Versão 1 (16/10)
 [C] O MVP local está cumprindo o papel no teste. Pedidos do Felipe para a versão 1: lançamento mais fácil, layout mais limpo, entregas por cidade, conferir se perdeu comanda, registrar o que o Luan tira do caixa da empresa para pagar o motoboy, salvar na nuvem e um painel para o Luan acompanhar, com o resumo no formato da folha de papel. Especificação em `SPEC-v1.md`; banco em `001_schema.sql`.
@@ -328,7 +334,7 @@ Proposta anterior, para quando o Luan entrar no teste: [S] o menor escopo que en
 - [L] Anotar um pedido leva de 3 a 5 minutos, boa parte esperando o cliente. [S] Antes do sistema, uma resposta rápida do WhatsApp Business pedindo forma de pagamento, localização e autorização numa mensagem só já pode encurtar a conversa.
 - [L] Pizza meio a meio cobra o sabor mais caro (R37). O cardápio tem pelo menos a categoria "tradicionais", que é a que recebe a promoção da noite.
 - [L] O layout precisa funcionar no celular e aproveitar uma tela maior, que ajudaria a anotar vários pedidos ao mesmo tempo.
-- [?] Cardápio, tamanhos, bordas e adicionais. O Felipe vai mandar uma foto do cardápio.
+- [C] Cardápio recebido em 16/10 (Mel Pizzaria): 5 faixas de preço (tradicional, especial, premium, doce e doce especial) em 4 tamanhos (brotinho, P, M e G), mais bordas, adicionais, 4 combos e bebidas. Está em `supabase/functions/_shared/cardapio-mel.json`.
 - [S] Promoção da noite (R35) definida a cada noite, antes do atendimento, como um desconto em reais sobre a categoria "tradicionais"; pedidos com a promoção ficam marcados, como o asterisco de hoje.
 
 ### Fases 3 a 6
@@ -359,7 +365,9 @@ Separadas por quem consegue responder.
 
 ### Para o Felipe
 - F1. Ao pegar a entrega, daria para o motoboy digitar no celular o código, o total e a cidade que estão na comanda, ou isso atrasaria a saída?
-- F2. Foto ou link do cardápio, com tamanhos, sabores, bordas, bebidas e preços. (pendente: o Felipe manda depois)
+- F2. Cardápio: recebido em 16/10.
+- F3. Na comanda, como se diferencia Pix já pago de Pix na hora (máquina)?
+- F4. O desconto da promoção vale por pizza tradicional? Vale no meio a meio de duas tradicionais?
 
 ### Para o Luan
 A primeira rodada (L1 a L10, página "Conversa com o Luan") foi respondida em 12/10; o texto original está na seção 13. Pendentes:
