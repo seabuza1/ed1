@@ -1,0 +1,13 @@
+node_modules/
+dist/
+dev-dist/
+coverage/
+
+# Segredos
+.env
+.env.*
+!.env.example
+
+# Backups exportados pelo app
+backup*.json
+acerto-*.json
