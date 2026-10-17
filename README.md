@@ -19,8 +19,11 @@ Sem o `.env` do Supabase o app funciona como no MVP: tudo só no aparelho.
 2. No SQL Editor, rode `supabase/001_schema.sql`, depois `supabase/002_v1_app.sql` e `supabase/003_v1_avisos.sql` (uma vez cada, nessa ordem).
 3. Em Authentication, deixe o login por e-mail e senha. Se a confirmação de e-mail estiver ligada, o cadastro pede para confirmar pelo link; ponha o endereço do app em Authentication → URL Configuration → Site URL.
 4. Copie `.env.example` para `.env` e preencha `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` (Project Settings → API). Na Vercel, as mesmas duas variáveis em Settings → Environment Variables, e faça um novo deploy. Só a anon key; a service role nunca vai para o app.
-5. Cada um cria a conta pelo app (entra como motoboy). Depois defina os papéis no SQL Editor, com os `update` do fim do `001_schema.sql` (admin e expedição).
-6. O painel do Luan fica em `/painel`. A conta da expedição abre direto nele; o admin chega pelo Histórico → Ajustes → Painel da expedição.
+5. Cada um cria a conta pelo app (entra como motoboy). O primeiro admin é definido no SQL Editor, com o `update` do fim do `001_schema.sql`; depois o admin muda os papéis pelo painel, em **Áreas e equipe**.
+6. O painel do Luan fica em `/painel`. A expedição abre direto nele. O admin troca pela aba **Painel** do app e volta pelo **Meu caixa**; no computador, o painel abre sozinho (e o app lembra onde ele estava).
+
+### Painel no computador
+Menu na lateral (Folha da noite, Resumo da noite, Áreas e equipe), a noite num relance em cima da folha (em rota, entregues, Pix a conferir, acertos pendentes, devolver e receber), setas para a noite anterior e a próxima, e o caixa do motoboy em duas colunas. No celular, o mesmo painel com abas embaixo.
 
 No primeiro login, se o celular tiver noites da versão sem nuvem, o app oferece "Enviar meu histórico para a nuvem".
 

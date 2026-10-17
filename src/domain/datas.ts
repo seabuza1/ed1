@@ -64,6 +64,13 @@ export function fimDaSemana(inicio: string): string {
   return iso(d)
 }
 
+/** Data mais n dias ("2026-10-31", 1 → "2026-11-01"); n negativo volta. */
+export function somarDias(data: string, n: number): string {
+  const d = deData(data)
+  d.setDate(d.getDate() + n)
+  return iso(d)
+}
+
 /** "2026-10" → "Outubro de 2026" */
 export function nomeDoMes(mes: string): string {
   const [a, m] = mes.split('-').map(Number)

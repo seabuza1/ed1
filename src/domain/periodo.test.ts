@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { calcularAcerto } from './acerto'
-import { fimDaSemana, inicioDaSemana, nomeDoMes } from './datas'
+import { fimDaSemana, inicioDaSemana, nomeDoMes, somarDias } from './datas'
 import { recebidoNaNoite, resumirPorPeriodo } from './periodo'
 import type { AcertoConfirmado, Comanda, Noite } from './tipos'
 
@@ -19,6 +19,10 @@ describe('datas do período', () => {
     expect(inicioDaSemana('2026-10-18')).toBe('2026-10-12') // domingo
     expect(inicioDaSemana('2026-11-01')).toBe('2026-10-26')
     expect(fimDaSemana('2026-10-26')).toBe('2026-11-01')
+  })
+  it('somar dias vira o mês e volta', () => {
+    expect(somarDias('2026-10-31', 1)).toBe('2026-11-01')
+    expect(somarDias('2026-03-01', -1)).toBe('2026-02-28')
   })
   it('nome do mês', () => expect(nomeDoMes('2026-10')).toBe('Outubro de 2026'))
 })

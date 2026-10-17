@@ -1280,16 +1280,25 @@ a.botao {
 
 .app.painel {
   max-width: 1400px;
-  padding-bottom: calc(32px + env(safe-area-inset-bottom));
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
 }
 
-.app.painel > section,
-.app.painel > .pilulas,
-.app.painel > .resultado,
-.app.painel > p,
-.app.painel > button:not(.link) {
-  width: 100%;
-  max-width: 640px;
+/* Casca: no celular, abas embaixo como no app; no computador, menu na lateral (fim do arquivo). */
+.painel-marca,
+.painel-quem,
+.rotulo-longo {
+  display: none;
+}
+
+.topo-painel {
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.escolher-data {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .campo-data input {
@@ -1298,13 +1307,87 @@ a.botao {
   font-size: 1rem;
 }
 
-.chips-2 {
-  grid-template-columns: 1fr 1fr;
+button.so-icone {
+  width: 48px;
+  padding: 0;
+}
+
+/* A noite num relance: no celular rola para o lado. */
+.numeros-noite {
+  display: flex;
+  gap: 8px;
+  margin: 0 -16px;
+  padding: 0 16px 4px;
+  overflow-x: auto;
+}
+
+.numeros-noite > div {
+  flex: 0 0 auto;
+  min-width: 112px;
+  padding: 10px 12px;
+  border-radius: var(--raio);
+  background: var(--superficie);
+}
+
+.numeros-noite dt {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--discreto);
+}
+
+.numeros-noite dd {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.numeros-noite dd.pequeno {
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.numeros-noite .alerta {
+  box-shadow: inset 0 0 0 1.5px var(--alerta);
+}
+
+.numeros-noite .alerta dd.num {
+  color: var(--alerta);
+}
+
+/* Caixa do motoboy, resumo e ajustes: uma coluna no celular, grade no computador. */
+.caixa-grade,
+.grade-blocos {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
   max-width: 640px;
 }
 
-.segmentos .chip {
-  min-height: 48px;
+.linha-equipe {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--linha);
+}
+
+.linha-equipe.inativa .linha-equipe-nome {
+  opacity: 0.6;
+}
+
+.linha-equipe-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.linha-equipe-acoes .chips {
+  flex: 1 1 260px;
+}
+
+.linha-equipe .pilula {
+  align-self: flex-start;
 }
 
 /* Colunas: no celular rolam para o lado; em tela maior ficam lado a lado. */
@@ -1417,18 +1500,6 @@ button.coluna-folha {
   color: var(--ok);
 }
 
-.rodape-painel {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding-top: 16px;
-  border-top: 1px solid var(--linha);
-}
-
-.rodape-painel > * {
-  padding: 0 16px;
-}
-
 .coluna-pix {
   flex: 1 0 172px;
   max-width: 280px;
@@ -1483,4 +1554,147 @@ button.item-pix[aria-pressed='true'] {
   grid-area: quem;
   font-size: 0.78rem;
   color: var(--discreto);
+}
+
+/* ---------- Painel no computador ---------- */
+
+@media (min-width: 900px) {
+  .painel-casca {
+    display: grid;
+    grid-template-columns: 248px minmax(0, 1fr);
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  .abas.painel-nav {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    height: 100dvh;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    gap: 4px;
+    padding: 20px 12px;
+    border-top: 0;
+    border-right: 1px solid var(--linha);
+  }
+
+  .abas.painel-nav > button {
+    flex: none;
+    max-width: none;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 12px;
+    min-height: 48px;
+    padding: 0 14px;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    color: var(--texto-2);
+  }
+
+  .abas.painel-nav > button:hover {
+    background: var(--tonal);
+  }
+
+  .abas.painel-nav > button[aria-current='page'] {
+    background: var(--marca-suave);
+    color: var(--marca);
+  }
+
+  .abas.painel-nav > button.painel-trocar {
+    margin-top: 12px;
+    border: 1px solid var(--linha);
+  }
+
+  .painel-marca {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 14px 20px;
+    color: var(--marca);
+  }
+
+  .painel-marca > span,
+  .painel-quem > span {
+    display: flex;
+    flex-direction: column;
+    color: var(--texto);
+  }
+
+  .painel-quem {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: auto;
+    padding: 16px 14px 0;
+    border-top: 1px solid var(--linha);
+  }
+
+  .abas.painel-nav .painel-quem button {
+    flex-direction: row;
+    max-width: none;
+    min-height: 44px;
+    padding: 0 14px;
+    background: var(--tonal);
+    color: var(--texto);
+    font-size: 0.95rem;
+  }
+
+  .rotulo-longo {
+    display: inline;
+  }
+
+  .rotulo-curto,
+  .so-celular {
+    display: none;
+  }
+
+  .app.painel.painel-conteudo {
+    max-width: none;
+    margin: 0;
+    padding: 28px 32px 48px;
+  }
+
+  .topo-painel h1 {
+    font-size: 1.7rem;
+  }
+
+  .numeros-noite {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+  }
+
+  .folha {
+    margin: 0;
+    padding: 0 0 8px;
+    scroll-snap-type: none;
+  }
+
+  button.coluna-folha,
+  .coluna-pix {
+    flex: 1 0 200px;
+    max-width: 320px;
+  }
+
+  button.coluna-folha:hover {
+    box-shadow: inset 0 0 0 2px var(--marca);
+  }
+
+  .caixa-grade {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    max-width: 1200px;
+  }
+
+  .grade-blocos {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    align-items: start;
+    max-width: 1200px;
+  }
 }

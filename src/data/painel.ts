@@ -3,12 +3,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { useCallback, useEffect, useState } from 'react'
 import type { AcertoParaGravar, CaixaDoMotoboy } from '../domain/painel'
-import type { AcertoConfirmado, Area, Comanda } from '../domain/tipos'
+import type { AcertoConfirmado, Area, Comanda, Perfil } from '../domain/tipos'
 import {
+  areaParaGravar,
   linhaParaAcerto,
   linhaParaArea,
   linhaParaComanda,
   linhaParaNoite,
+  linhaParaPerfil,
   type AcertoLinha,
   type AreaLinha,
   type CaixaLinha,
@@ -22,6 +24,8 @@ export interface DadosPainel {
   comandas: Comanda[]
   acertos: AcertoConfirmado[]
   areas: Area[]
+  /** A equipe toda (a expedição e o admin leem todos os perfis). */
+  perfis: Perfil[]
 }
 
 export async function carregarPainel(sb: SupabaseClient, data: string): Promise<DadosPainel> {
@@ -49,6 +53,7 @@ export async function carregarPainel(sb: SupabaseClient, data: string): Promise<
     comandas: comandas.map(linhaParaComanda),
     acertos: acertos.map((a) => linhaParaAcerto(a, nome.get(a.confirmado_por) ?? null)),
     areas: areas.map(linhaParaArea).sort((a, b) => a.taxa - b.taxa || a.nome.localeCompare(b.nome)),
+    perfis: perfis.map(linhaParaPerfil).sort((a, b) => Number(b.ativo) - Number(a.ativo) || a.nome.localeCompare(b.nome)),
   }
 }
 
@@ -64,6 +69,14 @@ export const acoesPainel = (sb: SupabaseClient) => ({
     atualizar(sb, 'comandas', 'id', comandaId, { papel_conferido: conferido }),
   registrarContado: (caixaId: string, centavos: number | null) =>
     atualizar(sb, 'caixas', 'id', caixaId, { dinheiro_contado: centavos }),
+
+  /** Áreas e taxas (expedição e admin); os celulares recebem na próxima sincronização. */
+  async salvarArea(area: Area) {
+    verificar(await sb.from('areas').upsert(areaParaGravar(area)))
+  },
+
+  /** Só o admin (regra de acesso perfis_admin). */
+  mudarPerfil: (p: Perfil) => atualizar(sb, 'perfis', 'id', p.id, { papel: p.papel, ativo: p.ativo }),
 
   /** R15: grava os valores do momento e trava o caixa; fecha a noite se o motoboy não fechou. */
   async confirmarAcerto(a: AcertoParaGravar) {

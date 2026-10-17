@@ -23,6 +23,14 @@ const ICONES = {
   denovo: <path d="M21 12a9 9 0 1 1-9-9c2.5 0 4.9 1 6.7 2.7L21 8M21 3v5h-5" />,
   lapis: <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />,
   voltar: <path d="m15 18-6-6 6-6" />,
+  avancar: <path d="m9 18 6-6-6-6" />,
+  grafico: <path d="M3 3v18h18M7 15l4-4 3 3 5-6" />,
+  equipe: (
+    <>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14.5A6.5 6.5 0 0 1 21.5 20" />
+    </>
+  ),
   dinheiro: (
     <>
       <rect x="2" y="6" width="20" height="12" rx="2" />

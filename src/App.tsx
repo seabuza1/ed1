@@ -17,7 +17,8 @@ const ABAS: { id: Aba; rotulo: string; icone: NomeIcone }[] = [
   { id: 'historico', rotulo: 'Histórico', icone: 'historico' },
 ]
 
-export default function App() {
+/** O app do motoboy. Quem é da equipe ganha a aba Painel. */
+export default function App({ abrirPainel }: { abrirPainel?: () => void }) {
   const [aba, setAba] = useState<Aba>('noite')
   const [idHistorico, setIdHistorico] = useState<string | null>(null)
   const [ajustesAbertos, setAjustesAbertos] = useState(false)
@@ -83,6 +84,12 @@ export default function App() {
             {a.rotulo}
           </button>
         ))}
+        {abrirPainel && (
+          <button type="button" onClick={abrirPainel}>
+            <Icone nome="painel" tamanho={22} />
+            Painel
+          </button>
+        )}
       </nav>
     </>
   )

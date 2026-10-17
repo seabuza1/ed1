@@ -1,49 +1,17 @@
 import { useState } from 'react'
-import { alternarArea, editarAjustes, editarArea, novaArea } from '../domain/ajustes'
-import type { Resultado } from '../domain/comanda'
+import { editarAjustes, NOMES_PAPEL } from '../domain/ajustes'
 import { formatarDataHora } from '../domain/datas'
 import { formatarReais, lerReais, paraCampo } from '../domain/dinheiro'
 import type { Ajustes, Area } from '../domain/tipos'
 import { procurarAtualizacao } from '../data/atualizacao'
-import { novoId } from '../data/id'
 import { repo } from '../data/repo'
 import { ehEquipe, sair, useUsuario, type Usuario } from '../data/sessao'
 import { BotaoConfirmar } from '../ui/BotaoConfirmar'
 import { CampoReais } from '../ui/CampoReais'
 import { mensagemDeErro } from '../ui/erro'
 import { Icone } from '../ui/Icone'
-import { lerTema, salvarTema, type Tema } from '../ui/tema'
-
-const TEMAS: { id: Tema; rotulo: string }[] = [
-  { id: 'sistema', rotulo: 'Sistema' },
-  { id: 'escuro', rotulo: 'Escuro' },
-  { id: 'claro', rotulo: 'Claro' },
-]
-
-function EscolherTema() {
-  const [tema, setTema] = useState(lerTema)
-  return (
-    <section className="bloco pilha-curta">
-      <h2>Tema</h2>
-      <div className="chips chips-3" role="group" aria-label="Tema">
-        {TEMAS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className="chip"
-            aria-pressed={tema === t.id}
-            onClick={() => {
-              setTema(t.id)
-              salvarTema(t.id)
-            }}
-          >
-            {t.rotulo}
-          </button>
-        ))}
-      </div>
-    </section>
-  )
-}
+import { EditorAreas } from '../ui/EditorAreas'
+import { EscolherTema } from '../ui/EscolherTema'
 
 export function TelaAjustes(props: { areas: Area[]; ajustes: Ajustes; voltar: () => void }) {
   const usuario = useUsuario()
@@ -58,14 +26,12 @@ export function TelaAjustes(props: { areas: Area[]; ajustes: Ajustes; voltar: ()
       <h1>Ajustes</h1>
       {usuario && <Conta usuario={usuario} />}
       <EscolherTema />
-      {editaAreas ? <Areas areas={props.areas} /> : <AreasSoLeitura areas={props.areas} />}
+      {editaAreas ? <EditorAreas areas={props.areas} salvar={repo.salvarArea} /> : <AreasSoLeitura areas={props.areas} />}
       <ValoresPadrao key={`${props.ajustes.caixaPadrao}-${props.ajustes.diariaPadrao}`} ajustes={props.ajustes} />
       <SobreApp />
     </main>
   )
 }
-
-const NOMES_PAPEL = { motoboy: 'Motoboy', expedicao: 'Expedição', admin: 'Admin' }
 
 function Conta({ usuario }: { usuario: Usuario }) {
   const pendentes = repo.sync?.obter().pendentes ?? 0
@@ -77,12 +43,6 @@ function Conta({ usuario }: { usuario: Usuario }) {
         <br />
         <span className="discreto pequeno">{usuario.email}</span>
       </p>
-      {ehEquipe(usuario) && (
-        <a className="botao secundario" href="/painel">
-          <Icone nome="painel" tamanho={18} />
-          Painel da expedição
-        </a>
-      )}
       {pendentes > 0 ? (
         <>
           <p className="aviso">
@@ -118,120 +78,6 @@ function AreasSoLeitura({ areas }: { areas: Area[] }) {
           </div>
         ))}
     </section>
-  )
-}
-
-async function salvarArea(r: Resultado<Area>, setErro: (e: string | null) => void): Promise<boolean> {
-  if (!r.ok) {
-    setErro(r.erro)
-    return false
-  }
-  try {
-    await repo.salvarArea(r.valor)
-    setErro(null)
-    return true
-  } catch (e) {
-    setErro(mensagemDeErro(e))
-    return false
-  }
-}
-
-function Areas({ areas }: { areas: Area[] }) {
-  const [editando, setEditando] = useState<string | null>(null)
-  const [erro, setErro] = useState<string | null>(null)
-
-  return (
-    <section className="bloco pilha-curta">
-      <h2>
-        Áreas e taxas
-      </h2>
-      <p className="discreto pequeno">Mudar a taxa vale para as próximas comandas; as já lançadas não mudam.</p>
-      {areas.map((a) =>
-        editando === a.id ? (
-          <FormArea
-            key={a.id}
-            inicial={a}
-            rotulo="Salvar"
-            onCancelar={() => setEditando(null)}
-            onSalvar={async (entrada, setErroForm) => {
-              if (await salvarArea(editarArea(a, entrada, areas), setErroForm)) setEditando(null)
-            }}
-          />
-        ) : (
-          <div key={a.id} className={`linha-area ${a.ativa ? '' : 'inativa'}`}>
-            <div>
-              <strong>{a.nome}</strong>
-              <div className="discreto pequeno">
-                {formatarReais(a.taxa)}
-                {!a.ativa && ' · desativada'}
-              </div>
-            </div>
-            <button type="button" onClick={() => (setEditando(a.id), setErro(null))}>
-              Editar
-            </button>
-            <button type="button" onClick={() => salvarArea(alternarArea(a, areas), setErro)}>
-              {a.ativa ? 'Desativar' : 'Ativar'}
-            </button>
-          </div>
-        ),
-      )}
-      {erro && <p className="erro">{erro}</p>}
-      <h2 className="subtitulo">Nova área</h2>
-      <FormArea
-        rotulo="Adicionar"
-        onSalvar={async (entrada, setErroForm, limpar) => {
-          if (await salvarArea(novaArea(entrada, areas, novoId()), setErroForm)) limpar()
-        }}
-      />
-    </section>
-  )
-}
-
-function FormArea(props: {
-  inicial?: Area
-  rotulo: string
-  onSalvar: (
-    entrada: { nome: string; taxa: number },
-    setErro: (e: string | null) => void,
-    limpar: () => void,
-  ) => void
-  onCancelar?: () => void
-}) {
-  const [nome, setNome] = useState(props.inicial?.nome ?? '')
-  const [taxa, setTaxa] = useState(props.inicial ? paraCampo(props.inicial.taxa) : '')
-  const [erro, setErro] = useState<string | null>(null)
-
-  return (
-    <div className="pilha-curta form-area">
-      <div className="linha-form-area">
-        <label className="campo">
-          <span>Nome</span>
-          <input value={nome} autoComplete="off" onChange={(e) => (setNome(e.target.value), setErro(null))} />
-        </label>
-        <CampoReais rotulo="Taxa" valor={taxa} onChange={(t) => (setTaxa(t), setErro(null))} />
-      </div>
-      <div className={props.onCancelar ? 'lado-a-lado' : undefined}>
-        {props.onCancelar && (
-          <button type="button" className="secundario" onClick={props.onCancelar}>
-            Cancelar
-          </button>
-        )}
-        <button
-          type="button"
-          className="primario"
-          onClick={() => {
-            const valor = lerReais(taxa)
-            props.onSalvar({ nome, taxa: valor ?? NaN }, setErro, () => {
-              setNome('')
-              setTaxa('')
-            })
-          }}
-        >
-          {props.rotulo}
-        </button>
-      </div>
-      {erro && <p className="erro">{erro}</p>}
-    </div>
   )
 }
 

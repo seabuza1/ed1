@@ -1,5 +1,5 @@
 import type { Resultado } from './comanda'
-import type { Ajustes, Area } from './tipos'
+import type { Ajustes, Area, Papel, Perfil } from './tipos'
 
 export interface EntradaArea {
   nome: string
@@ -40,4 +40,17 @@ export function editarAjustes(valores: { caixaPadrao: number; diariaPadrao: numb
   if (!ok(valores.caixaPadrao)) return { ok: false, erro: 'Caixa inválido.' }
   if (!ok(valores.diariaPadrao)) return { ok: false, erro: 'Diária inválida.' }
   return { ok: true, valor: { id: 'padrao', ...valores } }
+}
+
+export const NOMES_PAPEL: Record<Papel, string> = { motoboy: 'Motoboy', expedicao: 'Expedição', admin: 'Admin' }
+
+/** Equipe: só o admin muda papel ou desativa alguém, e nunca a si mesmo (para não perder o acesso). */
+export function mudarPerfil(
+  eu: { id: string; papel: Papel },
+  perfil: Perfil,
+  mudanca: Partial<Pick<Perfil, 'papel' | 'ativo'>>,
+): Resultado<Perfil> {
+  if (eu.papel !== 'admin') return { ok: false, erro: 'Só o admin muda a equipe.' }
+  if (eu.id === perfil.id) return { ok: false, erro: 'Você não muda o próprio papel. Peça a outro admin.' }
+  return { ok: true, valor: { ...perfil, ...mudanca } }
 }

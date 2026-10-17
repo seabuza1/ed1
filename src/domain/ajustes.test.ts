@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { alternarArea, editarAjustes, editarArea, novaArea } from './ajustes'
+import { alternarArea, editarAjustes, editarArea, mudarPerfil, novaArea } from './ajustes'
 import type { Area } from './tipos'
 
 const areas: Area[] = [
@@ -38,4 +38,18 @@ it('valores padrão de caixa e diária', () => {
     valor: { id: 'padrao', caixaPadrao: 10000, diariaPadrao: 3500 },
   })
   expect(editarAjustes({ caixaPadrao: -1, diariaPadrao: 3000 }).ok).toBe(false)
+})
+
+it('equipe: só o admin muda, e não a si mesmo', () => {
+  const luan = { id: 'l', nome: 'Luan', papel: 'motoboy' as const, ativo: true }
+  expect(mudarPerfil({ id: 'f', papel: 'admin' }, luan, { papel: 'expedicao' })).toEqual({
+    ok: true,
+    valor: { ...luan, papel: 'expedicao' },
+  })
+  expect(mudarPerfil({ id: 'f', papel: 'admin' }, luan, { ativo: false })).toEqual({ ok: true, valor: { ...luan, ativo: false } })
+  expect(mudarPerfil({ id: 'l', papel: 'expedicao' }, luan, { papel: 'admin' }).ok).toBe(false)
+  expect(mudarPerfil({ id: 'l', papel: 'admin' }, luan, { papel: 'motoboy' })).toEqual({
+    ok: false,
+    erro: 'Você não muda o próprio papel. Peça a outro admin.',
+  })
 })

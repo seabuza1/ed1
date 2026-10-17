@@ -198,3 +198,32 @@ export function resumirNoiteDaEquipe(colunas: ColunaFolha[]): ResumoDaNoite {
   }
   return r
 }
+
+export interface NumerosDaNoite {
+  motoboys: number
+  emRota: number
+  entregues: number
+  voltaram: number
+  /** Pix antecipados que o Luan ainda não marcou como "caiu". */
+  pixAConferir: number
+  acertosPendentes: number
+  /** Soma do que os motoboys devolvem e recebem, pela conta de agora. */
+  devolver: number
+  receber: number
+}
+
+/** O topo do painel: a noite num relance. */
+export function numerosDaNoite(colunas: ColunaFolha[]): NumerosDaNoite {
+  const comandas = colunas.flatMap((c) => c.itens.map((i) => i.comanda))
+  const conta = (s: Comanda['status']) => comandas.filter((c) => c.status === s).length
+  return {
+    motoboys: colunas.length,
+    emRota: conta('em_rota'),
+    entregues: conta('entregue'),
+    voltaram: conta('voltou'),
+    pixAConferir: colunaPix(colunas).filter((p) => !p.comanda.pixConfirmado).length,
+    acertosPendentes: colunas.filter((c) => !c.confirmado).length,
+    devolver: colunas.reduce((s, c) => s + c.conta.devolver, 0),
+    receber: colunas.reduce((s, c) => s + c.conta.receber, 0),
+  }
+}

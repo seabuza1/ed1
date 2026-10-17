@@ -5,6 +5,7 @@ import {
   formaCurta,
   montarAcerto,
   montarFolha,
+  numerosDaNoite,
   resumirNoiteDaEquipe,
   textoLiquidacao,
   type CaixaDoMotoboy,
@@ -121,6 +122,22 @@ describe('folha da noite', () => {
       ['0017', 'Felipe', R(60)],
       ['8498', 'João', R(20)],
     ])
+  })
+
+  it('números da noite: status, Pix a conferir, acertos pendentes e somas', () => {
+    const { caixas, comandas } = noiteDaFolha()
+    const caiu = comandas.map((c) => (c.codigo === '0017' ? { ...c, pixConfirmado: true } : c))
+    const n = numerosDaNoite(montarFolha(caixas, caiu, [{ caixaId: 'j' } as AcertoConfirmado]))
+    expect(n).toEqual({
+      motoboys: 2,
+      emRota: 1,
+      entregues: 6,
+      voltaram: 1,
+      pixAConferir: 1,
+      acertosPendentes: 1,
+      devolver: R(243 + 130),
+      receber: R(86 + 45),
+    })
   })
 
   it('formas curtas', () => expect(formaCurta([{ forma: 'pix_antecipado', valor: 1 }, { forma: 'dinheiro', valor: 1 }])).toBe('pix+din'))

@@ -1,39 +1,65 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { useMemo, useState } from 'react'
 import { calcularAcerto } from '../domain/acerto'
-import { dataDaNoite, formatarData, formatarHora } from '../domain/datas'
+import { mudarPerfil, NOMES_PAPEL } from '../domain/ajustes'
+import { dataDaNoite, formatarData, formatarHora, partesData, somarDias } from '../domain/datas'
 import { formatarNumero, formatarReais, lerReais, paraCampo } from '../domain/dinheiro'
 import {
   colunaPix,
   montarAcerto,
   montarFolha,
+  numerosDaNoite,
   resumirNoiteDaEquipe,
   textoLiquidacao,
   type ColunaFolha,
+  type NumerosDaNoite,
   type ResumoDaNoite,
 } from '../domain/painel'
-import type { Area, Comanda } from '../domain/tipos'
+import type { Area, Comanda, Papel, Perfil } from '../domain/tipos'
 import { acoesPainel, usePainel } from '../data/painel'
 import { sair, type Usuario } from '../data/sessao'
 import { AcertoDoLuan, Conta, EntregasPorCidade, Maquininha, Papeis } from '../ui/BlocosAcerto'
 import { BotaoConfirmar } from '../ui/BotaoConfirmar'
 import { CampoReais } from '../ui/CampoReais'
 import { useAviso } from '../ui/desfazer'
+import { EditorAreas } from '../ui/EditorAreas'
+import { EscolherTema } from '../ui/EscolherTema'
 import { mensagemDeErro } from '../ui/erro'
 import { Icone, type NomeIcone } from '../ui/Icone'
 
 type Acoes = ReturnType<typeof acoesPainel>
+type Vista = 'folha' | 'resumo' | 'ajustes'
 
-/** Painel do Luan (/painel, só expedição e admin): a folha da noite em tempo real. */
-export function Painel({ sb, usuario }: { sb: SupabaseClient; usuario: Usuario }) {
-  const [data, setData] = useState(() => dataDaNoite(new Date()))
-  const [vista, setVista] = useState<'folha' | 'resumo'>('folha')
+const VISTAS: { id: Vista; rotulo: string; curto: string; icone: NomeIcone }[] = [
+  { id: 'folha', rotulo: 'Folha da noite', curto: 'Folha', icone: 'painel' },
+  { id: 'resumo', rotulo: 'Resumo da noite', curto: 'Resumo', icone: 'grafico' },
+  { id: 'ajustes', rotulo: 'Áreas e equipe', curto: 'Ajustes', icone: 'equipe' },
+]
+
+/**
+ * Painel do Luan (/painel, só expedição e admin): a folha da noite em tempo real, o resumo,
+ * as áreas e a equipe. No computador, menu na lateral; no celular, abas embaixo.
+ */
+export function Painel({ sb, usuario, abrirApp }: { sb: SupabaseClient; usuario: Usuario; abrirApp?: () => void }) {
+  const [hoje] = useState(() => dataDaNoite(new Date()))
+  const [data, setData] = useState(hoje)
+  const [vista, setVista] = useState<Vista>('folha')
   const [caixaId, setCaixaId] = useState<string | null>(null)
   const { dados, erro, recarregar } = usePainel(sb, data)
   const acoes = useMemo(() => acoesPainel(sb), [sb])
   const colunas = useMemo(() => (dados ? montarFolha(dados.caixas, dados.comandas, dados.acertos) : []), [dados])
-  const aberta = colunas.find((c) => c.caixa.noite.id === caixaId)
+  const aberta = vista === 'folha' ? colunas.find((c) => c.caixa.noite.id === caixaId) : undefined
   const aviso = useAviso()
+
+  const irPara = (v: Vista) => {
+    setVista(v)
+    setCaixaId(null)
+    window.scrollTo(0, 0)
+  }
+  const mudarData = (d: string) => {
+    setData(d)
+    setCaixaId(null)
+  }
 
   /** Coluna PIX: tocar marca que o Pix caiu (pix_confirmado), com desfazer. */
   async function marcarPix(c: Comanda) {
@@ -50,73 +76,161 @@ export function Painel({ sb, usuario }: { sb: SupabaseClient; usuario: Usuario }
     }
   }
 
+  const { semana } = partesData(data)
+  const titulo = aberta ? `${aberta.posicao} ${aberta.caixa.nome}` : VISTAS.find((v) => v.id === vista)!.rotulo
+
   return (
-    <main className="app painel pilha">
-      <header className="topo">
-        <div>
-          <h1>{aberta ? `${aberta.posicao} ${aberta.caixa.nome}` : 'Folha da noite'}</h1>
-          <p className="discreto pequeno">
-            {usuario.nome} · {usuario.papel === 'admin' ? 'Admin' : 'Expedição'}
-          </p>
+    <div className="painel-casca">
+      <nav className="abas painel-nav" aria-label="Painel">
+        <div className="painel-marca">
+          <Icone nome="painel" tamanho={22} />
+          <span>
+            <strong>Painel</strong>
+            <span className="discreto pequeno">Acerto dos motoboys</span>
+          </span>
         </div>
-        {!aberta && (
-          <label className="campo campo-data">
-            <span className="so-leitor">Data</span>
-            <input type="date" value={data} onChange={(e) => e.target.value && (setData(e.target.value), setCaixaId(null))} />
-          </label>
+        {VISTAS.map((v) => (
+          <button
+            key={v.id}
+            type="button"
+            aria-current={vista === v.id ? 'page' : undefined}
+            onClick={() => irPara(v.id)}
+          >
+            <Icone nome={v.icone} tamanho={22} />
+            <span className="rotulo-longo">{v.rotulo}</span>
+            <span className="rotulo-curto">{v.curto}</span>
+          </button>
+        ))}
+        {abrirApp && (
+          <button type="button" className="painel-trocar" onClick={abrirApp}>
+            <Icone nome="moto" tamanho={22} />
+            <span className="rotulo-longo">Meu caixa no app</span>
+            <span className="rotulo-curto">Meu caixa</span>
+          </button>
         )}
-      </header>
-      {erro && <p className="aviso">{erro}</p>}
+        <div className="painel-quem">
+          <span>
+            <strong>{usuario.nome}</strong>
+            <span className="discreto pequeno">{NOMES_PAPEL[usuario.papel]}</span>
+          </span>
+          <button type="button" className="secundario" onClick={sair}>
+            <Icone nome="sair" tamanho={18} />
+            Sair
+          </button>
+        </div>
+      </nav>
 
-      {aberta && dados ? (
-        <CaixaNoPainel
-          key={aberta.caixa.noite.id}
-          col={aberta}
-          comandas={dados.comandas.filter((c) => c.noiteId === aberta.caixa.noite.id)}
-          areas={dados.areas}
-          acoes={acoes}
-          admin={usuario.papel === 'admin'}
-          recarregar={recarregar}
-          voltar={() => setCaixaId(null)}
-        />
-      ) : (
-        <>
-          <div className="chips chips-2 segmentos" role="group" aria-label="Vista">
-            {(['folha', 'resumo'] as const).map((v) => (
-              <button key={v} type="button" className="chip" aria-pressed={vista === v} onClick={() => setVista(v)}>
-                {v === 'folha' ? 'Folha' : 'Resumo da noite'}
-              </button>
-            ))}
+      <main className="app painel painel-conteudo pilha">
+        <header className="topo topo-painel">
+          <div>
+            <h1>{titulo}</h1>
+            {vista !== 'ajustes' && (
+              <p className="discreto pequeno">
+                Noite de {semana} {formatarData(data)}
+                {data === hoje && ' · hoje'}
+              </p>
+            )}
           </div>
-          {!dados ? (
-            <p className="carregando">Carregando…</p>
-          ) : colunas.length === 0 ? (
-            <div className="vazio">
-              <Icone nome="moto" tamanho={28} />
-              <strong>Nenhum caixa em {formatarData(data)}</strong>
-              <span className="pequeno">As colunas aparecem quando os motoboys abrem a noite no app.</span>
-            </div>
-          ) : vista === 'folha' ? (
-            <Folha colunas={colunas} abrir={setCaixaId} marcarPix={marcarPix} />
-          ) : (
-            <Resumo resumo={resumirNoiteDaEquipe(colunas)} areas={dados.areas} />
-          )}
-        </>
-      )}
+          {vista !== 'ajustes' && !aberta && <EscolherData data={data} hoje={hoje} mudar={mudarData} />}
+        </header>
+        {erro && <p className="aviso">{erro}</p>}
 
-      <footer className="rodape-painel">
-        {usuario.papel === 'admin' && (
-          <a className="botao secundario" href="/">
-            <Icone nome="moto" tamanho={18} />
-            App do motoboy
-          </a>
+        {!dados ? (
+          <p className="carregando">Carregando…</p>
+        ) : vista === 'ajustes' ? (
+          <AjustesDoPainel
+            areas={dados.areas}
+            perfis={dados.perfis}
+            usuario={usuario}
+            acoes={acoes}
+            recarregar={recarregar}
+            abrirApp={abrirApp}
+          />
+        ) : aberta ? (
+          <CaixaNoPainel
+            key={aberta.caixa.noite.id}
+            col={aberta}
+            comandas={dados.comandas.filter((c) => c.noiteId === aberta.caixa.noite.id)}
+            areas={dados.areas}
+            acoes={acoes}
+            admin={usuario.papel === 'admin'}
+            recarregar={recarregar}
+            voltar={() => setCaixaId(null)}
+          />
+        ) : colunas.length === 0 ? (
+          <div className="vazio">
+            <Icone nome="moto" tamanho={28} />
+            <strong>Nenhum caixa em {formatarData(data)}</strong>
+            <span className="pequeno">As colunas aparecem quando os motoboys abrem a noite no app.</span>
+          </div>
+        ) : vista === 'folha' ? (
+          <>
+            <NumerosNoite n={numerosDaNoite(colunas)} />
+            <Folha colunas={colunas} abrir={setCaixaId} marcarPix={marcarPix} />
+          </>
+        ) : (
+          <Resumo resumo={resumirNoiteDaEquipe(colunas)} areas={dados.areas} />
         )}
-        <button type="button" className="secundario" onClick={sair}>
-          <Icone nome="sair" tamanho={18} />
-          Sair
+      </main>
+    </div>
+  )
+}
+
+/** Noite anterior, a data, a próxima e "Hoje". */
+function EscolherData({ data, hoje, mudar }: { data: string; hoje: string; mudar: (d: string) => void }) {
+  return (
+    <div className="escolher-data" role="group" aria-label="Noite">
+      <button
+        type="button"
+        className="secundario so-icone"
+        aria-label="Noite anterior"
+        onClick={() => mudar(somarDias(data, -1))}
+      >
+        <Icone nome="voltar" tamanho={20} />
+      </button>
+      <label className="campo campo-data">
+        <span className="so-leitor">Data</span>
+        <input type="date" value={data} onChange={(e) => e.target.value && mudar(e.target.value)} />
+      </label>
+      <button
+        type="button"
+        className="secundario so-icone"
+        aria-label="Próxima noite"
+        disabled={data >= hoje}
+        onClick={() => mudar(somarDias(data, 1))}
+      >
+        <Icone nome="avancar" tamanho={20} />
+      </button>
+      {data !== hoje && (
+        <button type="button" className="secundario" onClick={() => mudar(hoje)}>
+          Hoje
         </button>
-      </footer>
-    </main>
+      )}
+    </div>
+  )
+}
+
+/** A noite num relance, em cima da folha. */
+function NumerosNoite({ n }: { n: NumerosDaNoite }) {
+  const itens: { rotulo: string; valor: string; detalhe?: string; alerta?: boolean }[] = [
+    { rotulo: 'Motoboys', valor: String(n.motoboys) },
+    { rotulo: 'Em rota', valor: String(n.emRota) },
+    { rotulo: 'Entregues', valor: String(n.entregues), detalhe: n.voltaram ? `${n.voltaram} ${n.voltaram === 1 ? 'voltou' : 'voltaram'}` : undefined },
+    { rotulo: 'Pix a conferir', valor: String(n.pixAConferir), alerta: n.pixAConferir > 0 },
+    { rotulo: 'Acertos pendentes', valor: String(n.acertosPendentes), alerta: n.acertosPendentes > 0 },
+    { rotulo: 'Devolvem', valor: formatarReais(n.devolver) },
+    { rotulo: 'Recebem', valor: formatarReais(n.receber) },
+  ]
+  return (
+    <dl className="numeros-noite">
+      {itens.map((i) => (
+        <div key={i.rotulo} className={i.alerta ? 'alerta' : undefined}>
+          <dt>{i.rotulo}</dt>
+          <dd className="num">{i.valor}</dd>
+          {i.detalhe && <dd className="pequeno discreto">{i.detalhe}</dd>}
+        </div>
+      ))}
+    </dl>
   )
 }
 
@@ -130,7 +244,12 @@ function Folha(props: { colunas: ColunaFolha[]; abrir: (id: string) => void; mar
   return (
     <div className="folha">
       {colunas.map((col) => (
-        <button key={col.caixa.noite.id} type="button" className="coluna-folha" onClick={() => abrir(col.caixa.noite.id)}>
+        <button
+          key={col.caixa.noite.id}
+          type="button"
+          className="coluna-folha"
+          onClick={() => abrir(col.caixa.noite.id)}
+        >
           <span className="coluna-titulo">
             <span className="num">{col.posicao}</span> {col.caixa.nome}
           </span>
@@ -237,7 +356,8 @@ function CaixaNoPainel(props: {
   }
 
   const gravarContado = () => {
-    if (valorContado === undefined || (contado.trim() !== '' && valorContado === null)) return setErro('Valor inválido.')
+    if (valorContado === undefined || (contado.trim() !== '' && valorContado === null))
+      return setErro('Valor inválido.')
     if (valorContado !== noite.dinheiroContado) agir(() => acoes.registrarContado(noite.id, valorContado))
   }
 
@@ -256,101 +376,108 @@ function CaixaNoPainel(props: {
         <Icone nome="voltar" tamanho={18} />
         Folha
       </button>
-      <div className="pilulas">
-        <span className="pilula">
-          {formatarData(noite.data)} · caixa {formatarReais(noite.caixaInicial)}
-        </span>
-        {noite.fechadaEm ? (
-          <span className="pilula fechada">Motoboy fechou às {formatarHora(noite.fechadaEm)}</span>
-        ) : (
-          <span className="pilula aberta">Motoboy ainda lançando</span>
-        )}
-        <span className={`pilula ${col.confirmado ? 'confirmado' : 'aguardando'}`}>
-          {col.confirmado ? 'Confirmado' : 'Pendente'}
-        </span>
-      </div>
+      <div className="caixa-grade">
+        <div className="pilha">
+          <div className="pilulas">
+            <span className="pilula">
+              {formatarData(noite.data)} · caixa {formatarReais(noite.caixaInicial)}
+            </span>
+            {noite.fechadaEm ? (
+              <span className="pilula fechada">Motoboy fechou às {formatarHora(noite.fechadaEm)}</span>
+            ) : (
+              <span className="pilula aberta">Motoboy ainda lançando</span>
+            )}
+            <span className={`pilula ${col.confirmado ? 'confirmado' : 'aguardando'}`}>
+              {col.confirmado ? 'Confirmado' : 'Pendente'}
+            </span>
+          </div>
 
-      {col.confirmado ? (
-        <>
-          <AcertoDoLuan confirmado={col.confirmado} painel />
-          {props.admin && (
-            <BotaoConfirmar
-              className="perigo"
-              confirmacao="Toque de novo para reabrir"
-              onConfirmar={() => agir(() => acoes.reabrirAcerto(noite.id))}
-            >
-              Reabrir acerto
-            </BotaoConfirmar>
-          )}
-        </>
-      ) : (
-        <section className="bloco">
-          <h2>Acerto</h2>
-          <CampoReais
-            rotulo="Dinheiro contado"
-            valor={contado}
-            placeholder={paraCampo(conta.devolver)}
-            onChange={(t) => (setContado(t), setErro(null))}
-            aoSair={gravarContado}
-          />
-          {conf && (
+          {col.confirmado ? (
             <>
-              <div className={`resultado ${conf.situacao}`}>
-                {conf.situacao === 'bateu' && <p>Bateu.</p>}
-                {conf.situacao === 'falta' && <p>Faltou {formatarReais(conf.falta)}.</p>}
-                {conf.situacao === 'sobra' && <p>Sobrou {formatarReais(conf.sobra)}: fica retida até descobrir a origem.</p>}
-                <p>
-                  <strong>{textoLiquidacao(conf)}</strong>
-                </p>
-              </div>
-              <dl className="liquidacao">
-                <div>
-                  <dt>Pago ao motoboy</dt>
-                  <dd>{formatarReais(conf.pagar)}</dd>
-                </div>
-                <div>
-                  <dt>Do caixa dele</dt>
-                  <dd>{formatarReais(conf.doCaixaDele)}</dd>
-                </div>
-                <div>
-                  <dt>Retirado do caixa da empresa</dt>
-                  <dd>{formatarReais(conf.retiradoCaixaEmpresa)}</dd>
-                </div>
-                <div>
-                  <dt>Vai para a empresa</dt>
-                  <dd>{formatarReais(conf.vaiParaEmpresa)}</dd>
-                </div>
-              </dl>
+              <AcertoDoLuan confirmado={col.confirmado} painel />
+              {props.admin && (
+                <BotaoConfirmar
+                  className="perigo"
+                  confirmacao="Toque de novo para reabrir"
+                  onConfirmar={() => agir(() => acoes.reabrirAcerto(noite.id))}
+                >
+                  Reabrir acerto
+                </BotaoConfirmar>
+              )}
             </>
+          ) : (
+            <section className="bloco">
+              <h2>Acerto</h2>
+              <CampoReais
+                rotulo="Dinheiro contado"
+                valor={contado}
+                placeholder={paraCampo(conta.devolver)}
+                onChange={(t) => (setContado(t), setErro(null))}
+                aoSair={gravarContado}
+              />
+              {conf && (
+                <>
+                  <div className={`resultado ${conf.situacao}`}>
+                    {conf.situacao === 'bateu' && <p>Bateu.</p>}
+                    {conf.situacao === 'falta' && <p>Faltou {formatarReais(conf.falta)}.</p>}
+                    {conf.situacao === 'sobra' && (
+                      <p>Sobrou {formatarReais(conf.sobra)}: fica retida até descobrir a origem.</p>
+                    )}
+                    <p>
+                      <strong>{textoLiquidacao(conf)}</strong>
+                    </p>
+                  </div>
+                  <dl className="liquidacao">
+                    <div>
+                      <dt>Pago ao motoboy</dt>
+                      <dd>{formatarReais(conf.pagar)}</dd>
+                    </div>
+                    <div>
+                      <dt>Do caixa dele</dt>
+                      <dd>{formatarReais(conf.doCaixaDele)}</dd>
+                    </div>
+                    <div>
+                      <dt>Retirado do caixa da empresa</dt>
+                      <dd>{formatarReais(conf.retiradoCaixaEmpresa)}</dd>
+                    </div>
+                    <div>
+                      <dt>Vai para a empresa</dt>
+                      <dd>{formatarReais(conf.vaiParaEmpresa)}</dd>
+                    </div>
+                  </dl>
+                </>
+              )}
+              {faltamPapeis > 0 && conf && (
+                <p className="aviso">
+                  {faltamPapeis} {faltamPapeis === 1 ? 'papel não conferido' : 'papéis não conferidos'}. Confira abaixo
+                  antes de confirmar.
+                </p>
+              )}
+              <BotaoConfirmar
+                className="primario"
+                confirmacao="Toque de novo para confirmar e travar"
+                onConfirmar={confirmar}
+                desabilitado={!conf}
+              >
+                Confirmar acerto
+              </BotaoConfirmar>
+            </section>
           )}
-          {faltamPapeis > 0 && conf && (
-            <p className="aviso">
-              {faltamPapeis} {faltamPapeis === 1 ? 'papel não conferido' : 'papéis não conferidos'}. Confira abaixo antes de
-              confirmar.
-            </p>
-          )}
-          <BotaoConfirmar
-            className="primario"
-            confirmacao="Toque de novo para confirmar e travar"
-            onConfirmar={confirmar}
-            desabilitado={!conf}
-          >
-            Confirmar acerto
-          </BotaoConfirmar>
-        </section>
-      )}
-      {erro && <p className="erro">{erro}</p>}
-
-      <Papeis
-        comandas={props.comandas}
-        areas={props.areas}
-        leitura={false}
-        dica="Marque cada papel recebido."
-        aoAlternar={(c) => agir(() => acoes.marcarPapel(c.id, !c.papelConferido))}
-      />
-      <Conta acerto={conta} />
-      <EntregasPorCidade porArea={conta.porArea} areas={props.areas} />
-      <Maquininha comandas={props.comandas} leitura />
+          {erro && <p className="erro">{erro}</p>}
+          <Conta acerto={conta} />
+        </div>
+        <div className="pilha">
+          <Papeis
+            comandas={props.comandas}
+            areas={props.areas}
+            leitura={false}
+            dica="Marque cada papel recebido."
+            aoAlternar={(c) => agir(() => acoes.marcarPapel(c.id, !c.papelConferido))}
+          />
+          <EntregasPorCidade porArea={conta.porArea} areas={props.areas} />
+          <Maquininha comandas={props.comandas} leitura />
+        </div>
+      </div>
     </>
   )
 }
@@ -364,7 +491,7 @@ function Resumo({ resumo: r, areas }: { resumo: ResumoDaNoite; areas: Area[] }) 
   )
   const recebido = r.recebido
   return (
-    <>
+    <div className="grade-blocos">
       <section className="bloco">
         <h2>Recebido por forma</h2>
         <dl className="liquidacao">
@@ -392,6 +519,124 @@ function Resumo({ resumo: r, areas }: { resumo: ResumoDaNoite; areas: Area[] }) 
         </dl>
       </section>
       <EntregasPorCidade porArea={r.porArea} areas={areas} />
-    </>
+    </div>
+  )
+}
+
+const PAPEIS: Papel[] = ['motoboy', 'expedicao', 'admin']
+
+/** Áreas e taxas (expedição e admin), a equipe (o admin muda os papéis), o tema e a conta. */
+function AjustesDoPainel(props: {
+  areas: Area[]
+  perfis: Perfil[]
+  usuario: Usuario
+  acoes: Acoes
+  recarregar: () => void
+  abrirApp?: () => void
+}) {
+  const { acoes, recarregar } = props
+  return (
+    <div className="grade-blocos">
+      <EditorAreas
+        areas={props.areas}
+        salvar={async (a) => {
+          await acoes.salvarArea(a)
+          recarregar()
+        }}
+      />
+      <Equipe perfis={props.perfis} eu={props.usuario} acoes={acoes} recarregar={recarregar} />
+      <EscolherTema />
+      <section className="bloco pilha-curta so-celular">
+        <h2>Conta</h2>
+        <p>
+          <strong>{props.usuario.nome}</strong> · {NOMES_PAPEL[props.usuario.papel]}
+          <br />
+          <span className="discreto pequeno">{props.usuario.email}</span>
+        </p>
+        <button type="button" className="perigo" onClick={sair}>
+          <Icone nome="sair" tamanho={18} />
+          Sair
+        </button>
+      </section>
+    </div>
+  )
+}
+
+function Equipe(props: { perfis: Perfil[]; eu: Usuario; acoes: Acoes; recarregar: () => void }) {
+  const { eu, acoes, recarregar } = props
+  const aviso = useAviso()
+  const admin = eu.papel === 'admin'
+
+  async function mudar(p: Perfil, mudanca: Partial<Pick<Perfil, 'papel' | 'ativo'>>) {
+    const r = mudarPerfil(eu, p, mudanca)
+    if (!r.ok) return aviso(r.erro)
+    try {
+      await acoes.mudarPerfil(r.valor)
+      recarregar()
+      const texto =
+        mudanca.ativo === undefined
+          ? `${p.nome} agora é ${NOMES_PAPEL[r.valor.papel].toLowerCase()}`
+          : `${p.nome} ${r.valor.ativo ? 'ativado' : 'desativado'}`
+      aviso(texto, async () => {
+        await acoes.mudarPerfil(p)
+        recarregar()
+      })
+    } catch (e) {
+      aviso(mensagemDeErro(e))
+    }
+  }
+
+  return (
+    <section className="bloco pilha-curta">
+      <h2>Equipe</h2>
+      <p className="discreto pequeno">
+        {admin
+          ? 'Cada um cria a conta pelo app e entra como motoboy. Aqui você escolhe o papel.'
+          : 'Só o admin muda os papéis.'}
+      </p>
+      {props.perfis.map((p) => (
+        <div key={p.id} className={`linha-equipe ${p.ativo ? '' : 'inativa'}`}>
+          <div className="linha-equipe-nome">
+            <strong>{p.nome}</strong>
+            <span className="discreto pequeno">
+              {p.id === eu.id ? ' · você' : ''}
+              {p.ativo ? '' : ' · desativado'}
+            </span>
+          </div>
+          {admin && p.id !== eu.id ? (
+            <div className="linha-equipe-acoes">
+              <div className="chips chips-3" role="group" aria-label={`Papel de ${p.nome}`}>
+                {PAPEIS.map((papel) => (
+                  <button
+                    key={papel}
+                    type="button"
+                    className="chip"
+                    aria-pressed={p.papel === papel}
+                    onClick={() => p.papel !== papel && mudar(p, { papel })}
+                  >
+                    {NOMES_PAPEL[papel]}
+                  </button>
+                ))}
+              </div>
+              {p.ativo ? (
+                <BotaoConfirmar
+                  className="secundario"
+                  confirmacao="Toque de novo para desativar"
+                  onConfirmar={() => mudar(p, { ativo: false })}
+                >
+                  Desativar
+                </BotaoConfirmar>
+              ) : (
+                <button type="button" className="secundario" onClick={() => mudar(p, { ativo: true })}>
+                  Ativar
+                </button>
+              )}
+            </div>
+          ) : (
+            <span className="pilula">{NOMES_PAPEL[p.papel]}</span>
+          )}
+        </div>
+      ))}
+    </section>
   )
 }
