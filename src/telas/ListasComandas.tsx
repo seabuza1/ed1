@@ -1,13 +1,16 @@
-import { useState, type ReactNode } from 'react'
+import { useCallback, useState, type ReactNode } from 'react'
 import { filtrarPorCodigo, marcarEntregue, marcarVoltou, nomesFormas, saiuDeNovo, separarPorStatus } from '../domain/comanda'
 import { formatarHora } from '../domain/datas'
 import { formatarReais } from '../domain/dinheiro'
+import { avisoLeitura } from '../domain/leitura'
 import type { Area, Comanda } from '../domain/tipos'
 import { agora, novoId } from '../data/id'
 import { repo } from '../data/repo'
+import { useConsulta } from '../data/useConsulta'
 import { useAviso } from '../ui/desfazer'
 import { mensagemDeErro } from '../ui/erro'
 import { Icone, type NomeIcone } from '../ui/Icone'
+import { VerFoto } from '../ui/VerFoto'
 import { EditarComanda, TrocarForma } from './EditarComanda'
 
 type Aberta = { id: string; modo: 'menu' | 'editar' | 'trocar' } | null
@@ -19,11 +22,26 @@ const ICONE_STATUS: Record<Comanda['status'], NomeIcone> = {
 }
 
 /** Listas da noite. Sem `somenteLeitura`, com as ações (desfazer no lugar de confirmar) e a edição. */
-export function ListasComandas(props: { comandas: Comanda[]; areas: Area[]; somenteLeitura?: boolean }) {
+export function ListasComandas(props: {
+  comandas: Comanda[]
+  areas: Area[]
+  somenteLeitura?: boolean
+  /** Promoção da noite, para conferir as leituras que chegaram depois (R28). */
+  promoDesconto?: number | null
+}) {
   const [busca, setBusca] = useState('')
   const [aberta, setAberta] = useState<Aberta>(null)
   const [erro, setErro] = useState<string | null>(null)
+  const [foto, setFoto] = useState<Comanda | null>(null)
   const aviso = useAviso()
+  const noiteId = props.comandas[0]?.noiteId
+  const leituras = useConsulta(async () => (noiteId && repo.fotos ? repo.fotos.leituras(noiteId) : []), [noiteId])
+  /** R28: o que a leitura feita depois diz que não confere com o lançado. */
+  const avisos = (c: Comanda) => {
+    const reg = leituras?.find((l) => l.comandaId === c.id && l.resultado.posterior)
+    return reg ? avisoLeitura(reg, c, props.areas, props.promoDesconto ?? null) : []
+  }
+  const carregarFoto = useCallback(() => repo.fotos!.url(foto!), [foto])
   const { emRota, entregues, voltaram } = separarPorStatus(filtrarPorCodigo(props.comandas, busca))
 
   /** Grava e oferece desfazer (volta a comanda como estava, ou apaga a nova). */
@@ -42,7 +60,8 @@ export function ListasComandas(props: { comandas: Comanda[]; areas: Area[]; some
     const area = props.areas.find((a) => a.id === c.areaId)
     const modo = aberta?.id === c.id ? aberta.modo : null
     const abrir = (m: 'menu' | 'editar' | 'trocar') => setAberta({ id: c.id, modo: m })
-    const resumo = <ResumoComanda comanda={c} area={area?.nome ?? '—'} />
+    const naoConfere = avisos(c)
+    const resumo = <ResumoComanda comanda={c} area={area?.nome ?? '—'} naoConfere={naoConfere.length > 0} />
 
     return (
       <li key={c.id} className={`linha-comanda status-${c.status} ${modo ? 'aberta' : ''}`}>
@@ -72,6 +91,17 @@ export function ListasComandas(props: { comandas: Comanda[]; areas: Area[]; some
         </div>
         {modo === 'menu' && (
           <div className="menu-comanda">
+            {naoConfere.length > 0 && (
+              <p className="aviso">
+                A leitura da foto não confere: {naoConfere.join(' ')} Confira e, se for o caso, edite.
+              </p>
+            )}
+            {c.fotoPath && repo.fotos && (
+              <button type="button" onClick={() => setFoto(c)}>
+                <Icone nome="camera" tamanho={18} />
+                Ver foto
+              </button>
+            )}
             {c.status === 'em_rota' && (
               <>
                 <button type="button" onClick={() => abrir('trocar')}>
@@ -113,6 +143,7 @@ export function ListasComandas(props: { comandas: Comanda[]; areas: Area[]; some
 
   return (
     <>
+      {foto && <VerFoto titulo={foto.codigo} carregar={carregarFoto} fechar={() => setFoto(null)} />}
       {erro && <p className="erro">{erro}</p>}
       {props.comandas.length >= 4 && (
         <label className="busca">
@@ -163,7 +194,15 @@ function Lista(props: { titulo: string; comandas: Comanda[]; linha: (c: Comanda)
 }
 
 /** Código grande à esquerda, área e forma em cinza, valor à direita; status por cor e ícone. */
-export function ResumoComanda({ comanda: c, area }: { comanda: Comanda; area: string }) {
+export function ResumoComanda({
+  comanda: c,
+  area,
+  naoConfere,
+}: {
+  comanda: Comanda
+  area: string
+  naoConfere?: boolean
+}) {
   const temAntecipado = c.pagamentos.some((p) => p.forma === 'pix_antecipado')
   return (
     <span className="resumo-comanda">
@@ -177,6 +216,12 @@ export function ResumoComanda({ comanda: c, area }: { comanda: Comanda; area: st
         {c.troco > 0 && <> · troco Pix <span className="num">{formatarReais(c.troco)}</span></>}
         {c.finalizadaEm && <> · <span className="num">{formatarHora(c.finalizadaEm)}</span></>}
         {temAntecipado && c.pixConfirmado && <span className="selo-pix">Pix confirmado</span>}
+        {c.fotoPath && (
+          <span className="tem-foto" aria-label="Com foto">
+            <Icone nome="camera" tamanho={14} />
+          </span>
+        )}
+        {naoConfere && <span className="selo-pix selo-leitura">Leitura não confere</span>}
       </span>
     </span>
   )

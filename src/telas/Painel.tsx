@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { calcularAcerto } from '../domain/acerto'
 import { mudarPerfil, NOMES_PAPEL } from '../domain/ajustes'
 import { dataDaNoite, formatarData, formatarHora, partesData, somarDias } from '../domain/datas'
@@ -16,7 +16,9 @@ import {
   type ResumoDaNoite,
 } from '../domain/painel'
 import type { Area, Comanda, Papel, Perfil } from '../domain/tipos'
-import { acoesPainel, usePainel } from '../data/painel'
+import { linhasMedicao, nomeArquivoLeituras, paraCsv, resumirMedicao, type ResumoMedicao } from '../domain/medicao'
+import { baixarTexto } from '../data/arquivo'
+import { acoesPainel, carregarLeituras, usePainel } from '../data/painel'
 import { sair, type Usuario } from '../data/sessao'
 import { AcertoDoLuan, Conta, EntregasPorCidade, Maquininha, Papeis } from '../ui/BlocosAcerto'
 import { BotaoConfirmar } from '../ui/BotaoConfirmar'
@@ -24,8 +26,9 @@ import { CampoReais } from '../ui/CampoReais'
 import { useAviso } from '../ui/desfazer'
 import { EditorAreas } from '../ui/EditorAreas'
 import { EscolherTema } from '../ui/EscolherTema'
-import { mensagemDeErro } from '../ui/erro'
+import { mensagemDeErro, textoDoErro } from '../ui/erro'
 import { Icone, type NomeIcone } from '../ui/Icone'
+import { VerFoto } from '../ui/VerFoto'
 
 type Acoes = ReturnType<typeof acoesPainel>
 type Vista = 'folha' | 'resumo' | 'ajustes'
@@ -169,7 +172,11 @@ export function Painel({ sb, usuario, abrirApp }: { sb: SupabaseClient; usuario:
             <Folha colunas={colunas} abrir={setCaixaId} marcarPix={marcarPix} />
           </>
         ) : (
-          <Resumo resumo={resumirNoiteDaEquipe(colunas)} areas={dados.areas} />
+          <Resumo
+            resumo={resumirNoiteDaEquipe(colunas)}
+            areas={dados.areas}
+            extra={<MedicaoLeituras sb={sb} data={data} perfis={dados.perfis} areas={dados.areas} />}
+          />
         )}
       </main>
     </div>
@@ -215,7 +222,11 @@ function NumerosNoite({ n }: { n: NumerosDaNoite }) {
   const itens: { rotulo: string; valor: string; detalhe?: string; alerta?: boolean }[] = [
     { rotulo: 'Motoboys', valor: String(n.motoboys) },
     { rotulo: 'Em rota', valor: String(n.emRota) },
-    { rotulo: 'Entregues', valor: String(n.entregues), detalhe: n.voltaram ? `${n.voltaram} ${n.voltaram === 1 ? 'voltou' : 'voltaram'}` : undefined },
+    {
+      rotulo: 'Entregues',
+      valor: String(n.entregues),
+      detalhe: n.voltaram ? `${n.voltaram} ${n.voltaram === 1 ? 'voltou' : 'voltaram'}` : undefined,
+    },
     { rotulo: 'Pix a conferir', valor: String(n.pixAConferir), alerta: n.pixAConferir > 0 },
     { rotulo: 'Acertos pendentes', valor: String(n.acertosPendentes), alerta: n.acertosPendentes > 0 },
     { rotulo: 'Devolvem', valor: formatarReais(n.devolver) },
@@ -260,6 +271,11 @@ function Folha(props: { colunas: ColunaFolha[]; abrir: (id: string) => void; mar
                   <Icone nome={ICONE_STATUS[i.comanda.status]} tamanho={14} />
                 </span>
                 <span className="codigo">{i.comanda.codigo}</span>
+                {i.comanda.fotoPath && (
+                  <span className="tem-foto" aria-label="com foto">
+                    <Icone nome="camera" tamanho={12} />
+                  </span>
+                )}
                 <span className="forma">{i.comanda.status === 'voltou' ? 'voltou' : i.forma}</span>
                 {i.trocoPix > 0 && <span className="num troco">→{formatarNumero(i.trocoPix)}</span>}
                 {i.papelPendente && (
@@ -339,6 +355,8 @@ function CaixaNoPainel(props: {
   const noite = col.caixa.noite
   const [contado, setContado] = useState(noite.dinheiroContado === null ? '' : paraCampo(noite.dinheiroContado))
   const [erro, setErro] = useState<string | null>(null)
+  const [foto, setFoto] = useState<Comanda | null>(null)
+  const carregarFoto = useCallback(() => acoes.urlDaFoto(foto!.fotoPath!), [acoes, foto])
   const valorContado = contado.trim() === '' ? null : lerReais(contado)
   // A conta acompanha o que está sendo digitado, antes de gravar.
   const conta = calcularAcerto({ ...noite, dinheiroContado: valorContado }, props.comandas)
@@ -372,6 +390,7 @@ function CaixaNoPainel(props: {
 
   return (
     <>
+      {foto?.fotoPath && <VerFoto titulo={foto.codigo} carregar={carregarFoto} fechar={() => setFoto(null)} />}
       <button type="button" className="link alinha-inicio" onClick={props.voltar}>
         <Icone nome="voltar" tamanho={18} />
         Folha
@@ -470,6 +489,7 @@ function CaixaNoPainel(props: {
           <Papeis
             comandas={props.comandas}
             areas={props.areas}
+            abrirFoto={setFoto}
             leitura={false}
             dica="Marque cada papel recebido."
             aoAlternar={(c) => agir(() => acoes.marcarPapel(c.id, !c.papelConferido))}
@@ -482,7 +502,7 @@ function CaixaNoPainel(props: {
   )
 }
 
-function Resumo({ resumo: r, areas }: { resumo: ResumoDaNoite; areas: Area[] }) {
+function Resumo({ resumo: r, areas, extra }: { resumo: ResumoDaNoite; areas: Area[]; extra?: ReactNode }) {
   const linha = (rotulo: string, valor: number) => (
     <div>
       <dt>{rotulo}</dt>
@@ -519,6 +539,7 @@ function Resumo({ resumo: r, areas }: { resumo: ResumoDaNoite; areas: Area[] }) 
         </dl>
       </section>
       <EntregasPorCidade porArea={r.porArea} areas={areas} />
+      {extra}
     </div>
   )
 }
@@ -637,6 +658,62 @@ function Equipe(props: { perfis: Perfil[]; eu: Usuario; acoes: Acoes; recarregar
           )}
         </div>
       ))}
+    </section>
+  )
+}
+
+/** R27: exporta as leituras por foto em CSV para medir, com o resumo do período. */
+function MedicaoLeituras(props: { sb: SupabaseClient; data: string; perfis: Perfil[]; areas: Area[] }) {
+  const [resumo, setResumo] = useState<ResumoMedicao | null>(null)
+  const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null)
+
+  async function exportar(de: string) {
+    setMsg(null)
+    try {
+      const leituras = await carregarLeituras(props.sb, de, props.data, props.perfis)
+      setResumo(leituras.length ? resumirMedicao(leituras) : null)
+      if (!leituras.length) return setMsg({ ok: false, texto: 'Nenhuma leitura nesse período.' })
+      // O BOM faz o Excel mostrar os acentos.
+      const csv = '\uFEFF' + paraCsv(linhasMedicao(leituras, props.areas))
+      baixarTexto(csv, nomeArquivoLeituras(de, props.data), 'text/csv;charset=utf-8')
+      setMsg({ ok: true, texto: `${leituras.length} ${leituras.length === 1 ? 'leitura exportada' : 'leituras exportadas'}.` })
+    } catch (e) {
+      setMsg({ ok: false, texto: textoDoErro(e) })
+    }
+  }
+
+  const linha = (rotulo: string, valor: string) => (
+    <div>
+      <dt>{rotulo}</dt>
+      <dd>{valor}</dd>
+    </div>
+  )
+  return (
+    <section className="bloco pilha-curta">
+      <h2>Leituras por foto</h2>
+      <p className="discreto pequeno">Para medir quantas verdes estavam erradas (meta: zero) e o tempo por comanda.</p>
+      <div className="lado-a-lado">
+        <button type="button" className="secundario" onClick={() => exportar(props.data)}>
+          <Icone nome="baixar" tamanho={18} />
+          Desta noite
+        </button>
+        <button type="button" className="secundario" onClick={() => exportar(somarDias(props.data, -29))}>
+          <Icone nome="baixar" tamanho={18} />
+          Últimos 30 dias
+        </button>
+      </div>
+      {resumo && (
+        <dl className="liquidacao">
+          {linha('Leituras', String(resumo.total))}
+          {linha('Verdes', String(resumo.verdes))}
+          {linha('Verdes erradas', String(resumo.verdesErradas))}
+          {linha('Amarelas', String(resumo.amarelas))}
+          {linha('Vermelhas', String(resumo.vermelhas))}
+          {linha('Lançadas assim (forçadas)', String(resumo.forcadas))}
+          {resumo.segundosMedio !== null && linha('Tempo médio por comanda', `${resumo.segundosMedio} s`)}
+        </dl>
+      )}
+      {msg && <p className={msg.ok ? 'sucesso' : 'erro'}>{msg.texto}</p>}
     </section>
   )
 }

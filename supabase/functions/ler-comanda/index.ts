@@ -14,7 +14,8 @@ const COM_FALLBACK = new Set(['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-op
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  // A lista de @supabase/supabase-js/cors.
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-retry-count, traceparent, tracestate, baggage',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
@@ -31,6 +32,23 @@ function usuarioLogado(req: Request): boolean {
   } catch {
     return false
   }
+}
+
+/**
+ * Perfil ativo (meu_papel não nulo): conta desativada pelo admin não gasta a API. A chave anon
+ * nem executa meu_papel (003). Sem as variáveis do Supabase, fica só a conferência do token.
+ */
+async function perfilAtivo(req: Request): Promise<boolean> {
+  if (!usuarioLogado(req)) return false
+  const url = Deno.env.get('SUPABASE_URL')
+  const chave = Deno.env.get('SUPABASE_ANON_KEY')
+  if (!url || !chave) return true
+  const r = await fetch(`${url}/rest/v1/rpc/meu_papel`, {
+    method: 'POST',
+    headers: { apikey: chave, Authorization: req.headers.get('Authorization')!, 'Content-Type': 'application/json' },
+    body: '{}',
+  })
+  return r.ok && (await r.json()) !== null
 }
 
 class ErroLeitura extends Error {}
@@ -52,7 +70,7 @@ async function ler(cliente: Anthropic, modelo: string, tipo: TipoLeitura, imagem
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST') return resposta({ erro: 'Use POST.' }, 405)
-  if (!usuarioLogado(req)) return resposta({ erro: 'Entre no app para ler a comanda.' }, 401)
+  if (!(await perfilAtivo(req))) return resposta({ erro: 'Entre no app para ler a comanda.' }, 401)
 
   const chave = Deno.env.get('ANTHROPIC_API_KEY')
   if (!chave) return resposta({ erro: 'Leitura ainda não configurada. Lance à mão.' }, 503)

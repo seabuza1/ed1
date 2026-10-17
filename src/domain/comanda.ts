@@ -174,6 +174,8 @@ export function saiuDeNovo(
       criadaEm: ctx.agora,
       atualizadaEm: ctx.agora,
       finalizadaEm: null,
+      // A foto fica na comanda que voltou: o caminho dela leva o id daquela (supabase/004).
+      fotoPath: null,
     },
   }
 }

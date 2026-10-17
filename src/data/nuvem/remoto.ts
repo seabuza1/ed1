@@ -70,7 +70,7 @@ const BUCKET = 'comandas'
 
 const PAGINA = 1000 // limite de linhas por pedido do Supabase
 
-async function todas<T>(pagina: (de: number, ate: number) => PromiseLike<Resposta<T[]>>): Promise<T[]> {
+export async function todas<T>(pagina: (de: number, ate: number) => PromiseLike<Resposta<T[]>>): Promise<T[]> {
   const linhas: T[] = []
   for (let de = 0; ; de += PAGINA) {
     const parte = verificar(await pagina(de, de + PAGINA - 1)) ?? []

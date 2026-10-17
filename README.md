@@ -1,6 +1,6 @@
 # Acerto dos motoboys
 
-Nuvem: projeto Supabase `acerto-motoboys` (São Paulo), com 001, 002 e 003 já aplicados; as variáveis estão na Vercel.
+Nuvem: projeto Supabase `acerto-motoboys` (São Paulo), com 001 a 004 aplicados (o 005 espera confirmação); as variáveis estão na Vercel. Função `ler-comanda` publicada.
 
 App de celular (PWA offline) para o motoboy lançar as comandas da noite e ter a conta do acerto pronta, e painel para o Luan acompanhar a folha da noite e confirmar os acertos. Veja `CLAUDE.md`, `docs/SPEC-v1.md` (o que está sendo feito) e `docs/SPEC-mvp-acerto.md` (a base).
 
@@ -34,6 +34,15 @@ Toda alteração grava primeiro no IndexedDB do celular e entra numa fila, que s
 ### Testes do banco
 
 `supabase/teste/` tem o teste das regras de acesso (um motoboy não vê o caixa do outro, a trava depois do acerto) para rodar num Postgres local. Veja `supabase/teste/README.md`.
+
+## Leitura da comanda por foto
+
+`docs/SPEC-leitura.md`. O motoboy toca em **Foto da comanda**; a Edge Function `ler-comanda` lê a foto com a IA e a tela de confirmação mostra a conta pelo cardápio (verde, amarelo ou vermelho). Sem internet, a foto fica no celular e é lida quando a internet volta, só como conferência.
+
+1. SQL: `supabase/004_leitura.sql` e `005_leitura_ajustes.sql` (depois do 003).
+2. Chave da Anthropic: no Supabase, **Edge Functions → Secrets**, crie `ANTHROPIC_API_KEY` (e, se quiser outro modelo, `ANTHROPIC_MODEL`; o padrão é `claude-sonnet-5-5`). A chave fica só lá: nunca no app, no `.env` ou no repositório.
+3. Função: o workflow `.github/workflows/funcao-ler-comanda.yml` publica `ler-comanda` com a foto de exemplo. Crie um token em supabase.com → Account → Access Tokens e cadastre no GitHub como secret `SUPABASE_ACCESS_TOKEN`; depois, Actions → Função ler-comanda → Run workflow. (Pela CLI: `npx supabase functions deploy ler-comanda --project-ref ueahsvfmbpthujnvmahl`.)
+4. Medir: no painel, **Resumo da noite → Leituras por foto** exporta o CSV.
 
 ## Estrutura
 - `src/domain/`: regras e contas, funções puras com testes (`acerto.ts`, `comanda.ts`, `painel.ts`, `periodo.ts`, `envioHistorico.ts`...).

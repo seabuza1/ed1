@@ -101,7 +101,39 @@ export const comandaParaGravar = (c: Comanda) => ({
 
 export const areaParaGravar = (a: Area) => ({ id: a.id, nome: a.nome, taxa: a.taxa, ativa: a.ativa })
 
-/** Só sobe (o app não baixa as leituras de volta). */
+export interface LeituraLinha {
+  id: string
+  caixa_id: string
+  comanda_id: string | null
+  foto_path: string
+  leitura: RegistroLeitura['leitura']
+  conferencia: RegistroLeitura['conferencia']
+  resultado: RegistroLeitura['resultado']
+  lancado: RegistroLeitura['lancado']
+  corrigido: boolean
+  forcado: boolean
+  modelo: string | null
+  ms: number | null
+  criado_em: string
+}
+
+export const linhaParaLeitura = (l: LeituraLinha): RegistroLeitura => ({
+  id: l.id,
+  noiteId: l.caixa_id,
+  comandaId: l.comanda_id,
+  fotoPath: l.foto_path,
+  leitura: l.leitura,
+  conferencia: l.conferencia,
+  resultado: l.resultado,
+  lancado: l.lancado,
+  corrigido: l.corrigido,
+  forcado: l.forcado,
+  modelo: l.modelo ?? '',
+  ms: l.ms ?? 0,
+  criadaEm: iso(l.criado_em)!,
+})
+
+/** O motoboy só sobe; o painel lê para medir (linhaParaLeitura). */
 export const leituraParaGravar = (r: RegistroLeitura) => ({
   id: r.id,
   caixa_id: r.noiteId,

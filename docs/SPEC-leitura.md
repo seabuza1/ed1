@@ -17,7 +17,7 @@ Com letra de mão não existe leitura 100% certa. A segurança vem de três cois
 3. Edge Function `ler-comanda`: recebe a foto, faz duas leituras com a API da Anthropic e devolve as duas.
 4. Botão de foto, tela "Lendo" e tela de confirmação.
 5. Fila offline das fotos e leitura posterior.
-6. Fotos no Storage e tabela `leituras` para medir: `supabase/002_leitura.sql`.
+6. Fotos no Storage e tabela `leituras` para medir: `supabase/004_leitura.sql` (o 002 e o 003 já eram da v1) e `005_leitura_ajustes.sql`.
 7. Foto da comanda no painel do Luan.
 
 Fica de fora: QR code (fase 2), câmera própria com moldura, recorte por campo, leitura do relatório da maquininha e da folha de expedição.
@@ -51,7 +51,7 @@ Fica de fora: QR code (fase 2), câmera própria com moldura, recorte por campo,
 
 ## Saída da IA
 
-A saída vem por tool use forçado, com `input_schema` igual a este formato. O exemplo completo está em `supabase/functions/_shared/exemplos/3557.json`.
+A saída vem por saída estruturada (`output_config.format`, JSON Schema igual a este formato): o Sonnet 5.5 recusa tool use forçado. O exemplo completo está em `supabase/functions/_shared/exemplos/3557.json`.
 
 Leitura completa:
 ```
@@ -121,7 +121,7 @@ Use `cache_control` no system e nos exemplos, que se repetem em toda chamada.
 - **Lista da noite:** ícone de câmera nas comandas com foto e aviso de "leitura não confere" (R28).
 - **Painel do Luan:** tocar no código abre a foto.
 
-## Banco: `supabase/002_leitura.sql`
+## Banco: `supabase/004_leitura.sql`
 
 Rodar depois do `001_schema.sql`.
 
@@ -161,7 +161,7 @@ Os valores esperados foram conferidos por um cálculo à parte.
 ## Ordem de construção
 
 1. `leitura.ts` com L1 a L14 passando, local e sem rede.
-2. Rodar `002_leitura.sql`.
+2. Rodar `004_leitura.sql` e `005_leitura_ajustes.sql`.
 3. Edge Function e secrets. Testar com `exemplos/3557.jpg`: tem que dar verde em Aragarças.
 4. Botão de foto, "Lendo" e tela de confirmação.
 5. Fila offline e leitura posterior (R28).

@@ -328,9 +328,9 @@ describe('ações sobre a comanda', () => {
     const areas = areasPadrao()
     const base = noiteBase(areas)
     const voltou = base.find((c) => c.codigo === '8094')!
-    const r = saiuDeNovo(voltou, areas.find((a) => a.id === voltou.areaId), { id: 'nova', agora })
+    const r = saiuDeNovo({ ...voltou, fotoPath: `n/${voltou.id}.jpg` }, areas.find((a) => a.id === voltou.areaId), { id: 'nova', agora })
     if (!r.ok) throw new Error(r.erro)
-    expect(r.valor).toMatchObject({ id: 'nova', codigo: '8094', status: 'em_rota', taxa: R(12) })
+    expect(r.valor).toMatchObject({ id: 'nova', codigo: '8094', status: 'em_rota', taxa: R(12), fotoPath: null })
     const a = calcularAcerto(noite(), [...base, marcarEntregue(r.valor, agora)])
     expect(a.devolver).toBe(R(308))
     expect(a.receber).toBe(R(98))

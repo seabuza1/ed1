@@ -1,0 +1,38 @@
+# Publica a Edge Function ler-comanda (com a foto de exemplo, que não cabe no deploy pelo MCP).
+# Precisa do secret SUPABASE_ACCESS_TOKEN no repositório (Settings → Secrets and variables →
+# Actions). Roda sozinho quando a função muda na main, ou à mão em Actions → Run workflow.
+name: Função ler-comanda
+
+on:
+  push:
+    branches: [main]
+    paths: ['supabase/functions/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PROJETO: ueahsvfmbpthujnvmahl
+    steps:
+      - name: Sem token, não publica
+        if: env.SUPABASE_ACCESS_TOKEN == ''
+        run: echo "::notice::Cadastre o secret SUPABASE_ACCESS_TOKEN para publicar a função."
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        if: env.SUPABASE_ACCESS_TOKEN != ''
+        with:
+          persist-credentials: false
+
+      - uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2.1.1
+        if: env.SUPABASE_ACCESS_TOKEN != ''
+        with:
+          version: latest
+
+      - name: Publicar
+        if: env.SUPABASE_ACCESS_TOKEN != ''
+        run: supabase functions deploy ler-comanda --project-ref "$PROJETO"

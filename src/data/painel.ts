@@ -2,6 +2,7 @@
 // pelo realtime; a cada 20 segundos recarrega também, caso o realtime caia.
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { useCallback, useEffect, useState } from 'react'
+import type { LeituraMedida } from '../domain/medicao'
 import type { AcertoParaGravar, CaixaDoMotoboy } from '../domain/painel'
 import type { AcertoConfirmado, Area, Comanda, Perfil } from '../domain/tipos'
 import {
@@ -10,14 +11,16 @@ import {
   linhaParaArea,
   linhaParaComanda,
   linhaParaNoite,
+  linhaParaLeitura,
   linhaParaPerfil,
   type AcertoLinha,
   type AreaLinha,
   type CaixaLinha,
   type ComandaLinha,
+  type LeituraLinha,
   type PerfilLinha,
 } from './nuvem/linhas'
-import { ErroRemoto, MOTIVOS, verificar } from './nuvem/remoto'
+import { ErroRemoto, MOTIVOS, todas, verificar } from './nuvem/remoto'
 
 export interface DadosPainel {
   caixas: CaixaDoMotoboy[]
@@ -57,6 +60,31 @@ export async function carregarPainel(sb: SupabaseClient, data: string): Promise<
   }
 }
 
+type LeituraComCaixa = LeituraLinha & { caixas: { data: string; motoboy_id: string }; comandas: ComandaLinha | null }
+
+/** Leituras das noites de `de` a `ate` (R27), com a noite, o motoboy e a comanda como está agora. */
+export async function carregarLeituras(sb: SupabaseClient, de: string, ate: string, perfis: { id: string; nome: string }[]) {
+  const linhas = await todas<LeituraComCaixa>((i, f) =>
+    sb
+      .from('leituras')
+      .select('*, caixas!inner(data, motoboy_id), comandas(*)')
+      .gte('caixas.data', de)
+      .lte('caixas.data', ate)
+      .order('criado_em')
+      .order('id')
+      .range(i, f),
+  )
+  const nome = new Map(perfis.map((p) => [p.id, p.nome]))
+  return linhas.map(
+    (l): LeituraMedida => ({
+      registro: linhaParaLeitura(l),
+      data: l.caixas.data,
+      motoboy: nome.get(l.caixas.motoboy_id) ?? 'Motoboy',
+      atual: l.comandas ? linhaParaComanda(l.comandas) : null,
+    }),
+  )
+}
+
 /** Atualiza só o que foi pedido; recusa se nada mudou (regra de acesso). */
 async function atualizar(sb: SupabaseClient, tabela: string, coluna: string, id: string, campos: object) {
   const linhas = verificar<{ id: string }[]>(await sb.from(tabela).update(campos).eq(coluna, id).select(coluna))
@@ -73,6 +101,13 @@ export const acoesPainel = (sb: SupabaseClient) => ({
   /** Áreas e taxas (expedição e admin); os celulares recebem na próxima sincronização. */
   async salvarArea(area: Area) {
     verificar(await sb.from('areas').upsert(areaParaGravar(area)))
+  },
+
+  /** Link temporário da foto da comanda (bucket privado; vale 5 min). */
+  async urlDaFoto(caminho: string) {
+    const { data, error } = await sb.storage.from('comandas').createSignedUrl(caminho, 300)
+    if (error || !data) throw new ErroRemoto('A foto ainda não chegou do celular do motoboy.', false)
+    return data.signedUrl
   },
 
   /** Só o admin (regra de acesso perfis_admin). */

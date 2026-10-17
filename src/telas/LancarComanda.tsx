@@ -17,7 +17,7 @@ import { CampoReais } from '../ui/CampoReais'
 import { ChipsArea } from '../ui/ChipsArea'
 import { useAviso } from '../ui/desfazer'
 import { EditorPagamento } from '../ui/EditorPagamento'
-import { mensagemDeErro } from '../ui/erro'
+import { mensagemDeErro, textoDoErro } from '../ui/erro'
 import { Icone } from '../ui/Icone'
 import { prepararFoto } from '../ui/foto'
 import { lerPagamento, pagamentoVazio, type EstadoPagamento } from '../ui/pagamento'
@@ -81,7 +81,7 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
     try {
       pronta = await prepararFoto(arquivo)
     } catch (e) {
-      return setErro(mensagemDeErro(e))
+      return setErro(textoDoErro(e))
     }
     const url = URL.createObjectURL(pronta.blob)
     urls.current.push(url)
@@ -97,7 +97,7 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
     } catch (e) {
       if (ctrl.signal.aborted) return
       const naIA = e instanceof ErroRemoto && e.permanente
-      paraManual({ foto, pendente: !naIA }, naIA ? mensagemDeErro(e) : SEM_INTERNET)
+      paraManual({ foto, pendente: !naIA }, naIA ? textoDoErro(e) : SEM_INTERNET)
     }
   }
 

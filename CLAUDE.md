@@ -10,8 +10,11 @@ Sistema para a pizzaria onde trabalho como motoboy, construído aos poucos. O MV
 - `supabase/001_schema.sql`: tabelas, regras de acesso (RLS) e realtime.
 - `supabase/002_v1_app.sql`: complemento do app (hora da entrega, nome da expedição para o motoboy, área sugerida, ordem de chegada). Rodar depois do 001.
 - `supabase/003_v1_avisos.sql`: correções dos avisos do Supabase (search_path, EXECUTE das funções, políticas mais leves). Rodar depois do 002.
+- `supabase/004_leitura.sql`: leitura por foto (promoção da noite, foto e origem da área na comanda, tabela `leituras`, bucket `comandas`). Rodar depois do 003.
+- `supabase/005_leitura_ajustes.sql`: ajustes do 004 (caminho da foto, leitura obrigatória). Rodar depois do 004.
 - `supabase/teste/`: teste das regras de acesso num Postgres local.
 - `supabase/functions/_shared/cardapio-mel.json`: cardápio, regras e glossário. Fonte única para a Edge Function e para o front.
+- `supabase/functions/_shared/prompt.ts` e `ler-comanda/`: prompt e Edge Function da leitura. Depois de mudar um exemplo, `npm run exemplos`.
 
 ## Stack
 Vite + React + TypeScript, PWA offline. Supabase (Postgres, Auth, Realtime, Storage, Edge Functions). Local-first: IndexedDB (Dexie) com fila de sincronização, atrás de `src/data/repo.ts`. Testes com Vitest. Deploy na Vercel. No front só a anon key; a service role nunca. A Edge Function `ler-comanda` chama a API da Anthropic; `ANTHROPIC_API_KEY` fica só nos secrets do Supabase, nunca no front.

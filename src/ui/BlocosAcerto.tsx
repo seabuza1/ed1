@@ -137,6 +137,8 @@ export function Papeis(props: {
   leitura: boolean
   aoAlternar: (c: Comanda) => Promise<void>
   dica: string
+  /** Painel: botão de câmera nas comandas com foto. */
+  abrirFoto?: (c: Comanda) => void
 }) {
   const { comandas, areas, leitura } = props
   const { lista, faltando } = papeisParaConferir(comandas)
@@ -160,31 +162,47 @@ export function Papeis(props: {
           ? 'Todos os papéis conferidos.'
           : `${faltando} ${faltando === 1 ? 'papel ainda não conferido' : 'papéis ainda não conferidos'}. ${props.dica}`}
       </p>
-      {lista.map((c) => (
-        <button
-          key={c.id}
-          type="button"
-          className="item-papel"
-          aria-pressed={c.papelConferido === true}
-          disabled={leitura}
-          onClick={() => alternar(c)}
-        >
-          <span className="marca" aria-hidden>
-            {c.papelConferido && <Icone nome="check" tamanho={16} />}
-          </span>
-          <span className="papel-meio">
-            <strong className="codigo">{c.codigo}</strong>
-            {/* Dados para refazer a comanda se o papel sumiu. */}
-            <span className="detalhe">
-              {areas.find((a) => a.id === c.areaId)?.nome ?? '—'} · {nomesFormas(c.pagamentos)}
-              {c.troco > 0 && <> · troco Pix {formatarReais(c.troco)}</>} ·{' '}
-              {c.status === 'em_rota' ? 'lançada' : c.status === 'voltou' ? 'voltou' : 'entregue'}{' '}
-              {formatarHora(c.finalizadaEm ?? c.criadaEm)}
+      {lista.map((c) => {
+        const linha = (
+          <button
+            key={c.id}
+            type="button"
+            className="item-papel"
+            aria-pressed={c.papelConferido === true}
+            disabled={leitura}
+            onClick={() => alternar(c)}
+          >
+            <span className="marca" aria-hidden>
+              {c.papelConferido && <Icone nome="check" tamanho={16} />}
             </span>
-          </span>
-          <strong className="valor">{formatarReais(c.total)}</strong>
-        </button>
-      ))}
+            <span className="papel-meio">
+              <strong className="codigo">{c.codigo}</strong>
+              {/* Dados para refazer a comanda se o papel sumiu. */}
+              <span className="detalhe">
+                {areas.find((a) => a.id === c.areaId)?.nome ?? '—'} · {nomesFormas(c.pagamentos)}
+                {c.troco > 0 && <> · troco Pix {formatarReais(c.troco)}</>} ·{' '}
+                {c.status === 'em_rota' ? 'lançada' : c.status === 'voltou' ? 'voltou' : 'entregue'}{' '}
+                {formatarHora(c.finalizadaEm ?? c.criadaEm)}
+              </span>
+            </span>
+            <strong className="valor">{formatarReais(c.total)}</strong>
+          </button>
+        )
+        if (!props.abrirFoto || !c.fotoPath) return linha
+        return (
+          <div key={c.id} className="linha-com-foto">
+            {linha}
+            <button
+              type="button"
+              className="secundario so-icone"
+              aria-label={`Foto da ${c.codigo}`}
+              onClick={() => props.abrirFoto!(c)}
+            >
+              <Icone nome="camera" tamanho={20} />
+            </button>
+          </div>
+        )
+      })}
       {erro && <p className="erro">{erro}</p>}
     </section>
   )

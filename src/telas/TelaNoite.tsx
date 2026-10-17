@@ -36,7 +36,12 @@ export function TelaNoite(props: {
         ) : (
           <LancarComanda noite={aberta} areas={props.areas} comandas={props.comandas} />
         )}
-        <ListasComandas comandas={props.comandas} areas={props.areas} somenteLeitura={travada} />
+        <ListasComandas
+          comandas={props.comandas}
+          areas={props.areas}
+          somenteLeitura={travada}
+          promoDesconto={aberta.promoDesconto ?? null}
+        />
       </main>
     </>
   )
