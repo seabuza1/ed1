@@ -50,8 +50,11 @@ export function precoPizza(
     const sabor = acharSabor(c, nome)
     if (!sabor) return null
     const preco = reais(c.pizzas.faixas[sabor.faixa][tamanho])
-    // No empate fica a faixa do primeiro sabor (a ordem em que a comanda escreve).
-    if (!melhor || preco > melhor.preco) melhor = { preco, faixa: sabor.faixa }
+    // No empate de preço com outra faixa, a cobrada não é a tradicional (a promoção é só da pizza
+    // tradicional), seja qual for a ordem em que a comanda escreve os sabores.
+    const troca =
+      !melhor || preco > melhor.preco || (preco === melhor.preco && melhor.faixa === 'tradicional')
+    if (troca) melhor = { preco, faixa: sabor.faixa }
   }
   return melhor
 }

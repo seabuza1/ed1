@@ -2,7 +2,7 @@
 // conta pelo cardápio, a área sugerida e o estado verde, amarelo ou vermelho. Correções do
 // motoboy entram em `correcoes` e a conta é refeita do zero.
 import { CARDAPIO, normalizar, precoAvulso, precoPizza, type Cardapio, type Faixa, type Tamanho } from './cardapio'
-import { comandaRepetida, montarPagamentos, NOMES_STATUS } from './comanda'
+import { comandaRepetida, NOMES_FORMA, NOMES_STATUS, type Resultado } from './comanda'
 import { formatarReais, lerReais } from './dinheiro'
 import type { Area, Comanda, Forma, Pagamento } from './tipos'
 
@@ -101,9 +101,10 @@ function conferirItem(c: Cardapio, lido: ItemLido, escolha: string | undefined):
     const tamanho = item.tamanho
     if (item.opcoes.length) {
       const opcoes = item.opcoes.map((sabor) => ({ sabor, r: precoPizza(c, [...item.sabores, sabor], tamanho) }))
-      const precos = new Set(opcoes.map((o) => o.r?.preco ?? null))
-      // Opções com o mesmo preço (ex.: Calabresa e Calabresa Picante) não mudam a conta.
-      if (precos.size === 1 && opcoes[0].r)
+      // Opções com o mesmo preço (ex.: Calabresa e Calabresa Picante) não mudam a conta, desde que
+      // também não mudem a promoção (tradicional ou não).
+      const contas = new Set(opcoes.map((o) => (o.r ? `${o.r.preco}|${o.r.faixa === 'tradicional'}` : null)))
+      if (contas.size === 1 && opcoes[0].r)
         return { item, preco: opcoes[0].r.preco * qtd, faixa: opcoes[0].r.faixa, opcoes: [], problema: null }
       return semPreco(
         item,
@@ -116,12 +117,15 @@ function conferirItem(c: Cardapio, lido: ItemLido, escolha: string | undefined):
     return { item, preco: r.preco * qtd, faixa: r.faixa, opcoes: [], problema: null }
   }
 
-  if (item.opcoes.length && !item.item)
-    return semPreco(
-      item,
-      `"${item.lido}" pode ser mais de um item. Escolha qual.`,
-      item.opcoes.map((o) => ({ sabor: o, preco: precoAvulso(c, item.tipo as Exclude<TipoItem, 'pizza'>, o) })),
-    )
+  if (item.opcoes.length) {
+    const tipo = item.tipo
+    const opcoes = item.opcoes.map((o) => ({ sabor: o, preco: precoAvulso(c, tipo, o) }))
+    const precos = new Set(opcoes.map((o) => o.preco))
+    // Mesmo com um palpite em `item`, opções de preços diferentes ficam para o motoboy escolher.
+    if (precos.size === 1 && opcoes[0].preco !== null)
+      return { item, preco: opcoes[0].preco * qtd, faixa: null, opcoes: [], problema: null }
+    return semPreco(item, `"${item.lido}" pode ser mais de um item. Escolha qual.`, opcoes)
+  }
   const unitario = item.casou_pelo_cardapio && item.item ? precoAvulso(c, item.tipo, item.item) : null
   if (unitario === null) return semPreco(item, `"${item.lido}" não está no cardápio.`)
   return { item, preco: unitario * qtd, faixa: null, opcoes: [], problema: null }
@@ -132,12 +136,14 @@ function conferirItem(c: Cardapio, lido: ItemLido, escolha: string | undefined):
 export type OrigemArea = 'escrito' | 'valor' | 'padrao'
 
 const PALAVRAS_VAZIAS = new Set(['de', 'do', 'da', 'dos', 'das', 'e'])
+// Nome de área que começa assim só casa inteiro: "Parque das Águas" não é o Parque de Exposições.
+const GENERICAS = new Set(['parque', 'jardim', 'vila', 'setor', 'bairro', 'residencial', 'conjunto', 'centro'])
 const palavras = (nome: string) => normalizar(nome).split(' ').filter((p) => p && !PALAVRAS_VAZIAS.has(p))
 
 /**
  * Área citada no local escrito, pelo nome ("Pontal", "Barra") ou pelo glossário ("Arag.").
- * Com mais de uma citada, vale a que casa mais palavras e, no empate, a de taxa maior
- * ("Parque de Exposições (Barra)" é o Parque).
+ * Com mais de uma citada, vale a que casa a maior parte do próprio nome ("Parque de Exposições
+ * (Barra)" é o Parque; "Arag., perto da Barra" é Aragarças), depois mais palavras, depois a taxa maior.
  */
 export function areaDoLocal(local: string | null, areas: Area[], glossario: Record<string, string>): Area | null {
   if (!local) return null
@@ -147,13 +153,19 @@ export function areaDoLocal(local: string | null, areas: Area[], glossario: Reco
     const ehLugar = areas.some((a) => palavras(a.nome)[0] === palavras(nome)[0])
     if (curta && ehLugar) texto = texto.replaceAll(` ${curta} `, ` ${normalizar(nome)} `)
   }
-  let melhor: { area: Area; acertos: number } | null = null
+  let melhor: { area: Area; fracao: number; acertos: number } | null = null
   for (const area of areas) {
     const p = palavras(area.nome)
     if (!p.length || !texto.includes(` ${p[0]} `)) continue
     const acertos = p.filter((x) => texto.includes(` ${x} `)).length
-    if (!melhor || acertos > melhor.acertos || (acertos === melhor.acertos && area.taxa > melhor.area.taxa))
-      melhor = { area, acertos }
+    if (GENERICAS.has(p[0]) && acertos < p.length) continue
+    const fracao = acertos / p.length
+    const ganha =
+      !melhor ||
+      fracao > melhor.fracao ||
+      (fracao === melhor.fracao &&
+        (acertos > melhor.acertos || (acertos === melhor.acertos && area.taxa > melhor.area.taxa)))
+    if (ganha) melhor = { area, fracao, acertos }
   }
   return melhor?.area ?? null
 }
@@ -173,7 +185,10 @@ export function sugerirArea(
     const pelaTaxa = ativas.filter((a) => a.taxa === total - itensMenosDesconto)
     if (pelaTaxa.length === 1) return { area: pelaTaxa[0], origem: 'valor' }
   }
-  const padrao = ativas.find((a) => palavras(a.nome)[0] === 'aragarcas') ?? ativas[0]
+  const padrao =
+    ativas.find((a) => normalizar(a.nome) === 'aragarcas') ??
+    ativas.find((a) => palavras(a.nome)[0] === 'aragarcas') ??
+    ativas[0]
   return padrao ? { area: padrao, origem: 'padrao' } : null
 }
 
@@ -205,8 +220,10 @@ export interface Correcoes {
   /** Área tocada. */
   areaId?: string
   promocao?: boolean
-  /** Por pagamento lido, na mesma ordem. */
+  /** Forma tocada em cada pagamento lido, na mesma ordem (o toque do Pix entra aqui). */
   formas?: (Forma | null)[]
+  /** Pagamento refeito pelo motoboy: a versão da conferência ou as partes com o valor digitado. */
+  pagamento?: { forma: Forma; valor: string | null }[]
   /** Índice do item → sabor (ou item) escolhido entre as opções. */
   escolhas?: Record<number, string>
 }
@@ -282,7 +299,10 @@ export function conferirLeitura(e: EntradaConferencia): ResultadoLeitura {
       divergencias.push({ campo: 'total', completa: l.total_escrito ?? '', conferencia: totalConf })
     const formasL = formasDoTexto(l.pagamento.map((p) => p.forma_escrita).join(' ')).sort().join('+')
     const formasC = formasDoTexto(cf.forma_escrita).sort().join('+')
-    if (cor.formas === undefined && formasL !== formasC)
+    // O toque do Pix numa parte não decide as outras: só some com todas as formas escolhidas.
+    const pagamentoEscolhido =
+      cor.pagamento !== undefined || (l.pagamento.length > 0 && l.pagamento.every((_, i) => cor.formas?.[i] != null))
+    if (!pagamentoEscolhido && formasL !== formasC)
       divergencias.push({
         campo: 'pagamento',
         completa: l.pagamento.map((p) => p.forma_escrita).join(' + '),
@@ -318,35 +338,52 @@ export function conferirLeitura(e: EntradaConferencia): ResultadoLeitura {
   const desconto = promocao && e.promoDesconto !== null ? e.promoDesconto * pizzasTradicionais : 0
   const itensMenosDesconto = somaItens === null ? null : somaItens - desconto
 
-  // R22: área sugerida; a tocada vale para a conta.
-  const sugestao = sugerirArea(l.local_escrito, total, itensMenosDesconto, e.areas, c.glossario)
+  // R22: área sugerida; a tocada vale para a conta. Com asterisco e a promoção da noite ainda sem
+  // valor, a diferença pode ser promoção ou taxa: sem local escrito, só o toque na área resolve.
+  const duasIncognitas = promocao && e.promoDesconto === null && pizzasTradicionais > 0 && cor.areaId === undefined
+  const sugestao = sugerirArea(l.local_escrito, total, duasIncognitas ? null : itensMenosDesconto, e.areas, c.glossario)
   const tocada = cor.areaId === undefined ? null : (e.areas.find((a) => a.id === cor.areaId) ?? null)
   const area = tocada ?? sugestao?.area ?? null
   const areaOrigem = !area ? null : tocada && tocada.id !== sugestao?.area.id ? 'manual' : (sugestao?.origem ?? 'manual')
+  const esperaToque = duasIncognitas && sugestao?.origem !== 'escrito'
   if (!area) vermelho.push('Nenhuma área ativa.')
+  else if (esperaToque) vermelho.push('Asterisco sem local: toque na área para conferir a promoção.')
+  else if (!tocada && sugestao?.origem !== 'escrito' && l.local_escrito?.includes('[?]'))
+    vermelho.push('Local ilegível: toque na área.')
 
   // R24: esperado = itens − promoção + taxa.
   const esperado = itensMenosDesconto === null || !area ? null : itensMenosDesconto + area.taxa
   let promocaoSugerida: number | null = null
-  if (promocao && e.promoDesconto === null && pizzasTradicionais > 0 && esperado !== null && total !== null) {
+  if (promocao && e.promoDesconto === null && pizzasTradicionais > 0 && !esperaToque && esperado !== null && total !== null) {
     const diferenca = esperado - total
     const porPizza = diferenca / pizzasTradicionais
     if (Number.isInteger(porPizza) && porPizza >= PROMO_MIN && porPizza <= PROMO_MAX) promocaoSugerida = porPizza
   }
   if (promocaoSugerida !== null) amarelo.push(`Promoção de ${formatarReais(promocaoSugerida)} hoje?`)
-  else if (esperado !== null && total !== null && esperado !== total)
+  else if (!esperaToque && esperado !== null && total !== null && esperado !== total)
     vermelho.push(`A conta dá ${formatarReais(esperado)}, mas o total lido é ${formatarReais(total)}.`)
 
   // R29: pagamento.
-  const pagamentos: PagamentoConferido[] = l.pagamento.map((p, i) => {
-    const escolhida = cor.formas?.[i]
-    const lida: FormaEscrita | null = p.forma ?? formasDoTexto(p.forma_escrita)[0] ?? null
-    const forma: Forma | null = escolhida ?? (lida === 'pix' ? null : lida)
-    return { escrita: p.forma_escrita, forma, pedePix: !escolhida && lida === 'pix', valor: valorLido(p.valor_escrito) }
-  })
-  if (pagamentos.length === 0 || pagamentos.some((p) => !p.forma && !p.pedePix))
+  let juntas = false
+  const pagamentos: PagamentoConferido[] = cor.pagamento
+    ? cor.pagamento.map((p) => ({ escrita: NOMES_FORMA[p.forma], forma: p.forma, pedePix: false, valor: valorLido(p.valor) }))
+    : l.pagamento.map((p, i) => {
+        const escolhida = cor.formas?.[i] ?? null
+        const citadas = formasDoTexto(p.forma_escrita)
+        // "cart. e din" numa parte só é um misto que não veio dividido.
+        if (!escolhida && !p.forma && citadas.length > 1) juntas = true
+        const lida: FormaEscrita | null = p.forma ?? (citadas.length === 1 ? citadas[0] : null)
+        const forma: Forma | null = escolhida ?? (lida === 'pix' ? null : lida)
+        return { escrita: p.forma_escrita, forma, pedePix: !escolhida && lida === 'pix', valor: valorLido(p.valor_escrito) }
+      })
+  if (juntas) vermelho.push('Mais de uma forma na mesma parte: divida o pagamento.')
+  else if (pagamentos.length === 0 || pagamentos.some((p) => !p.forma && !p.pedePix))
     vermelho.push('Forma de pagamento ilegível: escolha a forma.')
   else if (pagamentos.some((p) => p.pedePix)) amarelo.push('Pix: toque em Pix antecipado ou Pix na máquina.')
+  if (total !== null && pagamentos.length) {
+    const partes = dividir(total, pagamentos)
+    if (!partes.ok) vermelho.push(partes.erro)
+  }
 
   // R26: alertas.
   const alertas: string[] = []
@@ -394,10 +431,31 @@ const NOME_CAMPO: Record<CampoCritico, string> = {
   promocao: 'asterisco',
 }
 
-/** Pagamentos para lançar: uma linha sem valor fica com o resto (R4); null se falta escolher a forma. */
+/**
+ * R4: valor de cada parte, fechando o total. Uma parte só vale o total (valor maior é o "troco
+ * p/ 150"); no misto, uma parte sem valor fica com o resto.
+ */
+function dividir(total: number, pagamentos: PagamentoConferido[]): Resultado<number[]> {
+  if (pagamentos.length === 1) {
+    const v = pagamentos[0].valor
+    if (v !== null && v < total)
+      return { ok: false, erro: `O pagamento escrito (${formatarReais(v)}) é menor que o total: falta a forma do resto.` }
+    return { ok: true, valor: [total] }
+  }
+  const vazias = pagamentos.filter((p) => p.valor === null).length
+  if (vazias > 1) return { ok: false, erro: 'Falta o valor das partes: digite quanto foi em cada forma.' }
+  const soma = pagamentos.reduce((s, p) => s + (p.valor ?? 0), 0)
+  const resto = total - soma
+  if (vazias === 1 && resto <= 0)
+    return { ok: false, erro: `As partes com valor já somam ${formatarReais(soma)}: não sobra para a outra.` }
+  if (vazias === 0 && resto !== 0)
+    return { ok: false, erro: `As partes somam ${formatarReais(soma)}, mas o total é ${formatarReais(total)}.` }
+  return { ok: true, valor: pagamentos.map((p) => p.valor ?? resto) }
+}
+
+/** Pagamentos para lançar; null se falta escolher a forma ou as partes não fecham o total. */
 export function pagamentosParaLancar(r: ResultadoLeitura): Pagamento[] | null {
   if (r.total === null || r.pagamentos.length === 0 || r.pagamentos.some((p) => !p.forma)) return null
-  const linhas = r.pagamentos.map((p) => ({ forma: p.forma!, valor: r.pagamentos.length === 1 ? null : p.valor }))
-  const m = montarPagamentos(r.total, linhas)
-  return m.ok ? m.valor : null
+  const partes = dividir(r.total, r.pagamentos)
+  return partes.ok ? r.pagamentos.map((p, i) => ({ forma: p.forma!, valor: partes.valor[i] })) : null
 }

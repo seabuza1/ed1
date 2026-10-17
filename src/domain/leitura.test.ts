@@ -284,6 +284,130 @@ describe('leitura: outras regras', () => {
   })
 })
 
+describe('leitura: pagamento', () => {
+  const pagos = (...partes: [string, 'dinheiro' | 'cartao' | 'pix' | null, string | null][]) =>
+    partes.map(([forma_escrita, forma, valor_escrito]) => ({ forma_escrita, forma, valor_escrito }))
+
+  it('misto cujas partes não fecham o total fica vermelho e não lança', () => {
+    const r = conferir(comanda({ pagamento: pagos(['Cartão', 'cartao', '100'], ['din', 'dinheiro', '10']) }))
+    expect(r.estado).toBe('vermelho')
+    expect(r.motivos).toContain(r$('As partes somam R$ 110,00, mas o total é R$ 113,00.'))
+    expect(pagamentosParaLancar(r)).toBeNull()
+  })
+
+  it('misto sem o valor das partes fica vermelho; digitando as partes, lança', () => {
+    const lida = comanda({ pagamento: pagos(['Cartão', 'cartao', null], ['din', 'dinheiro', null]) })
+    const r = conferir(lida)
+    expect(r.motivos).toContain('Falta o valor das partes: digite quanto foi em cada forma.')
+    expect(pagamentosParaLancar(r)).toBeNull()
+    const sobra = conferir(comanda({ pagamento: pagos(['Cartão', 'cartao', '120'], ['din', 'dinheiro', null]) }))
+    expect(sobra.estado).toBe('vermelho')
+
+    const digitado = conferir(lida, null, {
+      pagamento: [
+        { forma: 'cartao', valor: '100' },
+        { forma: 'dinheiro', valor: null },
+      ],
+    })
+    expect(digitado.estado).toBe('verde')
+    expect(pagamentosParaLancar(digitado)).toEqual([
+      { forma: 'cartao', valor: R(100) },
+      { forma: 'dinheiro', valor: R(13) },
+    ])
+  })
+
+  it('o toque do Pix numa parte não apaga a divergência das outras', () => {
+    const lida = comanda({ pagamento: pagos(['Pix', 'pix', '50'], ['din', 'dinheiro', null]) }, { forma_escrita: 'Pix + cartão' })
+    const r = conferir(lida, null, { formas: ['pix_antecipado'] })
+    expect(r.divergencias.map((d) => d.campo)).toEqual(['pagamento'])
+    expect(r.estado).toBe('vermelho')
+    const todas = conferir(lida, null, { formas: ['pix_antecipado', 'cartao'] })
+    expect(todas.divergencias).toEqual([])
+    expect(pagamentosParaLancar(todas)).toEqual([
+      { forma: 'pix_antecipado', valor: R(50) },
+      { forma: 'cartao', valor: R(63) },
+    ])
+  })
+
+  it('a versão da conferência pode ter outro número de partes', () => {
+    const lida = comanda({ pagamento: pagos(['Pix', 'pix', null], ['din', 'dinheiro', null]) }, { forma_escrita: 'Pix' })
+    expect(conferir(lida).estado).toBe('vermelho')
+    const r = conferir(lida, null, { pagamento: [{ forma: 'pix_antecipado', valor: null }] })
+    expect([r.estado, r.divergencias]).toEqual(['verde', []])
+    expect(pagamentosParaLancar(r)).toEqual([{ forma: 'pix_antecipado', valor: R(113) }])
+  })
+
+  it('uma parte só com valor menor que o total fica vermelha; maior (troco) vale o total', () => {
+    const menor = conferir(comanda({ pagamento: pagos(['Pix 50', 'pix', '50']) }), null, { formas: ['pix_antecipado'] })
+    expect(menor.motivos).toContain(r$('O pagamento escrito (R$ 50,00) é menor que o total: falta a forma do resto.'))
+    expect(pagamentosParaLancar(menor)).toBeNull()
+    const troco = conferir(comanda({ pagamento: pagos(['din, troco p/ 150', 'dinheiro', '150']) }))
+    expect(troco.estado).toBe('verde')
+    expect(pagamentosParaLancar(troco)).toEqual([{ forma: 'dinheiro', valor: R(113) }])
+  })
+
+  it('duas formas escritas numa parte só pedem a divisão', () => {
+    const r = conferir(comanda({ pagamento: pagos(['cart. e din', null, null]) }))
+    expect(r.motivos).toContain('Mais de uma forma na mesma parte: divida o pagamento.')
+    expect(r.estado).toBe('vermelho')
+  })
+})
+
+describe('leitura: área, promoção e itens', () => {
+  it('"Arag." vence outra área citada só de passagem', () => {
+    const r = (local: string) => conferir(comanda({ local_escrito: local })).sugestao
+    expect(r('Arag., perto da ponte da Barra')).toEqual({ areaId: 'aragarcas', origem: 'escrito' })
+    const comRural = [...AREAS, { id: 'rural', nome: 'Aragarças Zona Rural', taxa: R(20), ativa: true }]
+    const rural = conferirLeitura({ ...comanda(), areas: comRural, promoDesconto: null })
+    expect([rural.sugestao?.areaId, rural.estado]).toEqual(['aragarcas', 'verde'])
+  })
+
+  it('"Parque" sozinho não é o Parque de Exposições', () => {
+    const r = conferir(comanda({ local_escrito: 'Parque das Águas Quentes', total_escrito: '120,00' }))
+    expect([r.sugestao, r.estado]).toEqual([{ areaId: 'barra', origem: 'valor' }, 'verde'])
+  })
+
+  it('local ilegível pede o toque na área', () => {
+    const lida = comanda({ local_escrito: 'hospital da [?]', ilegiveis: ['[?]'] })
+    expect(conferir(lida).motivos).toContain('Local ilegível: toque na área.')
+    expect(conferir(lida, null, { areaId: 'aragarcas' }).estado).toBe('amarelo')
+  })
+
+  it('asterisco sem local e promoção sem valor: não adivinha área nem promoção', () => {
+    const itens = [pizza('G', ['Calabresa']), avulso('bebida', 'Refrigerante 2L')]
+    // 73 + 15 − 10 + 15 (Parque) = 93, que também seria Aragarças sem promoção.
+    const r = conferir(comanda({ itens, local_escrito: null, total_escrito: '93' }))
+    expect([r.estado, r.promocaoSugerida]).toEqual(['vermelho', null])
+    expect(r.motivos).toContain('Asterisco sem local: toque na área para conferir a promoção.')
+    const tocada = conferir(comanda({ itens, local_escrito: null, total_escrito: '93' }), null, { areaId: 'parque' })
+    expect([tocada.promocaoSugerida, tocada.estado]).toEqual([1000, 'amarelo'])
+  })
+
+  it('meio a meio tradicional e doce do mesmo preço: a ordem não muda a conta', () => {
+    const conta = (sabores: string[]) =>
+      conferir(comanda({ itens: [pizza('G', sabores)], local_escrito: 'Arag.', total_escrito: '78' }), 1000)
+    const a = conta(['Calabresa', 'Brigadeiro'])
+    const b = conta(['Brigadeiro', 'Calabresa'])
+    expect([a.desconto, a.esperado, a.estado]).toEqual([0, R(78), 'verde'])
+    expect([b.desconto, b.esperado, b.estado]).toEqual([0, R(78), 'verde'])
+    // Opções do mesmo preço, uma tradicional e outra doce: a promoção muda, então pede a escolha.
+    const opcoes = conferir(
+      comanda({ itens: [pizza('G', [], 'G abacaxi', ['Lombo com Abacaxi', 'Abacaxi c/ Leite Condensado'])], local_escrito: 'Arag.', total_escrito: '68' }),
+      1000,
+    )
+    expect(opcoes.itens[0].preco).toBeNull()
+  })
+
+  it('item com opções de preços diferentes fica sem preço mesmo com palpite; do mesmo preço, com preço', () => {
+    const cerveja = { ...avulso('bebida', 'Brahma 600ml'), opcoes: ['Brahma 600ml', 'Heineken 600ml', 'Original 600ml'] }
+    const r = conferir(comanda({ itens: [pizza('G', ['Filé Mignon']), cerveja], total_escrito: '110,00' }))
+    expect([r.itens[1].preco, r.estado]).toEqual([null, 'vermelho'])
+    const suco = { ...avulso('bebida', 'suco'), item: null, opcoes: ['Suco de Laranja 400ml', 'Suco de Maracujá 400ml'] }
+    const s = conferir(comanda({ itens: [pizza('G', ['Filé Mignon']), suco] }))
+    expect([s.itens[1].preco, s.estado]).toEqual([R(15), 'verde'])
+  })
+})
+
 describe('cardápio', () => {
   const sabores = CARDAPIO.pizzas.sabores
   it('todo sabor tem uma faixa com preço nos 4 tamanhos', () => {
