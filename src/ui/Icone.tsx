@@ -24,6 +24,13 @@ const ICONES = {
   lapis: <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />,
   voltar: <path d="m15 18-6-6 6-6" />,
   avancar: <path d="m9 18 6-6-6-6" />,
+  fechar: <path d="M18 6 6 18M6 6l12 12" />,
+  camera: (
+    <>
+      <path d="M14.5 4h-5L7.5 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3.5Z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </>
+  ),
   grafico: <path d="M3 3v18h18M7 15l4-4 3 3 5-6" />,
   equipe: (
     <>

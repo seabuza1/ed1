@@ -4,6 +4,6 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.integracao.tsbuildinfo",
     "types": ["node", "vite/client"]
   },
-  "include": ["src/**/*.integracao.test.ts"],
+  "include": ["src/**/*.integracao.test.ts", "src/**/*.node.test.ts"],
   "exclude": []
 }

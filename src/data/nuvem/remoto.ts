@@ -1,6 +1,7 @@
 // O que o app pede à nuvem. A implementação real é com o supabase-js; nos testes, uma
 // nuvem falsa em memória (remotoFalso.ts).
-import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js'
+import { FunctionsHttpError, type PostgrestError, type SupabaseClient } from '@supabase/supabase-js'
+import type { RespostaLeitura } from '../../domain/leitura'
 import type { AcertoLinha, AreaLinha, CaixaLinha, ComandaLinha, Gravavel, PerfilLinha, Tabela } from './linhas'
 
 /** permanente = a nuvem recusou (não adianta tentar de novo); senão é falta de internet. */
@@ -39,6 +40,13 @@ export interface Remoto {
 
   /** Realtime em caixas, comandas e acertos. Devolve a função que para de ouvir. */
   ouvir(aoEvento: (e: EventoRemoto) => void): () => void
+
+  /** Foto da comanda no Storage (bucket comandas); se já existe, conta como enviada. */
+  enviarFoto(caminho: string, jpeg: Blob): Promise<void>
+  /** Link temporário para ver a foto. */
+  urlFoto(caminho: string): Promise<string>
+  /** Edge Function ler-comanda. A IA não ter lido ({ erro }) é recusa permanente; sem internet, não. */
+  lerComanda(imagem: string, sinal?: AbortSignal): Promise<RespostaLeitura>
 }
 
 export const MOTIVOS: Record<string, string> = {
@@ -50,12 +58,15 @@ export const MOTIVOS: Record<string, string> = {
 
 type Resposta<T> = { data: T | null; error: PostgrestError | null; status: number }
 
+// status 0 = sem resposta (sem internet); 401 = sessão vencida, renova sozinha.
+const transitorio = (status: number) => status === 0 || status === 401 || status === 408 || status === 429 || status >= 500
+
 export function verificar<T>(r: Resposta<T>): T {
   if (!r.error) return r.data as T
-  // status 0 = sem resposta (sem internet); 401 = sessão vencida, renova sozinha.
-  const transitorio = r.status === 0 || r.status === 401 || r.status === 408 || r.status === 429 || r.status >= 500
-  throw new ErroRemoto(MOTIVOS[r.error.code] ?? r.error.message, !transitorio)
+  throw new ErroRemoto(MOTIVOS[r.error.code] ?? r.error.message, !transitorio(r.status))
 }
+
+const BUCKET = 'comandas'
 
 const PAGINA = 1000 // limite de linhas por pedido do Supabase
 
@@ -134,6 +145,39 @@ export function criarRemotoSupabase(sb: SupabaseClient): Remoto {
       return () => {
         sb.removeChannel(canal)
       }
+    },
+
+    async enviarFoto(caminho, jpeg) {
+      const { error } = await sb.storage.from(BUCKET).upload(caminho, jpeg, { contentType: 'image/jpeg', upsert: false })
+      if (!error) return
+      const { status, statusCode } = error as { status?: number; statusCode?: string }
+      const codigo = Number(status ?? statusCode ?? 0)
+      if (codigo === 409 || /exists/i.test(error.message)) return
+      throw new ErroRemoto(error.message, !transitorio(codigo))
+    },
+    async urlFoto(caminho) {
+      const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(caminho, 300)
+      if (error || !data) throw new ErroRemoto('A foto ainda não chegou na nuvem.', false)
+      return data.signedUrl
+    },
+    async lerComanda(imagem, sinal) {
+      const { data, error } = await sb.functions.invoke<RespostaLeitura | { erro: string }>('ler-comanda', {
+        body: { imagem },
+        signal: sinal,
+        timeout: 25_000,
+      })
+      if (error) {
+        const resposta = error instanceof FunctionsHttpError ? (error.context as Response) : null
+        let motivo = 'Não deu para ler a foto.'
+        try {
+          motivo = (await resposta?.json())?.erro ?? motivo
+        } catch {
+          // corpo sem JSON
+        }
+        throw new ErroRemoto(motivo, !transitorio(resposta?.status ?? 0))
+      }
+      if (!data || 'erro' in data) throw new ErroRemoto(data?.erro ?? 'Não deu para ler a foto.', true)
+      return data
     },
   }
 }

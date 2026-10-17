@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest'
 import exemplo3557 from '../../supabase/functions/_shared/exemplos/3557.json'
 import { CARDAPIO, normalizar, precoAvulso } from './cardapio'
 import {
+  avisoLeitura,
+  comandaDaLeitura,
   conferirLeitura,
+  houveCorrecao,
   pagamentosParaLancar,
+  registroLeitura,
   valorLido,
   type Correcoes,
   type ItemLido,
@@ -405,6 +409,101 @@ describe('leitura: área, promoção e itens', () => {
     const suco = { ...avulso('bebida', 'suco'), item: null, opcoes: ['Suco de Laranja 400ml', 'Suco de Maracujá 400ml'] }
     const s = conferir(comanda({ itens: [pizza('G', ['Filé Mignon']), suco] }))
     expect([s.itens[1].preco, s.estado]).toEqual([R(15), 'verde'])
+  })
+})
+
+describe('leitura: lançar', () => {
+  const ctx = { id: 'c1', noiteId: 'n1', agora: '2026-10-16T21:00:00.000Z', fotoPath: 'n1/c1.jpg' }
+
+  it('a 3557 vira comanda em rota com a foto, a área e de onde ela veio', () => {
+    const r = conferir(comanda())
+    const c = comandaDaLeitura(r, AREAS, 0, ctx)
+    expect(c.ok && c.valor).toMatchObject({
+      id: 'c1',
+      codigo: '3557',
+      total: R(113),
+      areaId: 'aragarcas',
+      taxa: R(5),
+      status: 'em_rota',
+      pagamentos: [{ forma: 'cartao', valor: R(113) }],
+      fotoPath: 'n1/c1.jpg',
+      areaOrigem: 'escrito',
+    })
+  })
+
+  it('tocar outra área marca origem manual; sem forma ou com código ruim não lança', () => {
+    const c = comandaDaLeitura(conferir(comanda(), null, { areaId: 'pontal' }), AREAS, 0, ctx)
+    expect(c.ok && [c.valor.areaId, c.valor.areaOrigem]).toEqual(['pontal', 'manual'])
+    const pix = conferir(comanda({ pagamento: [{ forma_escrita: 'Pix', forma: 'pix', valor_escrito: null }] }))
+    expect(comandaDaLeitura(pix, AREAS, 0, ctx)).toEqual({ ok: false, erro: 'Escolha a forma de pagamento.' })
+    const codigo = conferir(comanda({ telefone_final: '35[?]7' }))
+    expect(comandaDaLeitura(codigo, AREAS, 0, ctx)).toEqual({ ok: false, erro: 'O código precisa ter 4 dígitos.' })
+    expect(codigo.problemas).toContain('codigo')
+  })
+
+  it('registro da leitura (R27): o lido, o achado e o lançado; tocar a sugestão não é correção', () => {
+    const lida = comanda()
+    const r = conferir(lida, null, { areaId: 'aragarcas' })
+    expect(houveCorrecao({ areaId: 'aragarcas' }, r)).toBe(false)
+    expect(houveCorrecao({ areaId: 'barra' }, conferir(lida, null, { areaId: 'barra' }))).toBe(true)
+    expect(houveCorrecao({ total: '113' }, r)).toBe(true)
+    const c = comandaDaLeitura(r, AREAS, 0, ctx)
+    if (!c.ok) throw new Error(c.erro)
+    const reg = registroLeitura({ ...lida, modelo: 'm', ms: 900 }, r, {
+      id: 'l1',
+      noiteId: 'n1',
+      fotoPath: 'n1/c1.jpg',
+      comanda: c.valor,
+      estadoFinal: 'verde',
+      segundos: 12,
+      corrigido: false,
+      forcado: false,
+      posterior: false,
+      agora: ctx.agora,
+    })
+    expect(reg).toMatchObject({
+      comandaId: 'c1',
+      resultado: { estado: 'verde', areaSugerida: 'aragarcas', origem: 'escrito', esperado: R(113), posterior: false },
+      lancado: {
+        codigo: '3557',
+        total: R(113),
+        areaId: 'aragarcas',
+        areaOrigem: 'escrito',
+        pagamentos: [{ forma: 'cartao', valor: R(113) }],
+        troco: 0,
+        estado: 'verde',
+        segundos: 12,
+      },
+      modelo: 'm',
+      ms: 900,
+    })
+  })
+
+  it('R28: a leitura que chega depois só avisa quando discorda do lançado', () => {
+    const lida = comanda()
+    const reg = registroLeitura({ ...lida, modelo: 'm', ms: 1 }, conferir(lida), {
+      id: 'l1',
+      noiteId: 'n1',
+      fotoPath: 'n1/c1.jpg',
+      comanda: null,
+      estadoFinal: null,
+      segundos: null,
+      corrigido: false,
+      forcado: false,
+      posterior: true,
+      agora: ctx.agora,
+    })
+    const r = conferir(lida)
+    const lancada = comandaDaLeitura(r, AREAS, 0, ctx)
+    if (!lancada.ok) throw new Error(lancada.erro)
+    const c = lancada.valor
+    expect(avisoLeitura(reg, c, AREAS, null)).toEqual([])
+    expect(avisoLeitura(reg, { ...c, codigo: '3558' }, AREAS, null)).toEqual(['Código lido: 3557.'])
+    expect(avisoLeitura(reg, { ...c, total: R(118), areaId: 'pontal' }, AREAS, null)).toEqual([r$('Total lido: R$ 113,00.')])
+    expect(avisoLeitura(reg, { ...c, areaId: 'barra' }, AREAS, null)).toEqual([r$('A conta pelo cardápio dá R$ 120,00.')])
+    expect(avisoLeitura(reg, { ...c, pagamentos: [{ forma: 'dinheiro', valor: R(113) }] }, AREAS, null)).toEqual([
+      'Forma lida: Cartão.',
+    ])
   })
 })
 

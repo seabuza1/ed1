@@ -1,10 +1,12 @@
 import type { Dados } from '../domain/backup'
+import type { RegistroLeitura, RespostaLeitura } from '../domain/leitura'
 import type { AcertoConfirmado, Ajustes, Area, Comanda, Noite } from '../domain/tipos'
 import { criarRepoLocal } from './repoLocal'
 
 /** Situação da sincronização com a nuvem, para o indicador discreto. */
 export interface EstadoSync {
   pendentes: number // alterações esperando internet
+  fotos: number // fotos de comanda esperando internet
   enviando: boolean
   online: boolean
   /** Última alteração recusada pela nuvem (ex.: acerto já confirmado). */
@@ -18,6 +20,21 @@ export interface FonteSync {
   limparRecusa(): void
 }
 
+/** Fotos das comandas e leitura pela IA (só com nuvem). */
+export interface FonteFotos {
+  /** Lê agora (precisa de internet). Lança ErroRemoto: permanente se a IA não leu, senão falta de internet. */
+  ler(imagem: string, sinal?: AbortSignal): Promise<RespostaLeitura>
+  /**
+   * Lança a comanda com a foto, de uma vez. Com a leitura feita, ela é registrada; sem leitura
+   * por falta de internet (pendente), a foto é lida quando a internet voltar (R28).
+   */
+  lancar(comanda: Comanda, jpeg: Blob, leitura: { registro: RegistroLeitura } | { pendente: boolean }): Promise<void>
+  /** Endereço para ver a foto: a do aparelho (blob:, revogar depois) ou um link temporário da nuvem. */
+  url(comanda: Comanda): Promise<string>
+  /** Leituras da noite feitas neste aparelho (para o aviso "leitura não confere"). */
+  leituras(noiteId: string): Promise<RegistroLeitura[]>
+}
+
 /**
  * Acesso aos dados. As telas só falam com esta interface. Sem nuvem configurada, é o
  * IndexedDB (Dexie) do aparelho; com nuvem, o mesmo IndexedDB com uma fila que sobe
@@ -27,6 +44,8 @@ export interface Repo {
   readonly nuvem: boolean
   /** Só com nuvem. */
   readonly sync?: FonteSync
+  /** Só com nuvem: sem ela o botão Foto não aparece e o lançamento é só à mão. */
+  readonly fotos?: FonteFotos
 
   listarNoites(): Promise<Noite[]>
   salvarNoite(noite: Noite): Promise<void>
@@ -82,6 +101,9 @@ export const repo: Repo = {
   },
   get sync() {
     return usar().sync
+  },
+  get fotos() {
+    return usar().fotos
   },
   listarNoites: () => usar().listarNoites(),
   salvarNoite: (n) => usar().salvarNoite(n),

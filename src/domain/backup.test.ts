@@ -54,6 +54,16 @@ describe('backup', () => {
     expect(com((b) => ((b.comandas as Comanda[])[0].noiteId = 'sumiu'))).toEqual({ ok: false, erro: 'Backup com comanda sem noite.' })
     expect(com((b) => ((b.noites as Noite[])[0].fechadaEm = null)).ok).toBe(false) // duas abertas
     expect(com((b) => delete b.ajustes).ok).toBe(false)
+    expect(com((b) => ((b.comandas as Comanda[])[0].areaOrigem = 'chute' as never)).ok).toBe(false)
+    expect(com((b) => ((b.noites as Noite[])[0].promoDesconto = -1)).ok).toBe(false)
+  })
+
+  it('leva a foto, a origem da área e a promoção da noite', () => {
+    const d = dados()
+    d.noites[0].promoDesconto = 1000
+    d.comandas[0] = comanda('c1', 'n1', { fotoPath: 'n1/c1.jpg', areaOrigem: 'escrito' })
+    const b = montarBackup(d, 'x')
+    expect(lerBackup(JSON.stringify(b))).toEqual({ ok: true, valor: b })
   })
 })
 

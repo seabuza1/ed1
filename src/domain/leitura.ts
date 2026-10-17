@@ -2,9 +2,9 @@
 // conta pelo cardápio, a área sugerida e o estado verde, amarelo ou vermelho. Correções do
 // motoboy entram em `correcoes` e a conta é refeita do zero.
 import { CARDAPIO, normalizar, precoAvulso, precoPizza, type Cardapio, type Faixa, type Tamanho } from './cardapio'
-import { comandaRepetida, NOMES_FORMA, NOMES_STATUS, type Resultado } from './comanda'
+import { comandaRepetida, criarComanda, NOMES_FORMA, NOMES_STATUS, type Resultado } from './comanda'
 import { formatarReais, lerReais } from './dinheiro'
-import type { Area, Comanda, Forma, Pagamento } from './tipos'
+import type { Area, Comanda, Forma, OrigemArea, Pagamento } from './tipos'
 
 // ---------- O que a IA devolve (tool use, mesmo formato do input_schema) ----------
 
@@ -133,7 +133,7 @@ function conferirItem(c: Cardapio, lido: ItemLido, escolha: string | undefined):
 
 // ---------- Área (R22) ----------
 
-export type OrigemArea = 'escrito' | 'valor' | 'padrao'
+export type OrigemSugestao = Exclude<OrigemArea, 'manual'>
 
 const PALAVRAS_VAZIAS = new Set(['de', 'do', 'da', 'dos', 'das', 'e'])
 // Nome de área que começa assim só casa inteiro: "Parque das Águas" não é o Parque de Exposições.
@@ -177,7 +177,7 @@ export function sugerirArea(
   itensMenosDesconto: number | null,
   areas: Area[],
   glossario: Record<string, string>,
-): { area: Area; origem: OrigemArea } | null {
+): { area: Area; origem: OrigemSugestao } | null {
   const ativas = areas.filter((a) => a.ativa)
   const escrita = areaDoLocal(local, ativas, glossario)
   if (escrita) return { area: escrita, origem: 'escrito' }
@@ -240,6 +240,17 @@ export interface EntradaConferencia {
   cardapio?: Cardapio
 }
 
+/** Onde a tela pinta de vermelho (R24). */
+export type CampoProblema = 'codigo' | 'total' | 'itens' | 'conta' | 'area' | 'pagamento' | 'promocao'
+
+const CAMPO_DA_DIVERGENCIA: Record<CampoCritico, CampoProblema> = {
+  telefone: 'codigo',
+  total: 'total',
+  pagamento: 'pagamento',
+  local: 'area',
+  promocao: 'promocao',
+}
+
 export interface ResultadoLeitura {
   estado: Estado
   /** Por que não ficou verde: os do vermelho primeiro. */
@@ -255,10 +266,10 @@ export interface ResultadoLeitura {
   desconto: number
   /** R23: "Promoção de R$ X hoje?" (centavos por pizza), quando a noite ainda não tem valor. */
   promocaoSugerida: number | null
-  sugestao: { areaId: string; origem: OrigemArea } | null
+  sugestao: { areaId: string; origem: OrigemSugestao } | null
   areaId: string | null
   /** De onde veio a área usada: a sugestão ou "manual" se o motoboy tocou outra. */
-  areaOrigem: OrigemArea | 'manual' | null
+  areaOrigem: OrigemArea | null
   taxa: number | null
   esperado: number | null
   pagamentos: PagamentoConferido[]
@@ -266,6 +277,7 @@ export interface ResultadoLeitura {
   alertas: string[]
   /** Posições do total que se confundem (3/8, 1/7, 5/6, 0/6), quando a área veio pelo valor. */
   digitosConfusos: number[]
+  problemas: CampoProblema[]
 }
 
 const DIGITOS_CONFUSOS = new Set(['3', '8', '1', '7', '5', '6', '0'])
@@ -280,6 +292,11 @@ export function conferirLeitura(e: EntradaConferencia): ResultadoLeitura {
   const cf = e.conferencia
   const cor = e.correcoes ?? {}
   const vermelho: string[] = []
+  const problemas = new Set<CampoProblema>()
+  const erro = (campo: CampoProblema, motivo: string) => {
+    vermelho.push(motivo)
+    problemas.add(campo)
+  }
   const amarelo: string[] = []
 
   // Campos críticos: o corrigido vale; senão a leitura completa.
@@ -320,15 +337,15 @@ export function conferirLeitura(e: EntradaConferencia): ResultadoLeitura {
         conferencia: cf.promocao ? 'com asterisco' : 'sem asterisco',
       })
   } else amarelo.push('Só uma leitura chegou: confira o código e o total.')
-  for (const d of divergencias) vermelho.push(`As duas leituras discordam no ${NOME_CAMPO[d.campo]}: escolha uma.`)
+  for (const d of divergencias) erro(CAMPO_DA_DIVERGENCIA[d.campo], `As duas leituras discordam no ${NOME_CAMPO[d.campo]}: escolha uma.`)
 
-  if (!codigo || !/^\d{4}$/.test(codigo)) vermelho.push('Telefone ilegível: digite os 4 dígitos.')
-  if (total === null) vermelho.push('Total ilegível: digite o total.')
+  if (!codigo || !/^\d{4}$/.test(codigo)) erro('codigo', 'Telefone ilegível: digite os 4 dígitos.')
+  if (total === null) erro('total', 'Total ilegível: digite o total.')
 
   // R20, R21: itens pelo cardápio.
   const itens = l.itens.map((item, i) => conferirItem(c, item, cor.escolhas?.[i]))
-  for (const it of itens) if (it.problema) vermelho.push(it.problema)
-  if (itens.length === 0) vermelho.push('Nenhum item lido.')
+  for (const it of itens) if (it.problema) erro('itens', it.problema)
+  if (itens.length === 0) erro('itens', 'Nenhum item lido.')
   const somaItens = itens.length && itens.every((it) => it.preco !== null) ? itens.reduce((s, it) => s + it.preco!, 0) : null
 
   // R23: promoção da noite, uma vez por pizza cobrada como tradicional.
@@ -346,10 +363,10 @@ export function conferirLeitura(e: EntradaConferencia): ResultadoLeitura {
   const area = tocada ?? sugestao?.area ?? null
   const areaOrigem = !area ? null : tocada && tocada.id !== sugestao?.area.id ? 'manual' : (sugestao?.origem ?? 'manual')
   const esperaToque = duasIncognitas && sugestao?.origem !== 'escrito'
-  if (!area) vermelho.push('Nenhuma área ativa.')
-  else if (esperaToque) vermelho.push('Asterisco sem local: toque na área para conferir a promoção.')
+  if (!area) erro('area', 'Nenhuma área ativa.')
+  else if (esperaToque) erro('area', 'Asterisco sem local: toque na área para conferir a promoção.')
   else if (!tocada && sugestao?.origem !== 'escrito' && l.local_escrito?.includes('[?]'))
-    vermelho.push('Local ilegível: toque na área.')
+    erro('area', 'Local ilegível: toque na área.')
 
   // R24: esperado = itens − promoção + taxa.
   const esperado = itensMenosDesconto === null || !area ? null : itensMenosDesconto + area.taxa
@@ -361,7 +378,7 @@ export function conferirLeitura(e: EntradaConferencia): ResultadoLeitura {
   }
   if (promocaoSugerida !== null) amarelo.push(`Promoção de ${formatarReais(promocaoSugerida)} hoje?`)
   else if (!esperaToque && esperado !== null && total !== null && esperado !== total)
-    vermelho.push(`A conta dá ${formatarReais(esperado)}, mas o total lido é ${formatarReais(total)}.`)
+    erro('conta', `A conta dá ${formatarReais(esperado)}, mas o total lido é ${formatarReais(total)}.`)
 
   // R29: pagamento.
   let juntas = false
@@ -376,13 +393,13 @@ export function conferirLeitura(e: EntradaConferencia): ResultadoLeitura {
         const forma: Forma | null = escolhida ?? (lida === 'pix' ? null : lida)
         return { escrita: p.forma_escrita, forma, pedePix: !escolhida && lida === 'pix', valor: valorLido(p.valor_escrito) }
       })
-  if (juntas) vermelho.push('Mais de uma forma na mesma parte: divida o pagamento.')
+  if (juntas) erro('pagamento', 'Mais de uma forma na mesma parte: divida o pagamento.')
   else if (pagamentos.length === 0 || pagamentos.some((p) => !p.forma && !p.pedePix))
-    vermelho.push('Forma de pagamento ilegível: escolha a forma.')
+    erro('pagamento', 'Forma de pagamento ilegível: escolha a forma.')
   else if (pagamentos.some((p) => p.pedePix)) amarelo.push('Pix: toque em Pix antecipado ou Pix na máquina.')
   if (total !== null && pagamentos.length) {
     const partes = dividir(total, pagamentos)
-    if (!partes.ok) vermelho.push(partes.erro)
+    if (!partes.ok) erro('pagamento', partes.erro)
   }
 
   // R26: alertas.
@@ -416,6 +433,7 @@ export function conferirLeitura(e: EntradaConferencia): ResultadoLeitura {
     esperado,
     pagamentos,
     divergencias,
+    problemas: [...problemas],
     alertas,
     digitosConfusos: usaValor
       ? [...(totalTexto ?? '')].flatMap((ch, i) => (DIGITOS_CONFUSOS.has(ch) ? [i] : []))
@@ -459,3 +477,162 @@ export function pagamentosParaLancar(r: ResultadoLeitura): Pagamento[] | null {
   const partes = dividir(r.total, r.pagamentos)
   return partes.ok ? r.pagamentos.map((p, i) => ({ forma: p.forma!, valor: partes.valor[i] })) : null
 }
+
+/** A comanda lançada pela leitura: as mesmas regras do lançamento à mão (R1 a R5) valem aqui. */
+export function comandaDaLeitura(
+  r: ResultadoLeitura,
+  areas: Area[],
+  troco: number,
+  ctx: { id: string; noiteId: string; agora: string; fotoPath: string | null },
+): Resultado<Comanda> {
+  const area = areas.find((a) => a.id === r.areaId)
+  if (!area) return { ok: false, erro: 'Toque na área.' }
+  if (r.total === null) return { ok: false, erro: 'Informe o total.' }
+  const pagamentos = pagamentosParaLancar(r)
+  if (!pagamentos)
+    return {
+      ok: false,
+      erro: r.pagamentos.some((p) => !p.forma) ? 'Escolha a forma de pagamento.' : 'As partes do pagamento não fecham o total.',
+    }
+  const c = criarComanda({ codigo: r.codigo ?? '', total: r.total, pagamentos, troco }, area, ctx)
+  return c.ok ? { ok: true, valor: { ...c.valor, fotoPath: ctx.fotoPath, areaOrigem: r.areaOrigem } } : c
+}
+
+// ---------- Registro da leitura (R27) e leitura que chega depois (R28) ----------
+
+/** Resposta da Edge Function ler-comanda. */
+export interface RespostaLeitura {
+  leitura: LeituraCompleta
+  conferencia: LeituraConferencia
+  modelo: string
+  ms: number
+}
+
+/**
+ * Uma leitura feita (tabela leituras): o que a IA leu, o que o app achou antes de qualquer correção
+ * (é o que se mede: verde errada é verde que precisou de correção) e o que foi lançado no fim.
+ */
+export interface RegistroLeitura {
+  id: string
+  noiteId: string
+  comandaId: string | null
+  fotoPath: string
+  leitura: LeituraCompleta
+  conferencia: LeituraConferencia | null
+  resultado: {
+    estado: Estado
+    motivos: string[]
+    areaSugerida: string | null
+    origem: OrigemSugestao | null
+    esperado: number | null
+    divergencias: CampoCritico[]
+    /** R28: lida depois que a comanda já tinha sido lançada à mão. */
+    posterior: boolean
+  }
+  lancado: {
+    codigo: string
+    total: number
+    areaId: string
+    areaOrigem: OrigemArea | null
+    pagamentos: Pagamento[]
+    troco: number
+    /** Estado na hora de lançar (depois das correções). */
+    estado: Estado | null
+    /** Da foto ao lançamento. */
+    segundos: number | null
+  } | null
+  corrigido: boolean
+  /** "Lançar assim" no vermelho. */
+  forcado: boolean
+  modelo: string
+  ms: number
+  criadaEm: string
+}
+
+/** O motoboy mudou algo da leitura (tocar a área sugerida ou escolher o Pix não conta). */
+export const houveCorrecao = (cor: Correcoes, r: ResultadoLeitura) =>
+  cor.codigo !== undefined ||
+  cor.total !== undefined ||
+  cor.promocao !== undefined ||
+  cor.pagamento !== undefined ||
+  Object.keys(cor.escolhas ?? {}).length > 0 ||
+  r.areaOrigem === 'manual'
+
+export function registroLeitura(
+  resposta: Pick<RespostaLeitura, 'leitura' | 'modelo' | 'ms'> & { conferencia: LeituraConferencia | null },
+  /** A conferência sem correções. */
+  r: ResultadoLeitura,
+  ctx: {
+    id: string
+    noiteId: string
+    fotoPath: string
+    comanda: Comanda | null
+    estadoFinal: Estado | null
+    segundos: number | null
+    corrigido: boolean
+    forcado: boolean
+    posterior: boolean
+    agora: string
+  },
+): RegistroLeitura {
+  const c = ctx.comanda
+  return {
+    id: ctx.id,
+    noiteId: ctx.noiteId,
+    comandaId: c?.id ?? null,
+    fotoPath: ctx.fotoPath,
+    leitura: resposta.leitura,
+    conferencia: resposta.conferencia,
+    resultado: {
+      estado: r.estado,
+      motivos: r.motivos,
+      areaSugerida: r.sugestao?.areaId ?? null,
+      origem: r.sugestao?.origem ?? null,
+      esperado: r.esperado,
+      divergencias: r.divergencias.map((d) => d.campo),
+      posterior: ctx.posterior,
+    },
+    lancado: c && {
+      codigo: c.codigo,
+      total: c.total,
+      areaId: c.areaId,
+      areaOrigem: c.areaOrigem ?? null,
+      pagamentos: c.pagamentos,
+      troco: c.troco,
+      estado: ctx.estadoFinal,
+      segundos: ctx.segundos,
+    },
+    corrigido: ctx.corrigido,
+    forcado: ctx.forcado,
+    modelo: resposta.modelo,
+    ms: resposta.ms,
+    criadaEm: ctx.agora,
+  }
+}
+
+const formaGeral = (f: Forma | FormaEscrita): FormaEscrita => (f === 'pix_antecipado' || f === 'pix_maquina' ? 'pix' : f)
+
+/**
+ * R28: a leitura que chegou depois confere com o que foi lançado? Devolve o que discorda (vazio =
+ * confere). A conta usa a área lançada. Nada muda sozinho: é só o aviso na lista.
+ */
+export function avisoLeitura(reg: RegistroLeitura, c: Comanda, areas: Area[], promoDesconto: number | null): string[] {
+  const r = conferirLeitura({
+    leitura: reg.leitura,
+    conferencia: reg.conferencia,
+    areas,
+    promoDesconto,
+    correcoes: { areaId: c.areaId },
+  })
+  const avisos: string[] = []
+  if (r.codigo !== c.codigo) avisos.push(`Código lido: ${r.codigo ?? '[?]'}.`)
+  if (r.total !== c.total) avisos.push(`Total lido: ${r.total === null ? '[?]' : formatarReais(r.total)}.`)
+  else if (r.esperado !== null && r.esperado !== c.total && r.promocaoSugerida === null)
+    avisos.push(`A conta pelo cardápio dá ${formatarReais(r.esperado)}.`)
+  const lidas = reg.leitura.pagamento.map((p) => p.forma ?? formasDoTexto(p.forma_escrita)[0] ?? null)
+  const conjunto = (fs: FormaEscrita[]) => [...new Set(fs)].sort().join('+')
+  if (lidas.every((f) => f !== null) && conjunto(lidas as FormaEscrita[]) !== conjunto(c.pagamentos.map((p) => formaGeral(p.forma))))
+    avisos.push(`Forma lida: ${reg.leitura.pagamento.map((p) => p.forma_escrita).join(' + ')}.`)
+  return avisos
+}
+

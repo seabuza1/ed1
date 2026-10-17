@@ -10,3 +10,6 @@ export function novoId(): string {
 
 /** Instante atual em ISO, para criadaEm/atualizadaEm/fechadaEm. */
 export const agora = () => new Date().toISOString()
+
+/** Segundos inteiros desde o instante (ms), para medir o tempo da foto ao lançamento. */
+export const segundosDesde = (inicio: number) => Math.round((Date.now() - inicio) / 1000)

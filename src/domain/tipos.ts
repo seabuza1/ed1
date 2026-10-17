@@ -22,6 +22,8 @@ export interface Noite {
   luanDiferenca: number | null // negativo = falta, positivo = sobra
   minutosAcerto: number | null
   obs: string
+  /** R23: promoção da noite, centavos por pizza tradicional; null até ser definida. */
+  promoDesconto?: number | null
 }
 
 export interface Pagamento {
@@ -49,7 +51,13 @@ export interface Comanda {
   papelConferido?: boolean
   /** Pix antecipado: o Luan confirmou que o Pix caiu. */
   pixConfirmado?: boolean
+  /** Foto da comanda no Storage ({caixa_id}/{id}.jpg). */
+  fotoPath?: string | null
+  /** De onde veio a área: sugestão da leitura (R22) ou toque em outra. */
+  areaOrigem?: OrigemArea | null
 }
+
+export type OrigemArea = 'escrito' | 'valor' | 'padrao' | 'manual'
 
 export interface Ajustes {
   id: 'padrao'

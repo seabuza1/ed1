@@ -1,8 +1,17 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { comandaRepetida, criarComanda } from '../domain/comanda'
 import { lerReais } from '../domain/dinheiro'
+import { NITIDEZ_MINIMA } from '../domain/foto'
+import {
+  conferirLeitura,
+  registroLeitura,
+  type Correcoes,
+  type RegistroLeitura,
+  type RespostaLeitura,
+} from '../domain/leitura'
 import type { Area, Comanda, Noite } from '../domain/tipos'
-import { agora, novoId } from '../data/id'
+import { agora, novoId, segundosDesde } from '../data/id'
+import { ErroRemoto } from '../data/nuvem/remoto'
 import { repo } from '../data/repo'
 import { CampoReais } from '../ui/CampoReais'
 import { ChipsArea } from '../ui/ChipsArea'
@@ -10,7 +19,9 @@ import { useAviso } from '../ui/desfazer'
 import { EditorPagamento } from '../ui/EditorPagamento'
 import { mensagemDeErro } from '../ui/erro'
 import { Icone } from '../ui/Icone'
+import { prepararFoto } from '../ui/foto'
 import { lerPagamento, pagamentoVazio, type EstadoPagamento } from '../ui/pagamento'
+import { BotaoFoto, ConfirmarLeitura, LendoComanda, type FotoDaComanda } from './LeituraComanda'
 
 const STATUS: Record<Comanda['status'], string> = {
   em_rota: 'em rota',
@@ -27,6 +38,20 @@ interface Formulario {
 
 const vazio = (): Formulario => ({ codigo: '', total: '', areaId: null, pagamento: pagamentoVazio() })
 
+/** A foto em leitura ou em confirmação. */
+type Leitura =
+  | { fase: 'lendo' | 'tremida'; foto: FotoDaComanda }
+  | { fase: 'confirmar'; foto: FotoDaComanda; resposta: RespostaLeitura; correcoes: Correcoes }
+
+/** Foto que segue com o lançamento à mão: lida depois (R28), ou já lida e recusada pelo motoboy. */
+interface FotoNoManual {
+  foto: FotoDaComanda
+  pendente: boolean
+  resposta?: RespostaLeitura
+}
+
+const SEM_INTERNET = 'Sem internet: lance à mão. A foto fica guardada e é lida quando a internet voltar.'
+
 /** Lançar comanda: tocar na forma de pagamento já lança; "Lançar" só no pagamento dividido. */
 export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Comanda[] }) {
   const [f, setF] = useState(vazio)
@@ -38,6 +63,75 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
   const refCodigo = useRef<HTMLInputElement>(null)
   const refTotal = useRef<HTMLInputElement>(null)
   const aviso = useAviso()
+  const fotos = repo.fotos
+  const [leitura, setLeitura] = useState<Leitura | null>(null)
+  const [fotoManual, setFotoManual] = useState<FotoNoManual | null>(null)
+  const [avisoFoto, setAvisoFoto] = useState<string | null>(null)
+  const pedido = useRef<AbortController | null>(null)
+  // Endereços blob: das fotos desta tela, revogados ao sair.
+  const urls = useRef<string[]>([])
+  useEffect(() => () => urls.current.forEach((u) => URL.revokeObjectURL(u)), [])
+
+  async function tirarFoto(arquivo: File) {
+    if (!fotos) return
+    setErro(null)
+    setAvisoFoto(null)
+    pedido.current?.abort()
+    let pronta
+    try {
+      pronta = await prepararFoto(arquivo)
+    } catch (e) {
+      return setErro(mensagemDeErro(e))
+    }
+    const url = URL.createObjectURL(pronta.blob)
+    urls.current.push(url)
+    const foto: FotoDaComanda = { id: novoId(), blob: pronta.blob, base64: pronta.base64, url, inicio: Date.now() }
+    if (pronta.nitidez < NITIDEZ_MINIMA) return setLeitura({ fase: 'tremida', foto })
+    if (!navigator.onLine) return paraManual({ foto, pendente: true }, SEM_INTERNET)
+    setLeitura({ fase: 'lendo', foto })
+    const ctrl = new AbortController()
+    pedido.current = ctrl
+    try {
+      const resposta = await fotos.ler(foto.base64, ctrl.signal)
+      if (!ctrl.signal.aborted) setLeitura({ fase: 'confirmar', foto, resposta, correcoes: {} })
+    } catch (e) {
+      if (ctrl.signal.aborted) return
+      const naIA = e instanceof ErroRemoto && e.permanente
+      paraManual({ foto, pendente: !naIA }, naIA ? mensagemDeErro(e) : SEM_INTERNET)
+    }
+  }
+
+  /** Volta ao lançamento à mão; a foto segue junto e é lançada com a comanda. */
+  function paraManual(fm: FotoNoManual, msg: string | null, preencher?: { codigo: string; total: string }) {
+    pedido.current?.abort()
+    setLeitura(null)
+    setFotoManual(fm)
+    setAvisoFoto(msg)
+    setAberto(true)
+    if (preencher) mudar(preencher)
+    setTimeout(() => refCodigo.current?.focus())
+  }
+
+  async function lancarLida(
+    foto: FotoDaComanda,
+    resposta: RespostaLeitura,
+    comanda: Comanda,
+    registro: RegistroLeitura,
+    correcoes: Correcoes,
+  ) {
+    if (!fotos) return
+    setLeitura(null)
+    try {
+      await fotos.lancar(comanda, foto.blob, { registro })
+      aviso(`${comanda.codigo} lançada`, async () => {
+        await repo.excluirComanda(comanda.id)
+        setLeitura({ fase: 'confirmar', foto, resposta, correcoes })
+      })
+    } catch (e) {
+      setLeitura({ fase: 'confirmar', foto, resposta, correcoes })
+      setErro(mensagemDeErro(e))
+    }
+  }
 
   const repetida = f.codigo.length === 4 ? comandaRepetida(f.codigo, props.comandas) : undefined
   const ativas = props.areas.filter((a) => a.ativa)
@@ -66,8 +160,9 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
     if (!area) return setErro('Escolha a área.')
     const p = lerPagamento(pagamento, total)
     if (!p.ok) return setErro(p.erro)
+    const fm = fotoManual
     const r = criarComanda({ codigo: f.codigo, total, ...p.valor }, area, {
-      id: novoId(),
+      id: fm?.foto.id ?? novoId(),
       noiteId: props.noite.id,
       agora: agora(),
     })
@@ -78,36 +173,116 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
     setF(vazio())
     setSugerida(null)
     setRepetidaOk(false)
+    setFotoManual(null)
+    setAvisoFoto(null)
     refCodigo.current?.focus()
     try {
-      await repo.salvarComanda(r.valor)
+      if (fm && fotos) {
+        const fotoPath = `${props.noite.id}/${fm.foto.id}.jpg`
+        const comanda: Comanda = { ...r.valor, fotoPath, areaOrigem: 'manual' }
+        // Lida e trocada pelo manual: a leitura entra na medição como corrigida.
+        const registro = fm.resposta && {
+          registro: registroLeitura(
+            fm.resposta,
+            conferirLeitura({ ...fm.resposta, areas: props.areas, promoDesconto: props.noite.promoDesconto ?? null }),
+            {
+              id: fm.foto.id,
+              noiteId: props.noite.id,
+              fotoPath,
+              comanda,
+              estadoFinal: null,
+              segundos: segundosDesde(fm.foto.inicio),
+              corrigido: true,
+              forcado: false,
+              posterior: false,
+              agora: agora(),
+            },
+          ),
+        }
+        await fotos.lancar(comanda, fm.foto.blob, registro ?? { pendente: fm.pendente })
+      } else await repo.salvarComanda(r.valor)
       aviso(`${r.valor.codigo} lançada`, async () => {
         await repo.excluirComanda(r.valor.id)
         setF(anterior)
+        setFotoManual(fm)
         setAberto(true)
       })
     } catch (e) {
       setF(anterior)
+      setFotoManual(fm)
       setErro(mensagemDeErro(e))
     }
   }
 
+  const botaoFoto = fotos && <BotaoFoto onFoto={tirarFoto} />
+
+  if (leitura?.fase === 'confirmar')
+    return (
+      <ConfirmarLeitura
+        key={leitura.foto.id}
+        foto={leitura.foto}
+        resposta={leitura.resposta}
+        correcoesIniciais={leitura.correcoes}
+        noite={props.noite}
+        areas={props.areas}
+        comandas={props.comandas}
+        onDigitar={(codigo, total) =>
+          paraManual({ foto: leitura.foto, pendente: false, resposta: leitura.resposta }, null, { codigo, total })
+        }
+        onLancar={(comanda, registro, correcoes) =>
+          lancarLida(leitura.foto, leitura.resposta, comanda, registro, correcoes)
+        }
+        onPromocao={(centavos) =>
+          repo.atualizarNoite(props.noite.id, { promoDesconto: centavos }).catch((e) => setErro(mensagemDeErro(e)))
+        }
+      />
+    )
+  if (leitura)
+    return (
+      <LendoComanda
+        foto={leitura.foto}
+        tremida={leitura.fase === 'tremida'}
+        onDigitar={() => paraManual({ foto: leitura.foto, pendente: leitura.fase === 'lendo' }, null)}
+        onTirarDeNovo={tirarFoto}
+      />
+    )
+
   if (!aberto)
     return (
-      <button type="button" className="primario" onClick={() => setAberto(true)}>
-        <Icone nome="mais" tamanho={22} />
-        Lançar comanda
-      </button>
+      <div className="pilha-curta">
+        {botaoFoto}
+        <button type="button" className="primario" onClick={() => setAberto(true)}>
+          <Icone nome="mais" tamanho={22} />
+          Lançar comanda
+        </button>
+      </div>
     )
 
   return (
     <section className="pilha form-lancar" aria-label="Lançar comanda">
+      {!fotoManual && botaoFoto}
       <div className="titulo-form">
         <h2>Lançar comanda</h2>
         <button type="button" className="link" onClick={() => setAberto(false)}>
           Recolher
         </button>
       </div>
+      {fotoManual && (
+        <div className="foto-no-manual">
+          <img src={fotoManual.foto.url} alt="Foto da comanda" />
+          <span className="pequeno">{avisoFoto ?? 'A foto vai junto com a comanda.'}</span>
+          <button
+            type="button"
+            className="link"
+            onClick={() => {
+              setFotoManual(null)
+              setAvisoFoto(null)
+            }}
+          >
+            Sem foto
+          </button>
+        </div>
+      )}
       <div className="lado-a-lado">
         <label className="campo">
           <span>Código</span>

@@ -1129,6 +1129,107 @@ h2.subtitulo {
   font-size: 0.95rem;
 }
 
+/* ---------- Leitura da comanda por foto ---------- */
+
+label.botao.botao-foto {
+  width: 100%;
+  min-height: 60px;
+  background: var(--marca);
+  color: var(--sobre-marca);
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button.foto-leitura,
+button.foto-cheia {
+  padding: 0;
+  background: var(--campo);
+  overflow: hidden;
+}
+
+button.foto-leitura {
+  width: 100%;
+  height: 180px;
+}
+
+button.foto-leitura img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Tocar amplia: a foto toma a tela, acima das abas e do aviso rápido. */
+button.foto-cheia {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  border-radius: 0;
+  background: var(--fundo);
+}
+
+button.foto-cheia img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.chip-area.chip-sugerida {
+  outline: 2px dashed var(--marca);
+  outline-offset: -2px;
+}
+
+.chip-area small.origem {
+  font-size: 0.72rem;
+  color: var(--marca);
+}
+
+.itens-leitura {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.linha-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Campo com problema na leitura (R24): borda vermelha, sem depender do texto. */
+.campo-problema input,
+.campo-problema .reais,
+ul.campo-problema,
+dl.campo-problema,
+div.campo-problema > .pilha-curta {
+  box-shadow: inset 0 0 0 2px var(--perigo);
+  border-radius: 12px;
+}
+
+ul.campo-problema,
+dl.campo-problema {
+  padding: 8px;
+}
+
+.digito-confuso {
+  text-decoration: underline wavy var(--alerta);
+  text-underline-offset: 3px;
+}
+
+.foto-no-manual {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.foto-no-manual img {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 10px;
+}
+
 /* ---------- Abas ---------- */
 
 .abas {

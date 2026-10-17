@@ -17,3 +17,22 @@ do $$ begin create role authenticated nologin; exception when duplicate_object t
 grant usage on schema public, auth to anon, authenticated;
 grant execute on function auth.uid() to anon, authenticated;
 create publication supabase_realtime;
+-- Storage (para as regras das fotos do 004): só as colunas que as políticas usam.
+create schema storage;
+create table storage.buckets (
+  id                 text primary key,
+  name               text not null,
+  public             boolean not null default false,
+  file_size_limit    bigint,
+  allowed_mime_types text[]
+);
+create table storage.objects (
+  id        uuid primary key default gen_random_uuid(),
+  bucket_id text references storage.buckets (id),
+  name      text not null,
+  owner     uuid default auth.uid()
+);
+alter table storage.objects enable row level security;
+grant usage on schema storage to anon, authenticated;
+grant select on storage.buckets to authenticated;
+grant select, insert, update, delete on storage.objects to authenticated;

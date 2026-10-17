@@ -1,6 +1,7 @@
 // Nuvem falsa, em memória, para os testes da sincronização. Imita as regras do
 // supabase/001_schema.sql que importam ao app: caixa travado depois do acerto, comanda
 // precisa do caixa, um caixa por motoboy e data, atualizado_em dado pelo banco.
+import type { RespostaLeitura } from '../../domain/leitura'
 import type { AcertoLinha, AreaLinha, CaixaLinha, ComandaLinha, Gravavel, PerfilLinha, Tabela } from './linhas'
 import { ErroRemoto, type EventoRemoto, type Remoto } from './remoto'
 
@@ -13,9 +14,17 @@ export function criarRemotoFalso() {
   const caixas = new Map<string, CaixaLinha>()
   const comandas = new Map<string, ComandaLinha>()
   const acertos = new Map<string, AcertoLinha>()
+  const leituras = new Map<string, Gravavel>()
+  const fotos = new Map<string, Blob>()
   const ouvintes = new Set<(e: EventoRemoto) => void>()
 
-  const estado = { offline: false, chamadas: 0 }
+  const estado = {
+    offline: false,
+    chamadas: 0,
+    /** O que a IA devolve no próximo lerComanda. */
+    ia: { erro: 'sem resposta configurada' } as RespostaLeitura | { erro: string },
+    leiturasIA: 0,
+  }
 
   function rede() {
     estado.chamadas++
@@ -66,6 +75,10 @@ export function criarRemotoFalso() {
       const caixaId = linha.caixa_id as string
       if (!caixas.has(caixaId)) throw recusa('falta o registro ligado a este na nuvem')
       if (travado(caixaId)) throw recusa('sem permissão')
+      if (tabela === 'leituras') {
+        if (linha.comanda_id && !comandas.has(linha.comanda_id as string)) throw recusa('falta o registro ligado a este na nuvem')
+        return void leituras.set(id, copia(linha))
+      }
       const existente = comandas.get(id)
       const nova = { ...existente, ...copia(linha), atualizado_em: agora() } as ComandaLinha
       comandas.set(id, nova)
@@ -79,7 +92,7 @@ export function criarRemotoFalso() {
       if (!atual || (tabela !== 'areas' && travado(caixaId))) throw recusa('sem permissão')
       const nova = { ...atual, ...copia(campos), atualizado_em: agora() }
       mapa.set(id, nova)
-      if (tabela !== 'areas') avisar({ tabela, tipo: 'UPDATE', nova: copia(nova), antiga: null })
+      if (tabela === 'caixas' || tabela === 'comandas') avisar({ tabela, tipo: 'UPDATE', nova: copia(nova), antiga: null })
     },
     async excluir(tabela: Tabela, id: string) {
       rede()
@@ -92,6 +105,25 @@ export function criarRemotoFalso() {
     ouvir(aoEvento) {
       ouvintes.add(aoEvento)
       return () => ouvintes.delete(aoEvento)
+    },
+
+    async enviarFoto(caminho, jpeg) {
+      rede()
+      const caixaId = caminho.split('/')[0]
+      if (!caixas.has(caixaId) || travado(caixaId)) throw recusa('sem permissão')
+      if (!fotos.has(caminho)) fotos.set(caminho, jpeg)
+    },
+    async urlFoto(caminho) {
+      rede()
+      if (!fotos.has(caminho)) throw new ErroRemoto('A foto ainda não chegou na nuvem.', false)
+      return `nuvem://${caminho}`
+    },
+    async lerComanda() {
+      rede()
+      estado.leiturasIA++
+      const r = estado.ia
+      if ('erro' in r) throw recusa(r.erro)
+      return copia(r)
     },
   }
 
@@ -130,5 +162,5 @@ export function criarRemotoFalso() {
     },
   }
 
-  return { remoto, estado, perfis, areas, caixas, comandas, acertos, equipe }
+  return { remoto, estado, perfis, areas, caixas, comandas, acertos, leituras, fotos, equipe }
 }

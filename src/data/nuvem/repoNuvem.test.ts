@@ -260,3 +260,95 @@ describe('nuvem com fila offline', () => {
     expect(await repo.sugerirArea('4444')).toBe('a1')
   })
 })
+
+describe('fotos das comandas (leitura)', () => {
+  const exemplo = {
+    leitura: {
+      telefone_final: '3557',
+      promocao: false,
+      local_escrito: 'Arag.',
+      itens: [
+        { lido: 'refri 2l', tipo: 'bebida' as const, quantidade: 1, tamanho: null, sabores: [], item: 'Refrigerante 2L', casou_pelo_cardapio: true, opcoes: [] },
+      ],
+      pagamento: [{ forma_escrita: 'din', forma: 'dinheiro' as const, valor_escrito: null }],
+      total_escrito: '20,00',
+      transcricao: [],
+      ilegiveis: [],
+    },
+    conferencia: { telefone_digitos: ['3', '5', '5', '7'], total_digitos: ['2', '0'], forma_escrita: 'din', local_escrito: 'Arag.', promocao: false },
+    modelo: 'teste',
+    ms: 10,
+  }
+  const jpeg = () => new Blob([new Uint8Array([0xff, 0xd8, 1, 2, 3])], { type: 'image/jpeg' })
+
+  async function comFoto(repo: RepoNuvem, noite: Noite, pendente: boolean, total = 2000) {
+    const area = (await repo.listarAreas()).find((a) => a.id === 'a1') as Area
+    const id = `f${++seq}`
+    const r = criarComanda({ codigo: '3557', total, pagamentos: [{ forma: 'dinheiro', valor: total }], troco: 0 }, area, {
+      id,
+      noiteId: noite.id,
+      agora: '2026-10-16T21:00:00.000Z',
+    })
+    if (!r.ok) throw new Error(r.erro)
+    const c = { ...r.valor, fotoPath: `${noite.id}/${id}.jpg`, areaOrigem: 'escrito' as const }
+    await repo.fotos!.lancar(c, jpeg(), { pendente })
+    return c
+  }
+
+  it('a foto sobe ao Storage depois da comanda, numa fila própria', async () => {
+    const { nuvem, repo, modoAviao } = montar()
+    await repo.sincronizar()
+    modoAviao(true)
+    const noite = await abrir(repo)
+    const c = await comFoto(repo, noite, false)
+    await repo.sincronizar()
+    expect(repo.sync!.obter()).toMatchObject({ pendentes: 2, fotos: 1 })
+
+    modoAviao(false)
+    await repo.sincronizar()
+    expect(nuvem.comandas.get(c.id)).toMatchObject({ foto_path: c.fotoPath, area_origem: 'escrito' })
+    expect(nuvem.fotos.has(c.fotoPath)).toBe(true)
+    expect(repo.sync!.obter()).toMatchObject({ pendentes: 0, fotos: 0 })
+    // A foto continua no aparelho por um tempo: vê sem precisar da nuvem.
+    expect(await repo.fotos!.url(c)).toMatch(/^blob:/)
+  })
+
+  it('R28: tirada sem internet, é lida quando a internet volta; só registra, não muda a comanda', async () => {
+    const { nuvem, repo, modoAviao } = montar()
+    await repo.sincronizar()
+    modoAviao(true)
+    const noite = await abrir(repo)
+    const c = await comFoto(repo, noite, true, 2500) // lançou 25 à mão; a comanda diz 20
+    nuvem.estado.ia = exemplo
+    await repo.sincronizar()
+    expect(nuvem.estado.leiturasIA).toBe(0)
+
+    modoAviao(false)
+    await repo.sincronizar()
+    expect(nuvem.estado.leiturasIA).toBe(1)
+    const [registro] = await repo.fotos!.leituras(noite.id)
+    expect(registro).toMatchObject({ comandaId: c.id, resultado: { posterior: true }, lancado: { total: 2500 } })
+    expect(nuvem.leituras.get(registro.id)).toMatchObject({ comanda_id: c.id, caixa_id: noite.id })
+    expect((await repo.listarComandas(noite.id))[0].total).toBe(2500)
+
+    await repo.sincronizar()
+    expect(nuvem.estado.leiturasIA).toBe(1) // não lê de novo
+  })
+
+  it('a IA não leu: tenta 3 vezes e desiste; leitura de comanda excluída não sobe', async () => {
+    const { nuvem, repo } = montar()
+    await repo.sincronizar()
+    const noite = await abrir(repo)
+    await comFoto(repo, noite, true)
+    nuvem.estado.ia = { erro: 'ilegível' }
+    for (let i = 0; i < 5; i++) await repo.sincronizar()
+    expect(nuvem.estado.leiturasIA).toBe(3)
+
+    const outra = await comFoto(repo, noite, true)
+    nuvem.estado.ia = exemplo
+    await repo.excluirComanda(outra.id)
+    await repo.sincronizar()
+    expect(nuvem.leituras.size).toBe(0)
+    expect(nuvem.fotos.has(outra.fotoPath)).toBe(false)
+  })
+})

@@ -1,6 +1,7 @@
-// Linhas das tabelas do Supabase (supabase/001_schema.sql e 002) e a conversão para os
+// Linhas das tabelas do Supabase (supabase/001_schema.sql a 004) e a conversão para os
 // tipos do app. Noite do app = caixa na nuvem (um motoboy numa noite).
-import type { AcertoConfirmado, Area, Comanda, Noite, Pagamento, Papel, Perfil, Status } from '../../domain/tipos'
+import type { RegistroLeitura } from '../../domain/leitura'
+import type { AcertoConfirmado, Area, Comanda, Noite, OrigemArea, Pagamento, Papel, Perfil, Status } from '../../domain/tipos'
 
 export interface CaixaLinha {
   id: string
@@ -12,6 +13,7 @@ export interface CaixaLinha {
   dinheiro_contado: number | null
   fechado_em: string | null
   obs: string
+  promo_desconto?: number | null // 004
   criado_em: string
   atualizado_em: string
 }
@@ -29,6 +31,8 @@ export interface ComandaLinha {
   papel_conferido: boolean
   pix_confirmado: boolean
   finalizada_em: string | null
+  foto_path?: string | null // 004
+  area_origem?: OrigemArea | null // 004
   criado_em: string
   atualizado_em: string
 }
@@ -57,7 +61,7 @@ export interface PerfilLinha {
   ativo: boolean
 }
 
-export type Tabela = 'caixas' | 'comandas' | 'areas'
+export type Tabela = 'caixas' | 'comandas' | 'areas' | 'leituras'
 
 /** Instante do Postgres ("…+00:00", microssegundos) → ISO do app ("…Z"). */
 export const iso = (t: string | null): string | null => (t === null ? null : new Date(t).toISOString())
@@ -74,6 +78,7 @@ export const caixaParaGravar = (n: Noite, motoboyId: string) => ({
   dinheiro_contado: n.dinheiroContado,
   fechado_em: n.fechadaEm,
   obs: n.obs,
+  promo_desconto: n.promoDesconto ?? null,
 })
 
 export const comandaParaGravar = (c: Comanda) => ({
@@ -89,16 +94,38 @@ export const comandaParaGravar = (c: Comanda) => ({
   papel_conferido: c.papelConferido === true,
   pix_confirmado: c.pixConfirmado === true,
   finalizada_em: c.finalizadaEm,
+  foto_path: c.fotoPath ?? null,
+  area_origem: c.areaOrigem ?? null,
   criado_em: c.criadaEm,
 })
 
 export const areaParaGravar = (a: Area) => ({ id: a.id, nome: a.nome, taxa: a.taxa, ativa: a.ativa })
 
+/** Só sobe (o app não baixa as leituras de volta). */
+export const leituraParaGravar = (r: RegistroLeitura) => ({
+  id: r.id,
+  caixa_id: r.noiteId,
+  comanda_id: r.comandaId,
+  foto_path: r.fotoPath,
+  leitura: r.leitura,
+  conferencia: r.conferencia,
+  resultado: r.resultado,
+  lancado: r.lancado,
+  corrigido: r.corrigido,
+  forcado: r.forcado,
+  modelo: r.modelo,
+  ms: r.ms,
+  criado_em: r.criadaEm,
+})
+
 export type Gravavel = Record<string, unknown>
 
-export function paraGravar(tabela: Tabela, registro: Noite | Comanda | Area, motoboyId: string): Gravavel {
+export type Registro = Noite | Comanda | Area | RegistroLeitura
+
+export function paraGravar(tabela: Tabela, registro: Registro, motoboyId: string): Gravavel {
   if (tabela === 'caixas') return caixaParaGravar(registro as Noite, motoboyId)
   if (tabela === 'comandas') return comandaParaGravar(registro as Comanda)
+  if (tabela === 'leituras') return leituraParaGravar(registro as RegistroLeitura)
   return areaParaGravar(registro as Area)
 }
 
@@ -121,6 +148,7 @@ export const linhaParaNoite = (l: CaixaLinha): Noite => ({
   luanDiferenca: null,
   minutosAcerto: null,
   obs: l.obs,
+  ...(l.promo_desconto != null ? { promoDesconto: l.promo_desconto } : {}),
 })
 
 export const linhaParaComanda = (l: ComandaLinha): Comanda => ({
@@ -138,6 +166,8 @@ export const linhaParaComanda = (l: ComandaLinha): Comanda => ({
   finalizadaEm: iso(l.finalizada_em),
   papelConferido: l.papel_conferido,
   pixConfirmado: l.pix_confirmado,
+  ...(l.foto_path ? { fotoPath: l.foto_path } : {}),
+  ...(l.area_origem ? { areaOrigem: l.area_origem } : {}),
 })
 
 export const linhaParaArea = (l: AreaLinha): Area => ({ id: l.id, nome: l.nome, taxa: l.taxa, ativa: l.ativa })

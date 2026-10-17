@@ -5,14 +5,20 @@
 // Conflitos: cada alteração sobe só com as colunas que mudaram, então o motoboy marcando
 // "entregue" não desfaz o "Pix caiu" do Luan na mesma comanda. Na mesma coluna vale a
 // última alteração enviada. O que ainda está na fila tem prioridade sobre o que desce.
+//
+// Fotos das comandas (leitura): ficam no aparelho e sobem ao Storage numa fila própria, depois
+// que a comanda subiu, para não travar a fila das alterações. Sem internet na hora da foto, a
+// leitura é feita quando ela volta e vira só conferência (R28).
 import Dexie, { type EntityTable, type Table } from 'dexie'
 import type { Dados } from '../../domain/backup'
 import { areaSugerida } from '../../domain/comanda'
+import { conferirLeitura, registroLeitura, type RegistroLeitura } from '../../domain/leitura'
 import { planejarEnvioHistorico, type PlanoEnvio } from '../../domain/envioHistorico'
 import { AJUSTES_PADRAO } from '../../domain/padroes'
 import type { Resultado } from '../../domain/comanda'
 import type { Ajustes, Area, Comanda, Noite, Perfil } from '../../domain/tipos'
 import type { EstadoSync, Repo } from '../repo'
+import { paraBase64 } from './base64'
 import {
   camposAlterados,
   comPendentes,
@@ -22,6 +28,7 @@ import {
   linhaParaNoite,
   linhaParaPerfil,
   paraGravar,
+  type Registro,
   type AcertoLinha,
   type AreaLinha,
   type CaixaLinha,
@@ -46,6 +53,21 @@ interface Meta {
   valor: string | null
 }
 
+/** Foto de uma comanda (id = id da comanda), até subir e ser lida. */
+interface FotoLocal {
+  id: string
+  caminho: string
+  jpeg: Blob
+  tiradaEm: string
+  envio: 'pendente' | 'enviada' | 'recusada'
+  /** feita: já tem leitura; pendente: ler quando houver internet (R28); falhou: a IA não leu. */
+  leitura: 'feita' | 'pendente' | 'falhou'
+  tentativas: number
+}
+
+const MAX_TENTATIVAS = 3
+const DIA = 24 * 60 * 60 * 1000
+
 type Banco = Dexie & {
   noites: EntityTable<Noite, 'id'>
   comandas: EntityTable<Comanda, 'id'>
@@ -55,6 +77,8 @@ type Banco = Dexie & {
   perfis: EntityTable<Perfil, 'id'>
   fila: EntityTable<ItemFila, 'seq'>
   meta: EntityTable<Meta, 'chave'>
+  fotos: EntityTable<FotoLocal, 'id'>
+  leituras: EntityTable<RegistroLeitura, 'id'>
 }
 
 export interface RepoNuvem extends Repo {
@@ -88,27 +112,34 @@ export function criarRepoNuvem(opcoes: {
     fila: '++seq, id',
     meta: 'chave',
   })
+  db.version(2).stores({ fotos: 'id, envio, leitura', leituras: 'id, noiteId' })
   db.on('populate', (tx) => {
     tx.table('ajustes').add(AJUSTES_PADRAO)
   })
 
-  const local: Record<Tabela, Table<Noite | Comanda | Area, string>> = {
-    caixas: db.noites as Table<Noite | Comanda | Area, string>,
-    comandas: db.comandas as Table<Noite | Comanda | Area, string>,
-    areas: db.areas as Table<Noite | Comanda | Area, string>,
+  const local: Record<Tabela, Table<Registro, string>> = {
+    caixas: db.noites as Table<Registro, string>,
+    comandas: db.comandas as Table<Registro, string>,
+    areas: db.areas as Table<Registro, string>,
+    leituras: db.leituras as Table<Registro, string>,
   }
 
   // ---------- Avisos ----------
 
   const ouvintes = new Set<() => void>()
   const ouvintesEstado = new Set<() => void>()
-  let estado: EstadoSync = { pendentes: 0, enviando: false, online: online(), recusa: null }
+  let estado: EstadoSync = { pendentes: 0, fotos: 0, enviando: false, online: online(), recusa: null }
 
   function mudarEstado(parcial: Partial<EstadoSync>) {
     estado = { ...estado, ...parcial }
     ouvintesEstado.forEach((o) => o())
   }
-  const contarPendentes = async () => mudarEstado({ pendentes: await db.fila.count(), online: online() })
+  const contarPendentes = async () =>
+    mudarEstado({
+      pendentes: await db.fila.count(),
+      fotos: await db.fotos.where('envio').equals('pendente').count(),
+      online: online(),
+    })
 
   let timerEnvio: ReturnType<typeof setTimeout> | undefined
   function mudou() {
@@ -144,7 +175,7 @@ export function criarRepoNuvem(opcoes: {
     else await db.fila.add({ tabela, id, op, campos, versao: 1 })
   }
 
-  async function gravar(tabela: Tabela, novo: Noite | Comanda | Area) {
+  async function gravar(tabela: Tabela, novo: Registro) {
     await db.transaction('rw', [local[tabela], db.fila], async () => {
       const antes = await local[tabela].get(novo.id)
       await local[tabela].put(novo)
@@ -164,13 +195,18 @@ export function criarRepoNuvem(opcoes: {
       try {
         if (item.op === 'inserir') {
           const registro = await local[item.tabela].get(item.id)
-          if (registro) await remoto.inserir(item.tabela, paraGravar(item.tabela, registro, uid))
+          // Leitura de comanda que foi excluída (Desfazer sem lançar de novo): não sobe.
+          const orfa = item.tabela === 'leituras' && !(await db.comandas.get((registro as RegistroLeitura).comandaId ?? ''))
+          if (registro && !orfa) await remoto.inserir(item.tabela, paraGravar(item.tabela, registro, uid))
         } else if (item.op === 'atualizar') await remoto.atualizar(item.tabela, item.id, item.campos ?? {})
         else await remoto.excluir(item.tabela, item.id)
       } catch (e) {
         if (!(e instanceof ErroRemoto && e.permanente)) throw e
-        recusou = true
-        mudarEstado({ recusa: `Uma alteração foi recusada pela nuvem: ${e.message}.` })
+        // Leitura recusada é só dado de medição: sai da fila sem aviso.
+        if (item.tabela !== 'leituras') {
+          recusou = true
+          mudarEstado({ recusa: `Uma alteração foi recusada pela nuvem: ${e.message}.` })
+        }
       }
       await db.transaction('rw', db.fila, async () => {
         const atual = await db.fila.get(item.seq!)
@@ -189,7 +225,7 @@ export function criarRepoNuvem(opcoes: {
     const comLocal = comPendentes(linha, pendentes[0]?.campos)
     if (tabela === 'caixas') await db.noites.put(linhaParaNoite(comLocal as CaixaLinha))
     else if (tabela === 'comandas') await db.comandas.put(linhaParaComanda(comLocal as ComandaLinha))
-    else await db.areas.put(linhaParaArea(comLocal as AreaLinha))
+    else if (tabela === 'areas') await db.areas.put(linhaParaArea(comLocal as AreaLinha))
   }
 
   async function removerLocal(tabela: 'caixas' | 'comandas', id: string) {
@@ -202,6 +238,73 @@ export function criarRepoNuvem(opcoes: {
   }
 
   const todasAsTabelas = () => [db.noites, db.comandas, db.areas, db.acertos, db.perfis, db.fila, db.meta]
+
+  // ---------- Fotos ----------
+
+  /** Sobe as fotos cuja comanda já está na nuvem (a regra do Storage confere o dono pelo caixa). */
+  async function enviarFotos() {
+    for (const f of await db.fotos.where('envio').equals('pendente').toArray()) {
+      const c = await db.comandas.get(f.id)
+      if (!c) continue // excluída; o Desfazer ainda pode trazer de volta
+      const naFila = await db.fila.where('id').anyOf(f.id, c.noiteId).toArray()
+      if (naFila.some((p) => p.op === 'inserir')) continue
+      try {
+        await remoto.enviarFoto(f.caminho, f.jpeg)
+        await db.fotos.update(f.id, { envio: 'enviada' })
+      } catch (e) {
+        if (!(e instanceof ErroRemoto && e.permanente)) throw e
+        await db.fotos.update(f.id, { envio: 'recusada' })
+      }
+      await contarPendentes()
+    }
+  }
+
+  /** R28: lê as fotos tiradas sem internet. Só registra; a comanda lançada não muda. */
+  async function lerPendentes() {
+    for (const f of await db.fotos.where('leitura').equals('pendente').toArray()) {
+      const c = await db.comandas.get(f.id)
+      if (!c) continue
+      let resposta
+      try {
+        resposta = await remoto.lerComanda(await paraBase64(f.jpeg))
+      } catch (e) {
+        if (!(e instanceof ErroRemoto && e.permanente)) throw e
+        const tentativas = f.tentativas + 1
+        await db.fotos.update(f.id, { tentativas, leitura: tentativas >= MAX_TENTATIVAS ? 'falhou' : 'pendente' })
+        continue
+      }
+      const noite = await db.noites.get(c.noiteId)
+      const r = conferirLeitura({ ...resposta, areas: await db.areas.toArray(), promoDesconto: noite?.promoDesconto ?? null })
+      const registro = registroLeitura(resposta, r, {
+        id: c.id,
+        noiteId: c.noiteId,
+        fotoPath: f.caminho,
+        comanda: c,
+        estadoFinal: null,
+        segundos: null,
+        corrigido: false,
+        forcado: false,
+        posterior: true,
+        agora: new Date().toISOString(),
+      })
+      await db.transaction('rw', [db.leituras, db.fila, db.fotos], async () => {
+        await db.leituras.put(registro)
+        await enfileirar('leituras', registro.id, 'inserir')
+        await db.fotos.update(f.id, { leitura: 'feita' })
+      })
+      ouvintes.forEach((o) => o())
+    }
+  }
+
+  /** Apaga do aparelho as fotos já resolvidas há 2 dias e as de comanda excluída há 1 dia. */
+  async function limparFotos() {
+    const agora = Date.now()
+    for (const f of await db.fotos.toArray()) {
+      const idade = agora - Date.parse(f.tiradaEm)
+      const resolvida = f.envio !== 'pendente' && f.leitura !== 'pendente'
+      if ((resolvida && idade > 2 * DIA) || (idade > DIA && !(await db.comandas.get(f.id)))) await db.fotos.delete(f.id)
+    }
+  }
 
   let recarregarTudo = false
 
@@ -267,13 +370,17 @@ export function criarRepoNuvem(opcoes: {
   let deNovo = false
 
   async function umaVez() {
-    if (!online()) return mudarEstado({ online: false })
+    if (!online()) return contarPendentes() // também marca offline
     mudarEstado({ enviando: true, online: true })
     try {
       // Com recusa, a nuvem manda a verdade de novo (desfaz aqui o que não foi aceito).
       if (await enviar()) recarregarTudo = true
       await baixar()
       ouvintes.forEach((o) => o())
+      await enviarFotos()
+      await lerPendentes()
+      if (await enviar()) recarregarTudo = true // as leituras feitas agora
+      await limparFotos()
     } catch (e) {
       if (!(e instanceof ErroRemoto) && !(e instanceof TypeError)) throw e
       // Sem internet ou nuvem fora do ar: a fila espera a próxima tentativa.
@@ -380,6 +487,37 @@ export function criarRepoNuvem(opcoes: {
     async listarAcertos() {
       const nomes = new Map((await db.perfis.toArray()).map((p) => [p.id, p.nome]))
       return (await db.acertos.toArray()).map((l) => linhaParaAcerto(l, nomes.get(l.confirmado_por) ?? null))
+    },
+
+    fotos: {
+      ler: (imagem, sinal) => remoto.lerComanda(imagem, sinal),
+      async lancar(comanda, jpeg, leitura) {
+        await db.transaction('rw', [db.comandas, db.fila, db.fotos, db.leituras], async () => {
+          await db.comandas.put(comanda)
+          await enfileirar('comandas', comanda.id, 'inserir')
+          await db.fotos.put({
+            id: comanda.id,
+            caminho: comanda.fotoPath ?? `${comanda.noiteId}/${comanda.id}.jpg`,
+            jpeg,
+            tiradaEm: new Date().toISOString(),
+            envio: 'pendente',
+            leitura: 'registro' in leitura ? 'feita' : leitura.pendente ? 'pendente' : 'falhou',
+            tentativas: 0,
+          })
+          if ('registro' in leitura) {
+            await db.leituras.put(leitura.registro)
+            await enfileirar('leituras', leitura.registro.id, 'inserir')
+          }
+        })
+        mudou()
+      },
+      async url(comanda) {
+        const f = await db.fotos.get(comanda.id)
+        if (f) return URL.createObjectURL(f.jpeg)
+        if (!comanda.fotoPath) throw new ErroRemoto('Esta comanda não tem foto.', true)
+        return remoto.urlFoto(comanda.fotoPath)
+      },
+      leituras: (noiteId) => db.leituras.where('noiteId').equals(noiteId).toArray(),
     },
 
     lerTudo: () =>

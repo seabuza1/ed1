@@ -1,5 +1,5 @@
 import { comHoraDeEntrega, FORMAS, type Resultado } from './comanda'
-import type { Ajustes, Area, Comanda, Noite } from './tipos'
+import type { Ajustes, Area, Comanda, Noite, OrigemArea } from './tipos'
 
 export interface Dados {
   noites: Noite[]
@@ -41,6 +41,8 @@ const ehCentavos = (v: unknown) => Number.isInteger(v) && (v as number) >= 0
 const ehCentavosOuNulo = (v: unknown) => v === null || ehCentavos(v)
 const ehInteiroOuNulo = (v: unknown) => v === null || Number.isInteger(v)
 
+const ORIGENS: OrigemArea[] = ['escrito', 'valor', 'padrao', 'manual']
+
 const noiteValida = (n: unknown): n is Noite =>
   ehObj(n) &&
   ehTexto(n.id) &&
@@ -53,7 +55,8 @@ const noiteValida = (n: unknown): n is Noite =>
   ehCentavosOuNulo(n.luanPagou) &&
   ehInteiroOuNulo(n.luanDiferenca) &&
   ehCentavosOuNulo(n.minutosAcerto) &&
-  ehTexto(n.obs)
+  ehTexto(n.obs) &&
+  (n.promoDesconto === undefined || ehCentavosOuNulo(n.promoDesconto))
 
 const comandaValida = (c: unknown): c is Comanda =>
   ehObj(c) &&
@@ -75,6 +78,8 @@ const comandaValida = (c: unknown): c is Comanda =>
   ) &&
   (c.papelConferido === undefined || typeof c.papelConferido === 'boolean') &&
   (c.pixConfirmado === undefined || typeof c.pixConfirmado === 'boolean') &&
+  (c.fotoPath === undefined || c.fotoPath === null || ehTexto(c.fotoPath)) &&
+  (c.areaOrigem === undefined || c.areaOrigem === null || ORIGENS.includes(c.areaOrigem as never)) &&
   ehTexto(c.criadaEm) &&
   ehTexto(c.atualizadaEm) &&
   (c.finalizadaEm === undefined || c.finalizadaEm === null || ehTexto(c.finalizadaEm)) // ausente em backup antigo
