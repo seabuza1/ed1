@@ -39,7 +39,7 @@ Toda alteração grava primeiro no IndexedDB do celular e entra numa fila, que s
 
 `docs/SPEC-leitura.md`. O motoboy toca em **Foto da comanda**; a Edge Function `ler-comanda` lê a foto com a IA e a tela de confirmação mostra a conta pelo cardápio (verde, amarelo ou vermelho). Sem internet, a foto fica no celular e é lida quando a internet volta, só como conferência.
 
-1. SQL: `supabase/004_leitura.sql` e `005_leitura_ajustes.sql` (depois do 003).
+1. SQL: `supabase/004_leitura.sql`, `005_leitura_ajustes.sql` e `006_pix_da_equipe.sql` (depois do 003; o 006 trava o Pix "caiu" para só a equipe marcar).
 2. Chave da Anthropic: no Supabase, **Edge Functions → Secrets**, crie `ANTHROPIC_API_KEY` (e, se quiser outro modelo, `ANTHROPIC_MODEL`; o padrão é `claude-sonnet-5-5`). A chave fica só lá: nunca no app, no `.env` ou no repositório.
 3. Função: o workflow `.github/workflows/funcao-ler-comanda.yml` publica `ler-comanda` com a foto de exemplo. Crie um token em supabase.com → Account → Access Tokens e cadastre no GitHub como secret `SUPABASE_ACCESS_TOKEN`; depois, Actions → Função ler-comanda → Run workflow. (Pela CLI: `npx supabase functions deploy ler-comanda --project-ref ueahsvfmbpthujnvmahl`.)
 4. Medir: no painel, **Resumo da noite → Leituras por foto** exporta o CSV.

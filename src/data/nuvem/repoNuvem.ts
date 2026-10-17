@@ -83,6 +83,8 @@ type Banco = Dexie & {
 
 export interface RepoNuvem extends Repo {
   sincronizar(): Promise<void>
+  /** Lê as fotos pendentes (R28). A sincronização já chama sem esperar; os testes esperam. */
+  lerFotos(): Promise<void>
   /** Liga a sincronização automática (internet voltou, app aberto, a cada minuto) e o realtime. */
   iniciar(): void
   parar(): void
@@ -142,10 +144,11 @@ export function criarRepoNuvem(opcoes: {
     })
 
   let timerEnvio: ReturnType<typeof setTimeout> | undefined
+  let parado = false // depois de sair, a leitura que terminar não agenda envio
   function mudou() {
     ouvintes.forEach((o) => o())
     contarPendentes()
-    if (automatico) {
+    if (automatico && !parado) {
       clearTimeout(timerEnvio)
       timerEnvio = setTimeout(() => sincronizar(), 300)
     }
@@ -153,8 +156,12 @@ export function criarRepoNuvem(opcoes: {
 
   // ---------- Fila ----------
 
+  /** Itens pendentes de um registro. A leitura usa o id da comanda: a tabela entra na chave. */
+  const pendentesDe = async (tabela: Tabela, id: string) =>
+    (await db.fila.where('id').equals(id).toArray()).filter((p) => p.tabela === tabela)
+
   async function enfileirar(tabela: Tabela, id: string, op: ItemFila['op'], campos?: Gravavel) {
-    const pendentes = await db.fila.where('id').equals(id).toArray()
+    const pendentes = await pendentesDe(tabela, id)
     const inserir = pendentes.find((p) => p.op === 'inserir')
     if (op === 'excluir') {
       // O que estava pendente não importa mais. Exclui mesmo se o inserir não subiu:
@@ -196,7 +203,8 @@ export function criarRepoNuvem(opcoes: {
         if (item.op === 'inserir') {
           const registro = await local[item.tabela].get(item.id)
           // Leitura de comanda que foi excluída (Desfazer sem lançar de novo): não sobe.
-          const orfa = item.tabela === 'leituras' && !(await db.comandas.get((registro as RegistroLeitura).comandaId ?? ''))
+          const orfa =
+            item.tabela === 'leituras' && !!registro && !(await db.comandas.get((registro as RegistroLeitura).comandaId ?? ''))
           if (registro && !orfa) await remoto.inserir(item.tabela, paraGravar(item.tabela, registro, uid))
         } else if (item.op === 'atualizar') await remoto.atualizar(item.tabela, item.id, item.campos ?? {})
         else await remoto.excluir(item.tabela, item.id)
@@ -220,7 +228,7 @@ export function criarRepoNuvem(opcoes: {
 
   /** Grava a linha da nuvem, respeitando o que ainda está na fila deste aparelho. */
   async function aplicar(tabela: Tabela, linha: CaixaLinha | ComandaLinha | AreaLinha) {
-    const pendentes = await db.fila.where('id').equals(linha.id).toArray()
+    const pendentes = await pendentesDe(tabela, linha.id)
     if (pendentes.some((p) => p.op !== 'atualizar')) return
     const comLocal = comPendentes(linha, pendentes[0]?.campos)
     if (tabela === 'caixas') await db.noites.put(linhaParaNoite(comLocal as CaixaLinha))
@@ -229,7 +237,7 @@ export function criarRepoNuvem(opcoes: {
   }
 
   async function removerLocal(tabela: 'caixas' | 'comandas', id: string) {
-    const pendentes = await db.fila.where('id').equals(id).toArray()
+    const pendentes = await pendentesDe(tabela, id)
     if (pendentes.some((p) => p.op === 'inserir')) return
     await db.fila.bulkDelete(pendentes.map((p) => p.seq!))
     if (tabela === 'comandas') return db.comandas.delete(id)
@@ -246,7 +254,8 @@ export function criarRepoNuvem(opcoes: {
     for (const f of await db.fotos.where('envio').equals('pendente').toArray()) {
       const c = await db.comandas.get(f.id)
       if (!c) continue // excluída; o Desfazer ainda pode trazer de volta
-      const naFila = await db.fila.where('id').anyOf(f.id, c.noiteId).toArray()
+      // A comanda e o caixa precisam estar na nuvem (a regra do Storage confere o dono pelo caixa).
+      const naFila = [...(await pendentesDe('comandas', f.id)), ...(await pendentesDe('caixas', c.noiteId))]
       if (naFila.some((p) => p.op === 'inserir')) continue
       try {
         await remoto.enviarFoto(f.caminho, f.jpeg)
@@ -268,7 +277,7 @@ export function criarRepoNuvem(opcoes: {
       try {
         resposta = await remoto.lerComanda(await paraBase64(f.jpeg))
       } catch (e) {
-        if (!(e instanceof ErroRemoto && e.permanente)) throw e
+        if (!(e instanceof ErroRemoto && e.permanente)) return // internet ou IA fora: tenta depois
         const tentativas = f.tentativas + 1
         await db.fotos.update(f.id, { tentativas, leitura: tentativas >= MAX_TENTATIVAS ? 'falhou' : 'pendente' })
         continue
@@ -292,8 +301,19 @@ export function criarRepoNuvem(opcoes: {
         await enfileirar('leituras', registro.id, 'inserir')
         await db.fotos.update(f.id, { leitura: 'feita' })
       })
-      ouvintes.forEach((o) => o())
+      mudou() // a leitura sobe no próximo envio
     }
+  }
+
+  let lendo: Promise<void> | null = null
+  /** Lê as fotos pendentes fora da sincronização: a IA leva até 20 s por foto e a fila não espera. */
+  function lerFotos(): Promise<void> {
+    lendo ??= lerPendentes()
+      .catch(() => {}) // leitura é só medição; tenta de novo na próxima sincronização
+      .finally(() => {
+        lendo = null
+      })
+    return lendo
   }
 
   /** Apaga do aparelho as fotos já resolvidas há 2 dias e as de comanda excluída há 1 dia. */
@@ -378,8 +398,7 @@ export function criarRepoNuvem(opcoes: {
       await baixar()
       ouvintes.forEach((o) => o())
       await enviarFotos()
-      await lerPendentes()
-      if (await enviar()) recarregarTudo = true // as leituras feitas agora
+      void lerFotos()
       await limparFotos()
     } catch (e) {
       if (!(e instanceof ErroRemoto) && !(e instanceof TypeError)) throw e
@@ -409,6 +428,7 @@ export function criarRepoNuvem(opcoes: {
   let desligar: (() => void)[] = []
 
   function iniciar() {
+    parado = false
     const sinc = () => void sincronizar().catch(() => {})
     desligar = [remoto.ouvir((e) => void aoEvento(e).catch(() => {}))]
     if (automatico) {
@@ -537,8 +557,10 @@ export function criarRepoNuvem(opcoes: {
     },
 
     sincronizar,
+    lerFotos,
     iniciar,
     parar() {
+      parado = true
       desligar.forEach((d) => d())
       desligar = []
       clearTimeout(timerEnvio)

@@ -26,9 +26,10 @@ function mudouDepois(m: LeituraMedida): 'sim' | 'não' | 'apagada' {
   return igual ? 'não' : 'sim'
 }
 
-/** Verde que precisou de correção (ou mudou depois): a meta é zero. */
+/** Verde que precisou de correção (ou mudou depois): a meta é zero. Apagar a comanda (voltou,
+ * lançada por engano) não diz que a leitura errou. */
 export const verdeErrada = (m: LeituraMedida) =>
-  m.registro.resultado.estado === 'verde' && (m.registro.corrigido || mudouDepois(m) !== 'não')
+  m.registro.resultado.estado === 'verde' && (m.registro.corrigido || mudouDepois(m) === 'sim')
 
 const COLUNAS = [
   'noite',

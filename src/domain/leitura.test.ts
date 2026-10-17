@@ -504,6 +504,9 @@ describe('leitura: lançar', () => {
     expect(avisoLeitura(reg, { ...c, pagamentos: [{ forma: 'dinheiro', valor: R(113) }] }, AREAS, null)).toEqual([
       'Forma lida: Cartão.',
     ])
+    // Sem forma escrita na comanda, não há o que comparar.
+    const semForma = { ...reg, leitura: { ...reg.leitura, pagamento: [] } }
+    expect(avisoLeitura(semForma, c, AREAS, null)).toEqual([])
   })
 })
 

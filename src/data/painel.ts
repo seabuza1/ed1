@@ -20,7 +20,7 @@ import {
   type LeituraLinha,
   type PerfilLinha,
 } from './nuvem/linhas'
-import { ErroRemoto, MOTIVOS, todas, verificar } from './nuvem/remoto'
+import { ErroRemoto, MOTIVOS, todas, urlFotoAssinada, verificar } from './nuvem/remoto'
 
 export interface DadosPainel {
   caixas: CaixaDoMotoboy[]
@@ -103,12 +103,7 @@ export const acoesPainel = (sb: SupabaseClient) => ({
     verificar(await sb.from('areas').upsert(areaParaGravar(area)))
   },
 
-  /** Link temporário da foto da comanda (bucket privado; vale 5 min). */
-  async urlDaFoto(caminho: string) {
-    const { data, error } = await sb.storage.from('comandas').createSignedUrl(caminho, 300)
-    if (error || !data) throw new ErroRemoto('A foto ainda não chegou do celular do motoboy.', false)
-    return data.signedUrl
-  },
+  urlDaFoto: (caminho: string) => urlFotoAssinada(sb, caminho, 'A foto ainda não chegou do celular do motoboy.'),
 
   /** Só o admin (regra de acesso perfis_admin). */
   mudarPerfil: (p: Perfil) => atualizar(sb, 'perfis', 'id', p.id, { papel: p.papel, ativo: p.ativo }),

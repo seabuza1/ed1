@@ -1,4 +1,5 @@
 // Foto da comanda no aparelho: reduz para 1600 px em JPEG 0,8 e mede a nitidez antes de enviar.
+import { paraBase64 } from '../data/nuvem/base64'
 import { emCinza, LADO_MAXIMO, LADO_NITIDEZ, nitidez, reduzir } from '../domain/foto'
 
 export interface FotoPronta {
@@ -17,15 +18,6 @@ function desenhar(origem: ImageBitmap, maximo: number) {
   if (!ctx) throw new Error('Este aparelho não conseguiu abrir a foto.')
   ctx.drawImage(origem, 0, 0, largura, altura)
   return { canvas, ctx, largura, altura }
-}
-
-export function paraBase64(blob: Blob): Promise<string> {
-  return new Promise((ok, erro) => {
-    const leitor = new FileReader()
-    leitor.onload = () => ok(String(leitor.result).split(',')[1] ?? '')
-    leitor.onerror = () => erro(leitor.error)
-    leitor.readAsDataURL(blob)
-  })
 }
 
 export async function prepararFoto(arquivo: Blob): Promise<FotoPronta> {

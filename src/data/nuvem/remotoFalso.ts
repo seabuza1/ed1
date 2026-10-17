@@ -21,8 +21,8 @@ export function criarRemotoFalso() {
   const estado = {
     offline: false,
     chamadas: 0,
-    /** O que a IA devolve no próximo lerComanda. */
-    ia: { erro: 'sem resposta configurada' } as RespostaLeitura | { erro: string },
+    /** O que a IA devolve no próximo lerComanda. Com `fora`, a falha é passageira (tenta de novo). */
+    ia: { erro: 'sem resposta configurada' } as RespostaLeitura | { erro: string; fora?: boolean },
     leiturasIA: 0,
   }
 
@@ -122,7 +122,7 @@ export function criarRemotoFalso() {
       rede()
       estado.leiturasIA++
       const r = estado.ia
-      if ('erro' in r) throw recusa(r.erro)
+      if ('erro' in r) throw new ErroRemoto(r.erro, !r.fora)
       return copia(r)
     },
   }

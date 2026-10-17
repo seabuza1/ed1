@@ -35,11 +35,11 @@ function medida(extra: { corrigido?: boolean; forcado?: boolean; mudar?: Partial
 }
 
 describe('medição da leitura', () => {
-  it('verde errada: verde que foi corrigida, mudou depois ou foi apagada', () => {
+  it('verde errada: verde que foi corrigida ou mudou depois; apagada não conta', () => {
     expect(verdeErrada(medida())).toBe(false)
     expect(verdeErrada(medida({ corrigido: true }))).toBe(true)
     expect(verdeErrada(medida({ mudar: { total: 11800 } }))).toBe(true)
-    expect(verdeErrada(medida({ apagada: true }))).toBe(true)
+    expect(verdeErrada(medida({ apagada: true }))).toBe(false)
   })
 
   it('uma linha por leitura, com o lido e o lançado lado a lado', () => {

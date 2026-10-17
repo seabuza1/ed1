@@ -631,7 +631,7 @@ export function avisoLeitura(reg: RegistroLeitura, c: Comanda, areas: Area[], pr
     avisos.push(`A conta pelo cardápio dá ${formatarReais(r.esperado)}.`)
   const lidas = reg.leitura.pagamento.map((p) => p.forma ?? formasDoTexto(p.forma_escrita)[0] ?? null)
   const conjunto = (fs: FormaEscrita[]) => [...new Set(fs)].sort().join('+')
-  if (lidas.every((f) => f !== null) && conjunto(lidas as FormaEscrita[]) !== conjunto(c.pagamentos.map((p) => formaGeral(p.forma))))
+  if (lidas.length > 0 && lidas.every((f) => f !== null) && conjunto(lidas as FormaEscrita[]) !== conjunto(c.pagamentos.map((p) => formaGeral(p.forma))))
     avisos.push(`Forma lida: ${reg.leitura.pagamento.map((p) => p.forma_escrita).join(' + ')}.`)
   return avisos
 }

@@ -68,6 +68,13 @@ export function verificar<T>(r: Resposta<T>): T {
 
 const BUCKET = 'comandas'
 
+/** Link temporário (5 min) da foto da comanda: o bucket é privado. */
+export async function urlFotoAssinada(sb: SupabaseClient, caminho: string, semFoto: string): Promise<string> {
+  const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(caminho, 300)
+  if (error || !data) throw new ErroRemoto(semFoto, false)
+  return data.signedUrl
+}
+
 const PAGINA = 1000 // limite de linhas por pedido do Supabase
 
 export async function todas<T>(pagina: (de: number, ate: number) => PromiseLike<Resposta<T[]>>): Promise<T[]> {
@@ -150,16 +157,13 @@ export function criarRemotoSupabase(sb: SupabaseClient): Remoto {
     async enviarFoto(caminho, jpeg) {
       const { error } = await sb.storage.from(BUCKET).upload(caminho, jpeg, { contentType: 'image/jpeg', upsert: false })
       if (!error) return
+      // O código do corpo (statusCode) vale sobre o HTTP: o Storage pode responder 400 com "409" no corpo.
       const { status, statusCode } = error as { status?: number; statusCode?: string }
-      const codigo = Number(status ?? statusCode ?? 0)
+      const codigo = [statusCode, status].map(Number).find((n) => n > 0) ?? 0
       if (codigo === 409 || /exists/i.test(error.message)) return
       throw new ErroRemoto(error.message, !transitorio(codigo))
     },
-    async urlFoto(caminho) {
-      const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(caminho, 300)
-      if (error || !data) throw new ErroRemoto('A foto ainda não chegou na nuvem.', false)
-      return data.signedUrl
-    },
+    urlFoto: (caminho) => urlFotoAssinada(sb, caminho, 'A foto ainda não chegou na nuvem.'),
     async lerComanda(imagem, sinal) {
       const { data, error } = await sb.functions.invoke<RespostaLeitura | { erro: string }>('ler-comanda', {
         body: { imagem },

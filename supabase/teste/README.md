@@ -9,8 +9,8 @@ sh supabase/teste/rodar.sh
 ```
 
 Cria o banco `acerto_teste` com `stub-supabase.sql` (o mínimo do Supabase: `auth.users`,
-`auth.uid()`, papéis `anon` e `authenticated`), roda `001_schema.sql` a `005_leitura_ajustes.sql`,
-`rls.sql` e `rls-leitura.sql`. Termina com `RLS ok` e `RLS leitura ok`, ou para no primeiro erro. Confere, com duas contas de
+`auth.uid()`, papéis `anon` e `authenticated`), roda `001_schema.sql` a `006_pix_da_equipe.sql`,
+`rls.sql`, `rls-leitura.sql` e `rls-pix.sql`. Termina com `RLS ok`, `RLS leitura ok` e `RLS Pix ok`, ou para no primeiro erro. Confere, com duas contas de
 motoboy, a do Luan e a do admin:
 
 - um motoboy não vê nem altera o caixa do outro;
@@ -19,7 +19,8 @@ motoboy, a do Luan e a do admin:
 - pagamentos que não somam o total são recusados;
 - ordem de chegada e área sugerida (`area_do_codigo`);
 - leitura por foto: leituras e fotos só do dono do caixa ou da equipe, nada depois do acerto, caminho da foto
-  `{caixa}/{comanda}.jpg` e só o admin apaga foto.
+  `{caixa}/{comanda}.jpg` e só o admin apaga foto;
+- só a equipe marca ou desmarca o Pix "caiu".
 
 ## App contra o banco (supabase-js + PostgREST)
 

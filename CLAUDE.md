@@ -12,6 +12,7 @@ Sistema para a pizzaria onde trabalho como motoboy, construído aos poucos. O MV
 - `supabase/003_v1_avisos.sql`: correções dos avisos do Supabase (search_path, EXECUTE das funções, políticas mais leves). Rodar depois do 002.
 - `supabase/004_leitura.sql`: leitura por foto (promoção da noite, foto e origem da área na comanda, tabela `leituras`, bucket `comandas`). Rodar depois do 003.
 - `supabase/005_leitura_ajustes.sql`: ajustes do 004 (caminho da foto, leitura obrigatória). Rodar depois do 004.
+- `supabase/006_pix_da_equipe.sql`: só a equipe marca o Pix "caiu". Rodar depois do 005.
 - `supabase/teste/`: teste das regras de acesso num Postgres local.
 - `supabase/functions/_shared/cardapio-mel.json`: cardápio, regras e glossário. Fonte única para a Edge Function e para o front.
 - `supabase/functions/_shared/prompt.ts` e `ler-comanda/`: prompt e Edge Function da leitura. Depois de mudar um exemplo, `npm run exemplos`.

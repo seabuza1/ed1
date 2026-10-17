@@ -17,9 +17,14 @@ export function Raiz() {
   const [caminho, setCaminho] = useState(location.pathname)
   // Medida uma vez: redimensionar a janela não troca de tela no meio do uso.
   const [larga] = useState(telaLarga)
+  // O modo salvo vale só ao abrir o app; depois, Voltar e Avançar seguem o endereço.
+  const [inicial, setInicial] = useState(true)
 
   useEffect(() => {
-    const aoVoltar = () => setCaminho(location.pathname)
+    const aoVoltar = () => {
+      setInicial(false)
+      setCaminho(location.pathname)
+    }
     window.addEventListener('popstate', aoVoltar)
     return () => window.removeEventListener('popstate', aoVoltar)
   }, [])
@@ -30,11 +35,12 @@ export function Raiz() {
   const u = sessao.usuario
   if (!ehEquipe(u)) return <App key={u.id} />
 
-  const modo = escolherModo({ caminho, papel: u.papel, telaLarga: larga, salvo: lerModo() })
+  const modo = escolherModo({ caminho, papel: u.papel, telaLarga: larga, salvo: inicial ? lerModo() : 'app' })
   const ir = (destino: Modo) => {
     const novo = destino === 'painel' ? '/painel' : '/'
     salvarModo(destino)
     if (location.pathname !== novo) history.pushState(null, '', novo)
+    setInicial(false)
     setCaminho(novo)
     window.scrollTo(0, 0)
   }

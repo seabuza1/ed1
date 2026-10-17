@@ -50,6 +50,7 @@ interface FotoNoManual {
   resposta?: RespostaLeitura
 }
 
+const DEPOIS = 'Lance à mão: a foto fica guardada e é lida depois.'
 const SEM_INTERNET = 'Sem internet: lance à mão. A foto fica guardada e é lida quando a internet voltar.'
 
 /** Lançar comanda: tocar na forma de pagamento já lança; "Lançar" só no pagamento dividido. */
@@ -68,9 +69,16 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
   const [fotoManual, setFotoManual] = useState<FotoNoManual | null>(null)
   const [avisoFoto, setAvisoFoto] = useState<string | null>(null)
   const pedido = useRef<AbortController | null>(null)
-  // Endereços blob: das fotos desta tela, revogados ao sair.
-  const urls = useRef<string[]>([])
-  useEffect(() => () => urls.current.forEach((u) => URL.revokeObjectURL(u)), [])
+  // Endereço blob: da última foto; o da anterior é revogado na foto seguinte e ao sair.
+  const urlFoto = useRef<string | null>(null)
+  const trocarUrl = (blob: Blob | null) => {
+    if (urlFoto.current) URL.revokeObjectURL(urlFoto.current)
+    urlFoto.current = blob && URL.createObjectURL(blob)
+    return urlFoto.current
+  }
+  useEffect(() => () => void trocarUrl(null), [])
+  // O Desfazer traz a foto de volta: endereço novo, o antigo pode já ter sido revogado.
+  const comUrlNova = (foto: FotoDaComanda) => ({ ...foto, url: trocarUrl(foto.blob)! })
 
   async function tirarFoto(arquivo: File) {
     if (!fotos) return
@@ -83,8 +91,7 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
     } catch (e) {
       return setErro(textoDoErro(e))
     }
-    const url = URL.createObjectURL(pronta.blob)
-    urls.current.push(url)
+    const url = trocarUrl(pronta.blob)!
     const foto: FotoDaComanda = { id: novoId(), blob: pronta.blob, base64: pronta.base64, url, inicio: Date.now() }
     if (pronta.nitidez < NITIDEZ_MINIMA) return setLeitura({ fase: 'tremida', foto })
     if (!navigator.onLine) return paraManual({ foto, pendente: true }, SEM_INTERNET)
@@ -96,8 +103,10 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
       if (!ctrl.signal.aborted) setLeitura({ fase: 'confirmar', foto, resposta, correcoes: {} })
     } catch (e) {
       if (ctrl.signal.aborted) return
+      // A IA não leu: segue à mão. Internet ou função fora: a foto fica para ler depois (R28).
       const naIA = e instanceof ErroRemoto && e.permanente
-      paraManual({ foto, pendente: !naIA }, naIA ? textoDoErro(e) : SEM_INTERNET)
+      const msg = naIA ? textoDoErro(e) : navigator.onLine ? `${textoDoErro(e)} ${DEPOIS}` : SEM_INTERNET
+      paraManual({ foto, pendente: !naIA }, msg)
     }
   }
 
@@ -125,7 +134,7 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
       await fotos.lancar(comanda, foto.blob, { registro })
       aviso(`${comanda.codigo} lançada`, async () => {
         await repo.excluirComanda(comanda.id)
-        setLeitura({ fase: 'confirmar', foto, resposta, correcoes })
+        setLeitura({ fase: 'confirmar', foto: comUrlNova(foto), resposta, correcoes })
       })
     } catch (e) {
       setLeitura({ fase: 'confirmar', foto, resposta, correcoes })
@@ -204,7 +213,7 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
       aviso(`${r.valor.codigo} lançada`, async () => {
         await repo.excluirComanda(r.valor.id)
         setF(anterior)
-        setFotoManual(fm)
+        setFotoManual(fm && { ...fm, foto: comUrlNova(fm.foto) })
         setAberto(true)
       })
     } catch (e) {
