@@ -1,0 +1,44 @@
+{
+  "escritor": null,
+  "observacao": "Comanda real de 16/10/2026. Foto ruim de propósito (dobrada, torta, reflexo de alumínio, luz laranja): serve de exemplo do pior caso. Lida e conferida: G Filé Mignon (premium 93) / Calabresa + Refrigerante 2L 15 + Aragarças 5 = 113.",
+  "leitura": {
+    "telefone_final": "3557",
+    "promocao": true,
+    "local_escrito": "hospital da Arag.",
+    "itens": [
+      {
+        "lido": "G Filé-calabresa",
+        "tipo": "pizza",
+        "quantidade": 1,
+        "tamanho": "G",
+        "sabores": ["Filé Mignon", "Calabresa"],
+        "item": null,
+        "casou_pelo_cardapio": true,
+        "opcoes": []
+      },
+      {
+        "lido": "& coca Zero 2lts",
+        "tipo": "bebida",
+        "quantidade": 1,
+        "tamanho": null,
+        "sabores": [],
+        "item": "Refrigerante 2L",
+        "casou_pelo_cardapio": true,
+        "opcoes": []
+      }
+    ],
+    "pagamento": [
+      { "forma_escrita": "Cartão", "forma": "cartao", "valor_escrito": null }
+    ],
+    "total_escrito": "113,00",
+    "transcricao": ["G", "Filé-calabresa", "& coca Zero 2lts", "Cartão", "hospital da Arag.", "113,00"],
+    "ilegiveis": []
+  },
+  "conferencia": {
+    "telefone_digitos": ["3", "5", "5", "7"],
+    "total_digitos": ["1", "1", "3", ",", "0", "0"],
+    "forma_escrita": "Cartão",
+    "local_escrito": "hospital da Arag.",
+    "promocao": true
+  }
+}

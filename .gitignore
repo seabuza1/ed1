@@ -1,0 +1,25 @@
+# Dependências e build
+node_modules
+dist
+dist-ssr
+dev-dist
+*.local
+
+# Logs
+*.log
+
+# Backups do app (exportados em JSON): nunca no repositório
+backups/
+acerto-backup-*.json
+
+# Editor e sistema
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.sw?
+
+# Segredos (Supabase): nunca no repositório
+.env
+.env.*
+!.env.example
