@@ -285,7 +285,8 @@ label.botao:focus-within {
   outline-offset: 2px;
 }
 
-button.primario {
+button.primario,
+label.botao.botao-foto {
   width: 100%;
   min-height: 56px;
   background: var(--marca);
@@ -1132,13 +1133,7 @@ h2.subtitulo {
 /* ---------- Leitura da comanda por foto ---------- */
 
 label.botao.botao-foto {
-  width: 100%;
   min-height: 60px;
-  background: var(--marca);
-  color: var(--sobre-marca);
-  font-size: 1.05rem;
-  font-weight: 700;
-  cursor: pointer;
 }
 
 button.foto-leitura,
@@ -1431,19 +1426,6 @@ button.item-papel .codigo {
 
 .entrar {
   padding-top: calc(32px + env(safe-area-inset-top));
-}
-
-a.botao {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 48px;
-  border-radius: 12px;
-  background: var(--tonal);
-  color: var(--texto);
-  font-weight: 600;
-  text-decoration: none;
 }
 
 /* ---------- Painel do Luan ---------- */
@@ -1820,7 +1802,7 @@ button.item-pix[aria-pressed='true'] {
     display: none;
   }
 
-  .app.painel.painel-conteudo {
+  .app.painel {
     max-width: none;
     margin: 0;
     padding: 28px 32px 48px;

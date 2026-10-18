@@ -234,9 +234,10 @@ export function ConfirmarLeitura(props: {
   const codigoTexto = cor.codigo ?? r.codigo ?? ''
   const totalTexto = cor.total ?? r.totalTexto ?? ''
   const umaParte = r.pagamentos.length === 1 && !editarPagamento
+  const divergenciaPagamento = r.divergencias.find((d) => d.campo === 'pagamento')
 
   return (
-    <section className="pilha form-lancar confirmar-leitura" aria-label="Confirmar leitura">
+    <section className="pilha form-lancar" aria-label="Confirmar leitura">
       <div className="titulo-form">
         <h2>Comanda lida</h2>
         <button type="button" className="link" onClick={() => props.onDigitar(codigoTexto, totalTexto)}>
@@ -371,10 +372,9 @@ export function ConfirmarLeitura(props: {
       </dl>
 
       <div className={`pilha-curta ${campo(r, 'pagamento') ?? ''}`}>
-        {r.divergencias.some((d) => d.campo === 'pagamento') && (
+        {divergenciaPagamento && (
           <p className="aviso">
-            Pagamento: {r.divergencias.find((d) => d.campo === 'pagamento')!.completa} ×{' '}
-            {r.divergencias.find((d) => d.campo === 'pagamento')!.conferencia}. Toque na forma certa.
+            Pagamento: {divergenciaPagamento.completa} × {divergenciaPagamento.conferencia}. Toque na forma certa.
           </p>
         )}
         {umaParte ? (

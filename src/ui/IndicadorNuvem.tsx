@@ -3,7 +3,7 @@ import type { EstadoSync, FonteSync } from '../data/repo'
 import { repo } from '../data/repo'
 import { Icone } from './Icone'
 
-const PARADO: EstadoSync = { pendentes: 0, fotos: 0, enviando: false, online: true, recusa: null }
+const PARADO: EstadoSync = { pendentes: 0, enviando: false, online: true, recusa: null }
 const nada = () => () => {}
 
 function useEstadoSync(fonte: FonteSync | undefined): EstadoSync {

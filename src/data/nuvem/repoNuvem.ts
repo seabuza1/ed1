@@ -130,18 +130,13 @@ export function criarRepoNuvem(opcoes: {
 
   const ouvintes = new Set<() => void>()
   const ouvintesEstado = new Set<() => void>()
-  let estado: EstadoSync = { pendentes: 0, fotos: 0, enviando: false, online: online(), recusa: null }
+  let estado: EstadoSync = { pendentes: 0, enviando: false, online: online(), recusa: null }
 
   function mudarEstado(parcial: Partial<EstadoSync>) {
     estado = { ...estado, ...parcial }
     ouvintesEstado.forEach((o) => o())
   }
-  const contarPendentes = async () =>
-    mudarEstado({
-      pendentes: await db.fila.count(),
-      fotos: await db.fotos.where('envio').equals('pendente').count(),
-      online: online(),
-    })
+  const contarPendentes = async () => mudarEstado({ pendentes: await db.fila.count(), online: online() })
 
   let timerEnvio: ReturnType<typeof setTimeout> | undefined
   let parado = false // depois de sair, a leitura que terminar não agenda envio
@@ -264,7 +259,6 @@ export function criarRepoNuvem(opcoes: {
         if (!(e instanceof ErroRemoto && e.permanente)) throw e
         await db.fotos.update(f.id, { envio: 'recusada' })
       }
-      await contarPendentes()
     }
   }
 

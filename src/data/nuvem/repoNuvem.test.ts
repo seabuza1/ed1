@@ -302,13 +302,14 @@ describe('fotos das comandas (leitura)', () => {
     const noite = await abrir(repo)
     const c = await comFoto(repo, noite, false)
     await repo.sincronizar()
-    expect(repo.sync!.obter()).toMatchObject({ pendentes: 2, fotos: 1 })
+    expect(repo.sync!.obter()).toMatchObject({ pendentes: 2 })
+    expect(nuvem.fotos.has(c.fotoPath)).toBe(false)
 
     modoAviao(false)
     await repo.sincronizar()
     expect(nuvem.comandas.get(c.id)).toMatchObject({ foto_path: c.fotoPath, area_origem: 'escrito' })
     expect(nuvem.fotos.has(c.fotoPath)).toBe(true)
-    expect(repo.sync!.obter()).toMatchObject({ pendentes: 0, fotos: 0 })
+    expect(repo.sync!.obter()).toMatchObject({ pendentes: 0 })
     // A foto continua no aparelho por um tempo: vê sem precisar da nuvem.
     expect(await repo.fotos!.url(c)).toMatch(/^blob:/)
   })

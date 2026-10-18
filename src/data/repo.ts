@@ -6,7 +6,6 @@ import { criarRepoLocal } from './repoLocal'
 /** Situação da sincronização com a nuvem, para o indicador discreto. */
 export interface EstadoSync {
   pendentes: number // alterações esperando internet
-  fotos: number // fotos de comanda esperando internet
   enviando: boolean
   online: boolean
   /** Última alteração recusada pela nuvem (ex.: acerto já confirmado). */

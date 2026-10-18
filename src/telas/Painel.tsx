@@ -51,7 +51,7 @@ export function Painel({ sb, usuario, abrirApp }: { sb: SupabaseClient; usuario:
   const { dados, erro, recarregar } = usePainel(sb, data)
   const acoes = useMemo(() => acoesPainel(sb), [sb])
   const colunas = useMemo(() => (dados ? montarFolha(dados.caixas, dados.comandas, dados.acertos) : []), [dados])
-  const aberta = vista === 'folha' ? colunas.find((c) => c.caixa.noite.id === caixaId) : undefined
+  const aberta = colunas.find((c) => c.caixa.noite.id === caixaId)
   const aviso = useAviso()
 
   const irPara = (v: Vista) => {
@@ -123,7 +123,7 @@ export function Painel({ sb, usuario, abrirApp }: { sb: SupabaseClient; usuario:
         </div>
       </nav>
 
-      <main className="app painel painel-conteudo pilha">
+      <main className="app painel pilha">
         <header className="topo topo-painel">
           <div>
             <h1>{titulo}</h1>
@@ -147,7 +147,6 @@ export function Painel({ sb, usuario, abrirApp }: { sb: SupabaseClient; usuario:
             usuario={usuario}
             acoes={acoes}
             recarregar={recarregar}
-            abrirApp={abrirApp}
           />
         ) : aberta ? (
           <CaixaNoPainel
@@ -553,7 +552,6 @@ function AjustesDoPainel(props: {
   usuario: Usuario
   acoes: Acoes
   recarregar: () => void
-  abrirApp?: () => void
 }) {
   const { acoes, recarregar } = props
   return (

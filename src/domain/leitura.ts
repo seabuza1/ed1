@@ -53,6 +53,9 @@ export interface LeituraConferencia {
 export const valorLido = (texto: string | null | undefined): number | null =>
   texto === null || texto === undefined ? null : lerReais(texto)
 
+/** O pagamento como está escrito na comanda ("Cartão + Dinheiro"). */
+export const pagamentoEscrito = (l: LeituraCompleta) => l.pagamento.map((p) => p.forma_escrita).join(' + ')
+
 type FormaEscrita = 'dinheiro' | 'cartao' | 'pix'
 
 /** Formas citadas num texto ("Cartão", "pix e dinheiro"). */
@@ -64,6 +67,9 @@ function formasDoTexto(texto: string | null): FormaEscrita[] {
   if (/ din/.test(t)) formas.push('dinheiro')
   return formas
 }
+
+/** Formas sem repetir e em ordem, para comparar ("cartao+pix"). */
+const conjunto = (fs: FormaEscrita[]) => [...new Set(fs)].sort().join('+')
 
 // ---------- Itens (R20, R21) ----------
 
@@ -314,15 +320,15 @@ export function conferirLeitura(e: EntradaConferencia): ResultadoLeitura {
     const totalConf = cf.total_digitos.join('')
     if (cor.total === undefined && valorLido(l.total_escrito) !== valorLido(totalConf))
       divergencias.push({ campo: 'total', completa: l.total_escrito ?? '', conferencia: totalConf })
-    const formasL = formasDoTexto(l.pagamento.map((p) => p.forma_escrita).join(' ')).sort().join('+')
-    const formasC = formasDoTexto(cf.forma_escrita).sort().join('+')
+    const formasL = conjunto(formasDoTexto(l.pagamento.map((p) => p.forma_escrita).join(' ')))
+    const formasC = conjunto(formasDoTexto(cf.forma_escrita))
     // O toque do Pix numa parte não decide as outras: só some com todas as formas escolhidas.
     const pagamentoEscolhido =
       cor.pagamento !== undefined || (l.pagamento.length > 0 && l.pagamento.every((_, i) => cor.formas?.[i] != null))
     if (!pagamentoEscolhido && formasL !== formasC)
       divergencias.push({
         campo: 'pagamento',
-        completa: l.pagamento.map((p) => p.forma_escrita).join(' + '),
+        completa: pagamentoEscrito(l),
         conferencia: cf.forma_escrita ?? '',
       })
     const ativas = e.areas.filter((a) => a.ativa)
@@ -630,9 +636,8 @@ export function avisoLeitura(reg: RegistroLeitura, c: Comanda, areas: Area[], pr
   else if (r.esperado !== null && r.esperado !== c.total && r.promocaoSugerida === null)
     avisos.push(`A conta pelo cardápio dá ${formatarReais(r.esperado)}.`)
   const lidas = reg.leitura.pagamento.map((p) => p.forma ?? formasDoTexto(p.forma_escrita)[0] ?? null)
-  const conjunto = (fs: FormaEscrita[]) => [...new Set(fs)].sort().join('+')
-  if (lidas.length > 0 && lidas.every((f) => f !== null) && conjunto(lidas as FormaEscrita[]) !== conjunto(c.pagamentos.map((p) => formaGeral(p.forma))))
-    avisos.push(`Forma lida: ${reg.leitura.pagamento.map((p) => p.forma_escrita).join(' + ')}.`)
+  if (lidas.length > 0 && lidas.every((f) => f !== null) && conjunto(lidas) !== conjunto(c.pagamentos.map((p) => formaGeral(p.forma))))
+    avisos.push(`Forma lida: ${pagamentoEscrito(reg.leitura)}.`)
   return avisos
 }
 

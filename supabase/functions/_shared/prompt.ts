@@ -147,6 +147,8 @@ export const ESQUEMA_CONFERENCIA = {
   },
 } as const
 
+const ESQUEMA = { completa: ESQUEMA_COMPLETA, conferencia: ESQUEMA_CONFERENCIA }
+
 const PEDIDO: Record<TipoLeitura, string> = {
   completa: 'Leia esta comanda e devolva a leitura completa.',
   conferencia:
@@ -185,7 +187,7 @@ export function montarPedido(tipo: TipoLeitura, e: { cardapio: CardapioPrompt; e
     // Esforço baixo: transcrever pede pouca deliberação e a chamada tem 20 s.
     output_config: {
       effort: 'low' as const,
-      format: { type: 'json_schema' as const, schema: tipo === 'completa' ? ESQUEMA_COMPLETA : ESQUEMA_CONFERENCIA },
+      format: { type: 'json_schema' as const, schema: ESQUEMA[tipo] },
     },
   }
 }
@@ -208,6 +210,6 @@ export function lerSaida(tipo: TipoLeitura, texto: string): Record<string, unkno
     return null
   }
   if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null
-  const campos = (tipo === 'completa' ? ESQUEMA_COMPLETA : ESQUEMA_CONFERENCIA).required
+  const campos = ESQUEMA[tipo].required
   return campos.every((k) => k in obj) ? (obj as Record<string, unknown>) : null
 }

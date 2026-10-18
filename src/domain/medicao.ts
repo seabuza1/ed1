@@ -2,7 +2,7 @@
 // CSV, uma linha por comanda lida, e o resumo que importa (quantas verdes estavam erradas).
 import { formatarHora } from './datas'
 import { formatarNumero } from './dinheiro'
-import type { RegistroLeitura } from './leitura'
+import { pagamentoEscrito, type RegistroLeitura } from './leitura'
 import { formaCurta } from './painel'
 import type { Area, Comanda } from './tipos'
 
@@ -89,7 +89,7 @@ export function linhasMedicao(leituras: LeituraMedida[], areas: Area[]): string[
         area(r.resultado.areaSugerida),
         r.resultado.origem ?? '',
         area(l?.areaId),
-        r.leitura.pagamento.map((p) => p.forma_escrita).join(' + '),
+        pagamentoEscrito(r.leitura),
         l ? formaCurta(l.pagamentos) : '',
         r.resultado.divergencias.join(' '),
         String(r.leitura.ilegiveis.length),

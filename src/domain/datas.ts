@@ -59,9 +59,7 @@ export function inicioDaSemana(data: string): string {
 
 /** Domingo da semana que começa na data. */
 export function fimDaSemana(inicio: string): string {
-  const d = deData(inicio)
-  d.setDate(d.getDate() + 6)
-  return iso(d)
+  return somarDias(inicio, 6)
 }
 
 /** Data mais n dias ("2026-10-31", 1 → "2026-11-01"); n negativo volta. */

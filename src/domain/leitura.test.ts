@@ -481,7 +481,8 @@ describe('leitura: lançar', () => {
 
   it('R28: a leitura que chega depois só avisa quando discorda do lançado', () => {
     const lida = comanda()
-    const reg = registroLeitura({ ...lida, modelo: 'm', ms: 1 }, conferir(lida), {
+    const r = conferir(lida)
+    const reg = registroLeitura({ ...lida, modelo: 'm', ms: 1 }, r, {
       id: 'l1',
       noiteId: 'n1',
       fotoPath: 'n1/c1.jpg',
@@ -493,7 +494,6 @@ describe('leitura: lançar', () => {
       posterior: true,
       agora: ctx.agora,
     })
-    const r = conferir(lida)
     const lancada = comandaDaLeitura(r, AREAS, 0, ctx)
     if (!lancada.ok) throw new Error(lancada.erro)
     const c = lancada.valor

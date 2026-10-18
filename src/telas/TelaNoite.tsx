@@ -40,7 +40,7 @@ export function TelaNoite(props: {
           comandas={props.comandas}
           areas={props.areas}
           somenteLeitura={travada}
-          promoDesconto={aberta.promoDesconto ?? null}
+          promoDesconto={aberta.promoDesconto}
         />
       </main>
     </>
