@@ -14,7 +14,8 @@ function medida(extra: { corrigido?: boolean; forcado?: boolean; mudar?: Partial
   const r = conferirLeitura({ ...lida, areas: AREAS, promoDesconto: null })
   const c = comandaDaLeitura(r, AREAS, 0, { id: 'c1', noiteId: 'n1', agora: '2026-10-16T21:00:00.000Z', fotoPath: 'n1/c1.jpg' })
   if (!c.ok) throw new Error(c.erro)
-  const registro = registroLeitura({ ...lida, modelo: 'm', ms: 1500 }, r, {
+  const tokens = { entrada: 1200, cache: 5000, saida: 900 }
+  const registro = registroLeitura({ ...lida, provedor: 'google', modelo: 'm', ms: 1500, tokens }, r, {
     id: 'c1',
     noiteId: 'n1',
     fotoPath: 'n1/c1.jpg',
@@ -52,6 +53,7 @@ describe('medição da leitura', () => {
     expect(celula('origem_area')).toBe('escrito')
     expect(celula('pagamento_lancado')).toBe('cartão')
     expect([celula('estado'), celula('verde_errada'), celula('segundos'), celula('ms_ia')]).toEqual(['verde', 'não', '9', '1500'])
+    expect([celula('provedor'), celula('modelo'), celula('tokens_entrada'), celula('tokens_cache'), celula('tokens_saida')]).toEqual(['google', 'm', '1200', '5000', '900'])
   })
 
   it('CSV com ";", aspas quando precisa e sem virar fórmula', () => {

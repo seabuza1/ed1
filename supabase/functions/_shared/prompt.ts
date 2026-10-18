@@ -1,8 +1,10 @@
-// Prompt da leitura da comanda (docs/SPEC-leitura.md, "Prompt" e "Saída da IA").
-// Usado pela Edge Function ler-comanda. Não depende de Deno nem do SDK, para os testes do app
-// rodarem aqui também. A IA só transcreve (R19): o cardápio vai sem preços e sem ingredientes.
+// Prompt da leitura da comanda (docs/SPEC-leitura.md, "Prompt"), igual para todo provedor.
+// Usado pela Edge Function ler-comanda e por scripts/comparar-modelos.ts. Não depende de Deno, para
+// os testes do app rodarem aqui também. A IA só transcreve (R19): o cardápio vai sem preços e sem
+// ingredientes.
+import { ESQUEMA, type TipoLeitura } from './schema.ts'
 
-export type TipoLeitura = 'completa' | 'conferencia'
+export type { TipoLeitura }
 
 /** O pedaço do cardapio-mel.json que o prompt usa. */
 export interface CardapioPrompt {
@@ -80,75 +82,6 @@ export function montarSistema(c: CardapioPrompt): string {
   ].join('\n')
 }
 
-// ---------- Saída (structured outputs: mesmo formato de supabase/functions/_shared/exemplos) ----------
-
-const nulo = (schema: object, description?: string) => ({
-  anyOf: [schema, { type: 'null' }],
-  ...(description ? { description } : {}),
-})
-const texto = { type: 'string' }
-const textos = { type: 'array', items: texto }
-
-export const ESQUEMA_COMPLETA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['telefone_final', 'promocao', 'local_escrito', 'itens', 'pagamento', 'total_escrito', 'transcricao', 'ilegiveis'],
-  properties: {
-    telefone_final: nulo(texto, '4 últimos dígitos do telefone, como escritos'),
-    promocao: { type: 'boolean', description: 'asterisco presente' },
-    local_escrito: nulo(texto, 'bairro, cidade ou referência, como escritos'),
-    itens: {
-      type: 'array',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['lido', 'tipo', 'quantidade', 'tamanho', 'sabores', 'item', 'casou_pelo_cardapio', 'opcoes'],
-        properties: {
-          lido: { type: 'string', description: 'o trecho como escrito' },
-          tipo: { type: 'string', enum: ['pizza', 'bebida', 'borda', 'adicional', 'combo', 'outro'] },
-          quantidade: { type: 'integer' },
-          tamanho: nulo({ type: 'string', enum: ['B', 'P', 'M', 'G'] }),
-          sabores: { ...textos, description: 'nomes exatos do cardápio' },
-          item: nulo(texto, 'nome exato do cardápio (bebida, borda, adicional) ou combo "01" a "04"'),
-          casou_pelo_cardapio: { type: 'boolean' },
-          opcoes: { ...textos, description: 'quando ambíguo: os sabores ou itens possíveis' },
-        },
-      },
-    },
-    pagamento: {
-      type: 'array',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['forma_escrita', 'forma', 'valor_escrito'],
-        properties: {
-          forma_escrita: texto,
-          forma: nulo({ type: 'string', enum: ['dinheiro', 'cartao', 'pix'] }),
-          valor_escrito: nulo(texto, 'valor desta parte, como escrito'),
-        },
-      },
-    },
-    total_escrito: nulo(texto, 'total como escrito, ex.: "113,00"'),
-    transcricao: { ...textos, description: 'linha por linha' },
-    ilegiveis: textos,
-  },
-} as const
-
-export const ESQUEMA_CONFERENCIA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['telefone_digitos', 'total_digitos', 'forma_escrita', 'local_escrito', 'promocao'],
-  properties: {
-    telefone_digitos: { ...textos, description: 'os 4 últimos dígitos do telefone, um por item' },
-    total_digitos: { ...textos, description: 'o total caractere por caractere, inclusive a vírgula' },
-    forma_escrita: nulo(texto),
-    local_escrito: nulo(texto),
-    promocao: { type: 'boolean', description: 'asterisco presente' },
-  },
-} as const
-
-const ESQUEMA = { completa: ESQUEMA_COMPLETA, conferencia: ESQUEMA_CONFERENCIA }
-
 const PEDIDO: Record<TipoLeitura, string> = {
   completa: 'Leia esta comanda e devolva a leitura completa.',
   conferencia:
@@ -156,39 +89,28 @@ const PEDIDO: Record<TipoLeitura, string> = {
     'como escrita, o local como escrito e se tem asterisco.',
 }
 
-const foto = (base64: string) => ({
-  type: 'image' as const,
-  source: { type: 'base64' as const, media_type: 'image/jpeg' as const, data: base64 },
-})
+/** O pedido de uma leitura, igual para todo provedor: o adaptador só muda o formato. */
+export interface Pedido {
+  /** Regras, glossário e cardápio. */
+  sistema: string
+  /** Cada exemplo com a foto e a resposta esperada (JSON). */
+  exemplos: { imagem: string; resposta: string }[]
+  instrucao: string
+  /** A foto da vez: vai por último, depois da parte fixa (assim o cache do provedor funciona). */
+  imagem: string
+  esquema: (typeof ESQUEMA)[TipoLeitura]
+}
 
-/**
- * Corpo do pedido à API (Messages). Ordem fixa para o cache: sistema (com cache), os exemplos
- * (o último com cache) e por fim a foto da vez, que muda a cada chamada.
- */
-export function montarPedido(tipo: TipoLeitura, e: { cardapio: CardapioPrompt; exemplos: Exemplo[]; imagem: string; modelo: string }) {
-  const exemplos = e.exemplos.flatMap((x, i) => [
-    { role: 'user' as const, content: [foto(x.imagem), { type: 'text' as const, text: PEDIDO[tipo] }] },
-    {
-      role: 'assistant' as const,
-      content: [
-        {
-          type: 'text' as const,
-          text: JSON.stringify(tipo === 'completa' ? x.leitura : x.conferencia),
-          ...(i === e.exemplos.length - 1 ? { cache_control: { type: 'ephemeral' as const } } : {}),
-        },
-      ],
-    },
-  ])
+export function montarPedido(tipo: TipoLeitura, e: { cardapio: CardapioPrompt; exemplos: Exemplo[]; imagem: string }): Pedido {
   return {
-    model: e.modelo,
-    max_tokens: 8000,
-    system: [{ type: 'text' as const, text: montarSistema(e.cardapio), cache_control: { type: 'ephemeral' as const } }],
-    messages: [...exemplos, { role: 'user' as const, content: [foto(e.imagem), { type: 'text' as const, text: PEDIDO[tipo] }] }],
-    // Esforço baixo: transcrever pede pouca deliberação e a chamada tem 20 s.
-    output_config: {
-      effort: 'low' as const,
-      format: { type: 'json_schema' as const, schema: ESQUEMA[tipo] },
-    },
+    sistema: montarSistema(e.cardapio),
+    exemplos: e.exemplos.map((x) => ({
+      imagem: x.imagem,
+      resposta: JSON.stringify(tipo === 'completa' ? x.leitura : x.conferencia),
+    })),
+    instrucao: PEDIDO[tipo],
+    imagem: e.imagem,
+    esquema: ESQUEMA[tipo],
   }
 }
 
@@ -200,16 +122,3 @@ export function tamanhoBase64(b64: string): number {
 }
 
 export const LIMITE_FOTO = 2 * 1024 * 1024
-
-/** O texto da resposta como JSON do formato pedido; null se não veio ou não tem os campos. */
-export function lerSaida(tipo: TipoLeitura, texto: string): Record<string, unknown> | null {
-  let obj: unknown
-  try {
-    obj = JSON.parse(texto)
-  } catch {
-    return null
-  }
-  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null
-  const campos = ESQUEMA[tipo].required
-  return campos.every((k) => k in obj) ? (obj as Record<string, unknown>) : null
-}

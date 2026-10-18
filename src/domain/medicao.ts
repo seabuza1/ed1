@@ -57,7 +57,11 @@ const COLUNAS = [
   'motivos',
   'segundos',
   'ms_ia',
+  'provedor',
   'modelo',
+  'tokens_entrada',
+  'tokens_cache',
+  'tokens_saida',
   'comanda_id',
 ]
 
@@ -96,7 +100,11 @@ export function linhasMedicao(leituras: LeituraMedida[], areas: Area[]): string[
         r.resultado.motivos.join(' | '),
         l?.segundos === null || l?.segundos === undefined ? '' : String(l.segundos),
         String(r.ms),
+        r.provedor ?? '',
         r.modelo,
+        r.tokens ? String(r.tokens.entrada) : '',
+        r.tokens ? String(r.tokens.cache) : '',
+        r.tokens ? String(r.tokens.saida) : '',
         r.comandaId ?? '',
       ]
     }),

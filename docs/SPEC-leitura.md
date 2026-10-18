@@ -14,11 +14,12 @@ Com letra de mão não existe leitura 100% certa. A segurança vem de três cois
 
 1. Cardápio, regras e glossário em `supabase/functions/_shared/cardapio-mel.json`. É a fonte única: a Edge Function manda para a IA e o front importa para a conta.
 2. Domínio `src/domain/leitura.ts`, com os testes L1 a L14.
-3. Edge Function `ler-comanda`: recebe a foto, faz duas leituras com a API da Anthropic e devolve as duas.
+3. Edge Function `ler-comanda`: recebe a foto, faz duas leituras com a IA configurada (Gemini 3.1 Pro por padrão) e devolve as duas.
 4. Botão de foto, tela "Lendo" e tela de confirmação.
 5. Fila offline das fotos e leitura posterior.
-6. Fotos no Storage e tabela `leituras` para medir: `supabase/004_leitura.sql` (o 002 e o 003 já eram da v1) e `005_leitura_ajustes.sql`.
+6. Fotos no Storage e tabela `leituras` para medir: `supabase/004_leitura.sql` (o 002 e o 003 já eram da v1), `005_leitura_ajustes.sql` e `007_leitura_provedor.sql`.
 7. Foto da comanda no painel do Luan.
+8. Script `scripts/comparar-modelos.ts` para comparar modelos com as fotos da noite de teste.
 
 Fica de fora: QR code (fase 2), câmera própria com moldura, recorte por campo, leitura do relatório da maquininha e da folha de expedição.
 
@@ -43,15 +44,15 @@ Fica de fora: QR code (fase 2), câmera própria com moldura, recorte por campo,
   - **Amarelo:** a conta fecha, mas tem algo para olhar: promoção sugerida, alerta (R26) ou trecho ilegível que não entra na conta.
   - **Vermelho:** esperado ≠ lido, campo crítico ilegível ou divergente, ou item sem preço. Só lança depois de corrigir, ou com dois toques em "Lançar assim". Esse caso fica marcado como `forcado` na leitura.
   - Corrigir um campo recalcula na hora.
-- **R25 Dupla leitura.** Duas chamadas em paralelo: uma completa e outra só com os campos críticos (telefone e total dígito por dígito, forma de pagamento, local e asterisco). Se um campo crítico divergir, ele fica vermelho e a tela mostra as duas versões para escolher.
+- **R25 Dupla leitura.** Duas chamadas em paralelo: uma completa e outra só com os campos críticos (telefone e total dígito por dígito, forma de pagamento, local e asterisco). Se um campo crítico divergir, ele fica vermelho e a tela mostra as duas versões para escolher. A conferência pode usar outro modelo (`IA_MODELO_CONFERENCIA`): modelos diferentes tendem a não errar o mesmo dígito.
 - **R26 Alertas (amarelo).** Total abaixo de R$ 20 ou acima de R$ 300. Total terminando em ,99 sem combo casado. O código repetido continua como na R1.
-- **R27 Foto e medição.** A foto fica ligada à comanda e o Luan vê no painel. Toda leitura grava em `leituras` o que a IA leu, o que foi lançado, se houve correção e se foi forçada.
+- **R27 Foto e medição.** A foto fica ligada à comanda e o Luan vê no painel. Toda leitura grava em `leituras` o que a IA leu, o que foi lançado, se houve correção, se foi forçada, o provedor, o modelo, os tokens e o tempo.
 - **R28 Sem internet.** A foto entra na fila e o motoboy lança à mão como hoje. Quando a leitura chega depois, ela vira conferência: se discordar do que foi lançado, a comanda ganha um aviso na lista. Nada muda sozinho.
 - **R29 Pagamento.** "Cartão" → `cartao`. "Dinheiro" → `dinheiro`. "Pix" pede um toque entre `pix_antecipado` e `pix_maquina` (ver Pendências). No pagamento misto, a IA traz o valor de cada parte quando está escrito.
 
 ## Saída da IA
 
-A saída vem por saída estruturada (`output_config.format`, JSON Schema igual a este formato): o Sonnet 5.5 recusa tool use forçado. O exemplo completo está em `supabase/functions/_shared/exemplos/3557.json`.
+A saída vem em JSON validado por um schema, igual para qualquer provedor. O schema fica em `supabase/functions/_shared/schema.ts`: JSON Schema simples (`type`, `properties`, `required`, `enum`, `items`, `additionalProperties`), sem `$ref`. Campo que pode ser nulo usa `anyOf` com `null`, que o Gemini e a Anthropic aceitam. O exemplo completo está em `supabase/functions/_shared/exemplos/3557.json`.
 
 Leitura completa:
 ```
@@ -85,22 +86,60 @@ promocao:         boolean
 
 ## Prompt
 
-Fica em `supabase/functions/_shared/prompt.ts`. O system leva:
+Fica em `supabase/functions/_shared/prompt.ts`, igual para todos os provedores. O system leva:
 1. As regras:
    > Você está lendo uma comanda de pizzaria escrita à mão. Transcreva exatamente o que está escrito, linha por linha, sem corrigir, deduzir ou completar nada. Marque trechos ilegíveis com [?] e liste-os em "ilegiveis". Transcreva o total e o telefone dígito por dígito. Use o cardápio e o glossário só para identificar itens, e marque casou_pelo_cardapio quando usar. Se uma palavra couber em mais de um sabor, devolva as opções em vez de escolher. Não calcule valores.
 2. O glossário.
 3. O cardápio: nomes dos sabores por faixa, tamanhos, bebidas, bordas, adicionais e combos. Os ingredientes não vão.
-4. Os exemplos de `exemplos/`, cada um com a foto e o JSON esperado. Por enquanto só a 3557. Depois da noite de teste entram de 3 a 5 comandas de cada uma das duas pessoas que escrevem.
+4. Os exemplos de `exemplos/`, cada um com a foto e o JSON esperado. Por enquanto só a 3557. Depois da noite de teste entram de 3 a 5 comandas de cada uma das duas pessoas que escrevem. Depois de mudar um exemplo, `npm run exemplos` gera `exemplos/exemplos.ts`, o módulo que a função publica.
 
-Use `cache_control` no system e nos exemplos, que se repetem em toda chamada.
+A parte fixa (system e exemplos) vem sempre primeiro e idêntica em toda chamada; a foto da comanda vem por último. Assim o cache do provedor funciona: no Gemini é automático; na Anthropic, usar `cache_control` no system e nos exemplos.
 
 ## Edge Function `ler-comanda`
 
-- `POST { imagem: string }` (JPEG em base64) → `{ leitura, conferencia, modelo, ms }` ou `{ erro }`.
-- Exige usuário logado (verificação de JWT padrão).
-- Secrets: `ANTHROPIC_API_KEY` e `ANTHROPIC_MODEL` (padrão `claude-sonnet-5-5`). A chave nunca vai para o front nem para os logs.
-- Faz as duas chamadas em paralelo, com timeout de 20 s. Em qualquer erro, devolve `{ erro }` e o front volta para o lançamento manual.
+- `POST { imagem: string }` (JPEG em base64) → `{ leitura, conferencia, provedor, modelo, ms, tokens }` ou `{ erro }`. `tokens` soma as duas chamadas: `{ entrada, cache, saida }`.
+- Exige usuário logado (verificação de JWT padrão) com perfil ativo.
+- Faz as duas chamadas em paralelo, com timeout de 30 s. Em qualquer erro, devolve `{ erro }` e o front volta para o lançamento manual. Provedor ocupado ou fora do ar (429 ou 5xx) devolve 503: a foto fica na fila e é lida depois, sem gastar tentativa.
 - Recusa imagem acima de 2 MB.
+- Nenhuma chave vai para o front nem para os logs.
+
+### Provedor configurável
+
+Cada provedor é um adaptador em `supabase/functions/_shared/ia/` com a mesma interface:
+```ts
+ler(imagemBase64: string, modo: 'completa' | 'conferencia', modelo: string)
+  → Promise<{ json: unknown, tokens: { entrada: number, cache: number, saida: number }, ms: number }>
+```
+- `google.ts` (padrão) e `anthropic.ts`, só com `fetch` (sem SDK), para rodar na função e no script de comparação. `ler.ts` escolhe o adaptador pelos secrets e faz a leitura dupla. Trocar de modelo ou provedor é só mudar os secrets.
+- O resultado passa pela mesma validação do schema antes de voltar ao front.
+
+Secrets:
+
+| Secret | Padrão | Uso |
+|---|---|---|
+| `IA_PROVEDOR` | `google` | `google` ou `anthropic` |
+| `IA_MODELO` | `gemini-3.1-pro-preview` (`claude-sonnet-5-5` na Anthropic) | modelo da leitura completa |
+| `IA_MODELO_CONFERENCIA` | igual a `IA_MODELO` | modelo da leitura de conferência (R25) |
+| `GEMINI_API_KEY` | | chave do Google AI Studio |
+| `ANTHROPIC_API_KEY` | | só se usar a Anthropic |
+
+### Gemini (`google.ts`)
+
+API Interactions:
+- `POST https://generativelanguage.googleapis.com/v1beta/interactions`, com o header `x-goog-api-key`.
+- Corpo:
+  - `model`: o do secret;
+  - `system_instruction`: o prompt fixo (texto);
+  - `input`: uma lista de conteúdos com os exemplos (texto, foto e a resposta certa de cada um) e, por último, o texto do modo e `{ "type": "image", "mime_type": "image/jpeg", "data": "<base64>", "resolution": "high" }`;
+  - `generation_config: { "thinking_level": "low" }` (no 3.1 Pro não existe `minimal`); sem `temperature`, o Google recomenda manter o padrão nos modelos Gemini 3;
+  - `response_format: { "type": "text", "mime_type": "application/json", "schema": <schema do modo> }`;
+  - `store: false`, para o Google não guardar a interação.
+- A resposta vale só com `status: "completed"`. O texto fica em `steps`: os passos `model_output` do fim, conteúdo `text` (os passos `thought` ficam de fora). Os tokens vêm em `usage` (`total_input_tokens`, `total_cached_tokens`, `total_output_tokens`, `total_thought_tokens`); a entrada sem cache é `total_input_tokens − total_cached_tokens`, e o raciocínio conta como saída.
+- Conta paga: o 3.1 Pro não tem nível grátis. Usar só conta paga, onde o Google não usa os dados para treinar.
+
+### Anthropic (`anthropic.ts`)
+
+- Messages API com saída estruturada (`output_config.format`, schema do modo), esforço baixo e `cache_control` na parte fixa. Não usa tool use forçado: o Sonnet 5.5 e o Opus 5.5 recusam `tool_choice` forçado, e a saída estruturada vale para todos os modelos.
 
 ## Front
 
@@ -121,17 +160,31 @@ Use `cache_control` no system e nos exemplos, que se repetem em toda chamada.
 - **Lista da noite:** ícone de câmera nas comandas com foto e aviso de "leitura não confere" (R28).
 - **Painel do Luan:** tocar no código abre a foto.
 
-## Banco: `supabase/004_leitura.sql`
+## Banco: `004_leitura.sql`, `005_leitura_ajustes.sql` e `007_leitura_provedor.sql`
 
-Rodar depois do `001_schema.sql`.
+Rodar nessa ordem, depois do `003_v1_avisos.sql` (o `006_pix_da_equipe.sql` é da v1).
 
 - `caixas.promo_desconto`: em centavos, nulo até ser definido.
 - `comandas.foto_path` e `comandas.area_origem` (`escrito`, `valor`, `padrao` ou `manual`).
-- Tabela `leituras`, com as mesmas regras de acesso de `comandas`.
+- Tabela `leituras`, com as mesmas regras de acesso de `comandas`. Inclui `provedor`, `modelo`, `tokens_entrada`, `tokens_cache`, `tokens_saida` e `ms` (as colunas do provedor e dos tokens vêm no 007).
 - Bucket privado `comandas`, com caminho `{caixa_id}/{id}.jpg`, só JPEG e até 2 MB.
   - Lê o dono do caixa ou a equipe.
   - Envia o dono do caixa enquanto o acerto não foi confirmado, ou a equipe.
   - Apaga só o admin.
+  - Fotos com mais de 30 dias podem ser apagadas (o plano grátis do Supabase tem 1 GB); o que a IA leu continua em `leituras`.
+
+## Comparar modelos: `scripts/comparar-modelos.ts`
+
+Roda local, com as chaves num `.env` fora do repositório (`GEMINI_API_KEY`, `ANTHROPIC_API_KEY`; o app só leva as variáveis `VITE_`):
+
+```
+npm run comparar -- <pasta> [--modelos google:gemini-3.1-pro-preview,anthropic:claude-haiku-5-5] [--promo 10]
+```
+
+- Entrada: uma pasta com as fotos da noite de teste (as do Storage, já reduzidas pelo app) e um `gabarito.csv` com o certo de cada comanda, tirado do que foi lançado e conferido. Separado por `;`: `foto;codigo;total;area;forma` (forma `dinheiro`, `cartao` ou `pix`; misto como `cartao+dinheiro`). Um `areas.csv` (`nome;taxa`) opcional troca as áreas do `001`.
+- Roda cada foto em cada modelo de uma lista (padrão: `google:gemini-3.1-pro-preview`, `google:gemini-3.8-flash`, `anthropic:claude-haiku-5-5`), usando os mesmos adaptadores, prompt e `leitura.ts`. A foto que é exemplo do prompt fica de fora.
+- Saída `comparacao.csv` e um resumo por modelo: verdes certas, **verdes erradas** (meta: zero), amarelas, vermelhas, tempo médio e custo por foto (tokens × preço da tabela no script).
+- Escolher o mais barato com zero verdes erradas e poucas vermelhas, e gravar nos secrets.
 
 ## Casos de teste do domínio (R$)
 
@@ -161,23 +214,37 @@ Os valores esperados foram conferidos por um cálculo à parte.
 ## Ordem de construção
 
 1. `leitura.ts` com L1 a L14 passando, local e sem rede.
-2. Rodar `004_leitura.sql` e `005_leitura_ajustes.sql`.
-3. Edge Function e secrets. Testar com `exemplos/3557.jpg`: tem que dar verde em Aragarças.
+2. Rodar `004_leitura.sql`, `005_leitura_ajustes.sql` e `007_leitura_provedor.sql`.
+3. Edge Function com o adaptador `google.ts` e os secrets. Testar com `exemplos/3557.jpg`: tem que dar verde em Aragarças.
 4. Botão de foto, "Lendo" e tela de confirmação.
 5. Fila offline e leitura posterior (R28).
 6. Foto no painel do Luan.
 7. Exportar `leituras` em CSV para medir.
+8. Adaptador `anthropic.ts` e `scripts/comparar-modelos.ts`, rodados com as fotos da noite de teste.
 
 ## Pronto quando
 
 - L1 a L14 passam, e T1 a T17 continuam passando.
 - A foto da 3557 lida pela função dá verde em Aragarças.
 - Em modo avião, a foto entra na fila e o lançamento manual funciona.
-- A chave da API não aparece no bundle do front.
-- Uma noite real foi medida: quantas comandas ficaram verdes, quantas verdes estavam erradas (meta: zero) e o tempo por comanda.
+- Nenhuma chave de API aparece no bundle do front.
+- Trocar `IA_PROVEDOR` e `IA_MODELO` muda o modelo sem mexer no código.
+- Uma noite real foi medida: quantas comandas ficaram verdes, quantas verdes estavam erradas (meta: zero) e o tempo e o custo por comanda.
 
 ## Pendências
 
 - Como a comanda diferencia Pix já pago de Pix na hora? Até saber, "Pix" pede um toque (R29).
 - O desconto da promoção vale por pizza tradicional? Vale no meio a meio de duas tradicionais?
 - Exemplos de 3 a 5 comandas de cada uma das duas pessoas que escrevem, depois da noite de teste.
+- O `gemini-3.1-pro-preview` é versão de testes do Google e pode ser desligado com aviso prévio (o `gemini-3-pro-preview` foi desligado em março de 2026). Por isso o modelo fica num secret.
+
+## Documentação
+
+- Gemini, API Interactions: https://ai.google.dev/api/interactions-api
+- Gemini, imagens: https://ai.google.dev/gemini-api/docs/image-understanding
+- Gemini, resolução da imagem: https://ai.google.dev/gemini-api/docs/media-resolution
+- Gemini, saída estruturada: https://ai.google.dev/gemini-api/docs/structured-output
+- Gemini, raciocínio: https://ai.google.dev/gemini-api/docs/thinking
+- Gemini, modelos que serão desligados: https://ai.google.dev/gemini-api/docs/deprecations
+- Anthropic, visão: https://platform.claude.com/docs/en/build-with-claude/vision
+- Anthropic, saída estruturada: https://platform.claude.com/docs/en/build-with-claude/structured-outputs

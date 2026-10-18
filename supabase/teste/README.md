@@ -9,7 +9,7 @@ sh supabase/teste/rodar.sh
 ```
 
 Cria o banco `acerto_teste` com `stub-supabase.sql` (o mínimo do Supabase: `auth.users`,
-`auth.uid()`, papéis `anon` e `authenticated`), roda `001_schema.sql` a `006_pix_da_equipe.sql`,
+`auth.uid()`, papéis `anon` e `authenticated`), roda `001_schema.sql` a `007_leitura_provedor.sql`,
 `rls.sql`, `rls-leitura.sql` e `rls-pix.sql`. Termina com `RLS ok`, `RLS leitura ok` e `RLS Pix ok`, ou para no primeiro erro. Confere, com duas contas de
 motoboy, a do Luan e a do admin:
 

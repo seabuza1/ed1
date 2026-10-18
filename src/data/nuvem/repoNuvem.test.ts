@@ -320,7 +320,7 @@ describe('fotos das comandas (leitura)', () => {
     modoAviao(true)
     const noite = await abrir(repo)
     const c = await comFoto(repo, noite, true, 2500) // lançou 25 à mão; a comanda diz 20
-    nuvem.estado.ia = exemplo
+    nuvem.estado.ia = { ...exemplo, provedor: 'google', tokens: { entrada: 1200, cache: 5000, saida: 900 } }
     await repo.sincronizar()
     expect(nuvem.estado.leiturasIA).toBe(0)
 
@@ -331,7 +331,14 @@ describe('fotos das comandas (leitura)', () => {
     expect(nuvem.estado.leiturasIA).toBe(1)
     const [registro] = await repo.fotos!.leituras(noite.id)
     expect(registro).toMatchObject({ comandaId: c.id, resultado: { posterior: true }, lancado: { total: 2500 } })
-    expect(nuvem.leituras.get(registro.id)).toMatchObject({ comanda_id: c.id, caixa_id: noite.id })
+    expect(nuvem.leituras.get(registro.id)).toMatchObject({
+      comanda_id: c.id,
+      caixa_id: noite.id,
+      provedor: 'google',
+      tokens_entrada: 1200,
+      tokens_cache: 5000,
+      tokens_saida: 900,
+    })
     expect((await repo.listarComandas(noite.id))[0].total).toBe(2500)
 
     await repo.sincronizar()
