@@ -43,6 +43,19 @@ export class ErroIA extends Error {
   }
 }
 
+/**
+ * fetch ao provedor. Falha de rede (sem ter sido cancelada) vira 503: fora do ar, a foto é lida
+ * depois.
+ */
+export async function chamar(buscar: typeof fetch, url: string, init: RequestInit, nome: string): Promise<Response> {
+  try {
+    return await buscar(url, init)
+  } catch (e) {
+    if (init.signal?.aborted) throw e
+    throw new ErroIA(`${nome} rede`, 503)
+  }
+}
+
 /** O texto da resposta como JSON; sem JSON, a IA não leu. */
 export function comoJson(texto: string): unknown {
   try {

@@ -1,7 +1,7 @@
 // Adaptador da Anthropic, Messages API. Saída estruturada (output_config.format) em vez de tool use
 // forçado: o Sonnet 5.5 e o Opus 5.5 recusam tool_choice forçado, e o formato vale para todos.
 import { montarPedido, type Pedido } from '../prompt.ts'
-import { comoJson, ErroIA, type Adaptador, type OpcoesAdaptador } from './tipos.ts'
+import { chamar, comoJson, ErroIA, type Adaptador, type OpcoesAdaptador } from './tipos.ts'
 
 export const URL_ANTHROPIC = 'https://api.anthropic.com/v1/messages'
 
@@ -29,12 +29,17 @@ export function criarAnthropic(o: OpcoesAdaptador): Adaptador {
   return {
     async ler(imagem, modo, modelo) {
       const inicio = Date.now()
-      const r = await buscar(URL_ANTHROPIC, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-api-key': o.chave, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify(corpoAnthropic(montarPedido(modo, { cardapio: o.cardapio, exemplos: o.exemplos, imagem }), modelo)),
-        signal: o.sinal,
-      })
+      const r = await chamar(
+        buscar,
+        URL_ANTHROPIC,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-api-key': o.chave, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify(corpoAnthropic(montarPedido(modo, { cardapio: o.cardapio, exemplos: o.exemplos, imagem }), modelo)),
+          signal: o.sinal,
+        },
+        'Anthropic',
+      )
       const msg = await r.json().catch(() => null)
       if (!r.ok) throw new ErroIA(`Anthropic ${r.status}`, r.status)
       if (msg?.stop_reason === 'refusal') throw new ErroIA('recusa')

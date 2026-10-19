@@ -1,7 +1,7 @@
 // Adaptador do Gemini, API Interactions (https://ai.google.dev/api/interactions-api). Conta paga:
 // o Google não usa os dados para treinar, e store: false não guarda a interação.
 import { montarPedido, type Pedido } from '../prompt.ts'
-import { comoJson, ErroIA, type Adaptador, type OpcoesAdaptador, type Tokens } from './tipos.ts'
+import { chamar, comoJson, ErroIA, type Adaptador, type OpcoesAdaptador, type Tokens } from './tipos.ts'
 
 export const URL_GEMINI = 'https://generativelanguage.googleapis.com/v1beta/interactions'
 
@@ -10,7 +10,8 @@ const foto = (data: string) => ({ type: 'image', mime_type: 'image/jpeg', data, 
 
 /**
  * Corpo da interação. Exemplos e foto num só turno: a parte fixa (system e exemplos) vem primeiro e
- * sempre igual, para o cache implícito do Gemini; a foto da vez vem por último.
+ * sempre igual, para o cache implícito do Gemini (que só começa com um prefixo de uns 4.096 tokens);
+ * a foto da vez vem por último.
  */
 export function corpoGemini(p: Pedido, modelo: string) {
   return {
@@ -63,16 +64,26 @@ export function criarGoogle(o: OpcoesAdaptador): Adaptador {
   return {
     async ler(imagem, modo, modelo) {
       const inicio = Date.now()
-      const r = await buscar(URL_GEMINI, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': o.chave },
-        body: JSON.stringify(corpoGemini(montarPedido(modo, { cardapio: o.cardapio, exemplos: o.exemplos, imagem }), modelo)),
-        signal: o.sinal,
-      })
+      const r = await chamar(
+        buscar,
+        URL_GEMINI,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': o.chave },
+          body: JSON.stringify(corpoGemini(montarPedido(modo, { cardapio: o.cardapio, exemplos: o.exemplos, imagem }), modelo)),
+          signal: o.sinal,
+        },
+        'Gemini',
+      )
       const corpo = await r.json().catch(() => null)
+      // Chave inválida volta 400 com API_KEY_INVALID: é configuração, como um 401.
+      if (r.status === 400 && JSON.stringify(corpo).includes('API_KEY_INVALID')) throw new ErroIA('Gemini chave inválida', 401)
       if (!r.ok) throw new ErroIA(`Gemini ${r.status}`, r.status)
-      // 200 também volta "incomplete" (saída cortada) ou "failed".
-      if (corpo?.status !== 'completed') throw new ErroIA(`Gemini ${corpo?.status ?? 'sem status'}`)
+      // 200 também volta "incomplete" (saída cortada) ou "failed" (com o código do erro, se veio).
+      if (corpo?.status !== 'completed') {
+        const codigo = Number(corpo?.errors?.[0]?.code)
+        throw new ErroIA(`Gemini ${corpo?.status ?? 'sem status'}`, Number.isInteger(codigo) ? codigo : undefined)
+      }
       return { json: comoJson(textoGemini(corpo.steps)), tokens: tokensGemini(corpo.usage), ms: Date.now() - inicio }
     },
   }

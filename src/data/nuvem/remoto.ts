@@ -168,7 +168,7 @@ export function criarRemotoSupabase(sb: SupabaseClient): Remoto {
       const { data, error } = await sb.functions.invoke<RespostaLeitura | { erro: string }>('ler-comanda', {
         body: { imagem },
         signal: sinal,
-        timeout: 35_000, // a função espera a IA até 30 s
+        timeout: 45_000, // a função desiste em 30 s desde a chegada; sobra para subir a foto
       })
       if (error) {
         const resposta = error instanceof FunctionsHttpError ? (error.context as Response) : null

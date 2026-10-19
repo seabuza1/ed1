@@ -63,9 +63,15 @@ interface FotoLocal {
   /** feita: já tem leitura; pendente: ler quando houver internet (R28); falhou: a IA não leu. */
   leitura: 'feita' | 'pendente' | 'falhou'
   tentativas: number
+  /** IA ocupada, fora do ar ou ainda sem chave: quantas vezes ficou para depois e quando tentar de novo. */
+  adiadas?: number
+  proximaEm?: string
 }
 
 const MAX_TENTATIVAS = 3
+// Adiada: espera 2, 4, 8... até 60 min entre as tentativas e desiste na 8ª (umas 4 horas).
+const MAX_ADIADAS = 8
+const esperaAdiada = (n: number) => Math.min(2 ** n, 60) * 60_000
 const DIA = 24 * 60 * 60 * 1000
 
 type Banco = Dexie & {
@@ -265,13 +271,25 @@ export function criarRepoNuvem(opcoes: {
   /** R28: lê as fotos tiradas sem internet. Só registra; a comanda lançada não muda. */
   async function lerPendentes() {
     for (const f of await db.fotos.where('leitura').equals('pendente').toArray()) {
+      if (f.proximaEm && Date.parse(f.proximaEm) > Date.now()) continue
       const c = await db.comandas.get(f.id)
       if (!c) continue
       let resposta
       try {
         resposta = await remoto.lerComanda(await paraBase64(f.jpeg))
       } catch (e) {
-        if (!(e instanceof ErroRemoto && e.permanente)) return // internet ou IA fora: tenta depois
+        if (!(e instanceof ErroRemoto) || (!e.permanente && !online())) return // sem internet: tenta na próxima
+        if (!e.permanente) {
+          // A função respondeu que a IA não leu agora: esta foto espera, as outras seguem.
+          const adiadas = (f.adiadas ?? 0) + 1
+          await db.fotos.update(
+            f.id,
+            adiadas >= MAX_ADIADAS
+              ? { adiadas, leitura: 'falhou' }
+              : { adiadas, proximaEm: new Date(Date.now() + esperaAdiada(adiadas)).toISOString() },
+          )
+          continue
+        }
         const tentativas = f.tentativas + 1
         await db.fotos.update(f.id, { tentativas, leitura: tentativas >= MAX_TENTATIVAS ? 'falhou' : 'pendente' })
         continue

@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { calcularAcerto } from '../../domain/acerto'
 import { criarComanda, marcarEntregue } from '../../domain/comanda'
 import { abrirNoite } from '../../domain/noite'
@@ -346,24 +346,48 @@ describe('fotos das comandas (leitura)', () => {
     expect(nuvem.estado.leiturasIA).toBe(1) // não lê de novo
   })
 
-  it('IA fora do ar não segura a fila: a comanda e a foto sobem, a leitura espera', async () => {
-    const { nuvem, repo } = montar()
-    await repo.sincronizar()
-    const noite = await abrir(repo)
-    const c = await comFoto(repo, noite, true)
-    nuvem.estado.ia = { erro: 'IA fora do ar', fora: true }
-    for (let i = 0; i < 4; i++) {
+  it('IA fora do ar não segura a fila: a comanda e a foto sobem, a leitura espera e volta depois', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      const { nuvem, repo } = montar()
+      await repo.sincronizar()
+      const noite = await abrir(repo)
+      const c = await comFoto(repo, noite, true)
+      await comFoto(repo, noite, true)
+      nuvem.estado.ia = { erro: 'IA fora do ar', fora: true }
       await repo.sincronizar()
       await repo.lerFotos()
-    }
-    expect(nuvem.comandas.has(c.id)).toBe(true)
-    expect(nuvem.fotos.has(c.fotoPath)).toBe(true)
-    expect(nuvem.estado.leiturasIA).toBeGreaterThan(3) // passageira: não gasta as 3 tentativas
+      expect(nuvem.comandas.has(c.id)).toBe(true)
+      expect(nuvem.fotos.has(c.fotoPath)).toBe(true)
+      expect(nuvem.estado.leiturasIA).toBe(2) // uma foto adiada não para a outra
+      await repo.lerFotos()
+      expect(nuvem.estado.leiturasIA).toBe(2) // espera antes de tentar de novo
 
-    nuvem.estado.ia = exemplo
-    await repo.lerFotos()
-    await repo.sincronizar()
-    expect(nuvem.leituras.size).toBe(1)
+      vi.setSystemTime(Date.now() + 3 * 60_000)
+      nuvem.estado.ia = exemplo
+      await repo.lerFotos()
+      await repo.sincronizar()
+      expect(nuvem.leituras.size).toBe(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('IA fora do ar por horas: a foto desiste depois de 8 adiamentos', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      const { nuvem, repo } = montar()
+      await repo.sincronizar()
+      await comFoto(repo, await abrir(repo), true)
+      nuvem.estado.ia = { erro: 'IA fora do ar', fora: true }
+      for (let i = 0; i < 10; i++) {
+        await repo.lerFotos()
+        vi.setSystemTime(Date.now() + 61 * 60_000)
+      }
+      expect(nuvem.estado.leiturasIA).toBe(8)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('a IA não leu: tenta 3 vezes e desiste; leitura de comanda excluída não sobe', async () => {

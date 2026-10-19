@@ -87,6 +87,19 @@ describe('Gemini (API Interactions)', () => {
     })
     await expect(semJson.ler('FOTO', 'completa', 'm')).rejects.toBeInstanceOf(ErroIA)
   })
+
+  it('chave inválida, falha de sobrecarga e falha de rede ganham o status certo', async () => {
+    const com = (status: number, json: unknown) =>
+      criarGoogle({ chave: 'k', cardapio: CARDAPIO, exemplos: [], fetch: falso(() => ({ status, json })).f })
+    const chaveRuim = [{ error: { code: 400, status: 'INVALID_ARGUMENT', details: [{ reason: 'API_KEY_INVALID' }] } }]
+    await expect(com(400, chaveRuim).ler('FOTO', 'completa', 'm')).rejects.toMatchObject({ status: 401 })
+    await expect(com(200, { status: 'failed', errors: [{ code: 503 }] }).ler('FOTO', 'completa', 'm')).rejects.toMatchObject({ status: 503 })
+    const semRede = (async () => {
+      throw new TypeError('fetch failed')
+    }) as unknown as typeof fetch
+    const ia = criarGoogle({ chave: 'k', cardapio: CARDAPIO, exemplos: [], fetch: semRede })
+    await expect(ia.ler('FOTO', 'completa', 'm')).rejects.toMatchObject({ message: 'Gemini rede', status: 503 })
+  })
 })
 
 describe('Anthropic (Messages)', () => {
@@ -141,6 +154,9 @@ describe('provedor pelos secrets e leitura dupla (R25)', () => {
     expect(configurar(env({}))).toEqual({ falta: 'GEMINI_API_KEY' })
     expect(configurar(env({ IA_PROVEDOR: 'anthropic', GEMINI_API_KEY: 'g' }))).toEqual({ falta: 'ANTHROPIC_API_KEY' })
     expect(configurar(env({ IA_PROVEDOR: 'constructor', GEMINI_API_KEY: 'g' }))).toHaveProperty('falta')
+    // Modelo de outro provedor: cada foto daria erro.
+    expect(configurar(env({ IA_PROVEDOR: 'anthropic', IA_MODELO: 'gemini-3.8-flash', ANTHROPIC_API_KEY: 'a' }))).toHaveProperty('falta')
+    expect(configurar(env({ IA_MODELO_CONFERENCIA: 'claude-haiku-5-5', GEMINI_API_KEY: 'g' }))).toHaveProperty('falta')
   })
 
   it('duas chamadas em paralelo, validadas, com os tokens somados', async () => {
@@ -150,6 +166,23 @@ describe('provedor pelos secrets e leitura dupla (R25)', () => {
     expect(r).toMatchObject({ leitura: ex.leitura, conferencia: ex.conferencia, provedor: 'google', modelo: 'pro + flash' })
     expect(r.tokens).toEqual({ entrada: 2000, cache: 4000, saida: 800 })
     expect(pedidos.map((p) => p.corpo.model).sort()).toEqual(['flash', 'pro'])
+  })
+
+  it('se uma chamada falha, a outra é cancelada', async () => {
+    let cancelada = false
+    const f = (async (_url: string, init: RequestInit) => {
+      const c = JSON.parse(String(init.body))
+      if (modoGemini(c) === 'conferencia') return new Response('{}', { status: 400 })
+      return new Promise((_, rejeitar) =>
+        init.signal!.addEventListener('abort', () => {
+          cancelada = true
+          rejeitar(new DOMException('cancelada', 'AbortError'))
+        }),
+      )
+    }) as unknown as typeof fetch
+    const config = { provedor: 'google' as const, chave: 'g', modelo: 'm', modeloConferencia: 'm' }
+    await expect(lerDuasVezes(config, 'FOTO', { cardapio: CARDAPIO, exemplos: [], fetch: f })).rejects.toThrow('Gemini 400')
+    expect(cancelada).toBe(true)
   })
 
   it('saída fora do esquema não volta para o app', async () => {

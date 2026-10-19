@@ -17,7 +17,7 @@ Com letra de mão não existe leitura 100% certa. A segurança vem de três cois
 3. Edge Function `ler-comanda`: recebe a foto, faz duas leituras com a IA configurada (Gemini 3.1 Pro por padrão) e devolve as duas.
 4. Botão de foto, tela "Lendo" e tela de confirmação.
 5. Fila offline das fotos e leitura posterior.
-6. Fotos no Storage e tabela `leituras` para medir: `supabase/004_leitura.sql` (o 002 e o 003 já eram da v1), `005_leitura_ajustes.sql` e `007_leitura_provedor.sql`.
+6. Fotos no Storage e tabela `leituras` para medir: `supabase/004_leitura.sql` (o 002 e o 003 já eram da v1), `005_leitura_ajustes.sql`, `007_leitura_provedor.sql` e `008_leitura_limite.sql`.
 7. Foto da comanda no painel do Luan.
 8. Script `scripts/comparar-modelos.ts` para comparar modelos com as fotos da noite de teste.
 
@@ -93,13 +93,14 @@ Fica em `supabase/functions/_shared/prompt.ts`, igual para todos os provedores. 
 3. O cardápio: nomes dos sabores por faixa, tamanhos, bebidas, bordas, adicionais e combos. Os ingredientes não vão.
 4. Os exemplos de `exemplos/`, cada um com a foto e o JSON esperado. Por enquanto só a 3557. Depois da noite de teste entram de 3 a 5 comandas de cada uma das duas pessoas que escrevem. Depois de mudar um exemplo, `npm run exemplos` gera `exemplos/exemplos.ts`, o módulo que a função publica.
 
-A parte fixa (system e exemplos) vem sempre primeiro e idêntica em toda chamada; a foto da comanda vem por último. Assim o cache do provedor funciona: no Gemini é automático; na Anthropic, usar `cache_control` no system e nos exemplos.
+A parte fixa (system e exemplos) vem sempre primeiro e idêntica em toda chamada; a foto da comanda vem por último. Assim o cache do provedor funciona: no Gemini é automático, mas só a partir de um prefixo de uns 4.096 tokens (com só a 3557 pode não chegar; `tokens_cache` mostra); na Anthropic, usar `cache_control` no system e nos exemplos.
 
 ## Edge Function `ler-comanda`
 
-- `POST { imagem: string }` (JPEG em base64) → `{ leitura, conferencia, provedor, modelo, ms, tokens }` ou `{ erro }`. `tokens` soma as duas chamadas: `{ entrada, cache, saida }`.
-- Exige usuário logado (verificação de JWT padrão) com perfil ativo.
-- Faz as duas chamadas em paralelo, com timeout de 30 s. Em qualquer erro, devolve `{ erro }` e o front volta para o lançamento manual. Provedor ocupado ou fora do ar (429 ou 5xx) devolve 503: a foto fica na fila e é lida depois, sem gastar tentativa.
+- `POST { imagem: string }` (JPEG em base64) → `{ leitura, conferencia, provedor, modelo, ms, tokens }` ou `{ erro }`. `tokens` soma as duas chamadas: `{ entrada, cache, saida }` (com modelos diferentes, o custo por comanda sai aproximado).
+- Exige usuário logado (verificação de JWT padrão) com perfil ativo e no máximo 60 leituras por hora por conta (`pode_ler_comanda`, no 008): conta nova nasce ativa, e o limite segura o gasto de quem não é da pizzaria até o admin desativar.
+- Faz as duas chamadas em paralelo, com timeout de 30 s contado da chegada do pedido. Se uma falha, a outra é cancelada; se o app desiste (Digitar, outra foto), a função para também. Em qualquer erro, devolve `{ erro }` e o front volta para o lançamento manual.
+- Erro que não é da foto devolve 503 e a foto fica na fila: provedor ocupado ou fora do ar (408, 429, 5xx, falha de rede) ou configuração (secret faltando, chave recusada, modelo que não existe). A fila espera 2, 4, 8... até 60 min entre as tentativas e desiste na 8ª; as outras fotos seguem. A IA não ter lido a foto (resposta fora do formato, recusa, tempo esgotado) conta como uma das 3 tentativas.
 - Recusa imagem acima de 2 MB.
 - Nenhuma chave vai para o front nem para os logs.
 
@@ -110,7 +111,7 @@ Cada provedor é um adaptador em `supabase/functions/_shared/ia/` com a mesma in
 ler(imagemBase64: string, modo: 'completa' | 'conferencia', modelo: string)
   → Promise<{ json: unknown, tokens: { entrada: number, cache: number, saida: number }, ms: number }>
 ```
-- `google.ts` (padrão) e `anthropic.ts`, só com `fetch` (sem SDK), para rodar na função e no script de comparação. `ler.ts` escolhe o adaptador pelos secrets e faz a leitura dupla. Trocar de modelo ou provedor é só mudar os secrets.
+- `google.ts` (padrão) e `anthropic.ts`, só com `fetch` (sem SDK), para rodar na função e no script de comparação. `ler.ts` escolhe o adaptador pelos secrets e faz a leitura dupla. Trocar de modelo ou provedor é só mudar os secrets; os dois modelos têm que ser do provedor escolhido (`gemini-...` ou `claude-...`), senão a função responde que a leitura não está configurada.
 - O resultado passa pela mesma validação do schema antes de voltar ao front.
 
 Secrets:
@@ -119,7 +120,7 @@ Secrets:
 |---|---|---|
 | `IA_PROVEDOR` | `google` | `google` ou `anthropic` |
 | `IA_MODELO` | `gemini-3.1-pro-preview` (`claude-sonnet-5-5` na Anthropic) | modelo da leitura completa |
-| `IA_MODELO_CONFERENCIA` | igual a `IA_MODELO` | modelo da leitura de conferência (R25) |
+| `IA_MODELO_CONFERENCIA` | igual a `IA_MODELO` | modelo da leitura de conferência (R25), do mesmo provedor |
 | `GEMINI_API_KEY` | | chave do Google AI Studio |
 | `ANTHROPIC_API_KEY` | | só se usar a Anthropic |
 
@@ -160,7 +161,7 @@ API Interactions:
 - **Lista da noite:** ícone de câmera nas comandas com foto e aviso de "leitura não confere" (R28).
 - **Painel do Luan:** tocar no código abre a foto.
 
-## Banco: `004_leitura.sql`, `005_leitura_ajustes.sql` e `007_leitura_provedor.sql`
+## Banco: `004_leitura.sql`, `005_leitura_ajustes.sql`, `007_leitura_provedor.sql` e `008_leitura_limite.sql`
 
 Rodar nessa ordem, depois do `003_v1_avisos.sql` (o `006_pix_da_equipe.sql` é da v1).
 
@@ -172,6 +173,7 @@ Rodar nessa ordem, depois do `003_v1_avisos.sql` (o `006_pix_da_equipe.sql` é d
   - Envia o dono do caixa enquanto o acerto não foi confirmado, ou a equipe.
   - Apaga só o admin.
   - Fotos com mais de 30 dias podem ser apagadas (o plano grátis do Supabase tem 1 GB); o que a IA leu continua em `leituras`.
+- Tabela `uso_leitura` e função `pode_ler_comanda()` (008): perfil ativo e até 60 leituras por hora por conta. Ninguém lê a tabela direto.
 
 ## Comparar modelos: `scripts/comparar-modelos.ts`
 
@@ -214,7 +216,7 @@ Os valores esperados foram conferidos por um cálculo à parte.
 ## Ordem de construção
 
 1. `leitura.ts` com L1 a L14 passando, local e sem rede.
-2. Rodar `004_leitura.sql`, `005_leitura_ajustes.sql` e `007_leitura_provedor.sql`.
+2. Rodar `004_leitura.sql`, `005_leitura_ajustes.sql`, `007_leitura_provedor.sql` e `008_leitura_limite.sql`.
 3. Edge Function com o adaptador `google.ts` e os secrets. Testar com `exemplos/3557.jpg`: tem que dar verde em Aragarças.
 4. Botão de foto, "Lendo" e tela de confirmação.
 5. Fila offline e leitura posterior (R28).
