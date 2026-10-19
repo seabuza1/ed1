@@ -122,7 +122,8 @@ export function criarRemotoFalso() {
       rede()
       estado.leiturasIA++
       const r = estado.ia
-      if ('erro' in r) throw new ErroRemoto(r.erro, !r.fora)
+      // Como a função: 503 quando a IA está fora; 200 com { erro } quando não leu.
+      if ('erro' in r) throw new ErroRemoto(r.erro, !r.fora, r.fora ? 503 : 200)
       return copia(r)
     },
   }

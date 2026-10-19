@@ -274,11 +274,17 @@ export function criarRepoNuvem(opcoes: {
       if (f.proximaEm && Date.parse(f.proximaEm) > Date.now()) continue
       const c = await db.comandas.get(f.id)
       if (!c) continue
+      // Acerto confirmado: a nuvem recusa a leitura, então nem chama a IA.
+      if (await db.acertos.get(c.noiteId)) {
+        await db.fotos.update(f.id, { leitura: 'falhou' })
+        continue
+      }
       let resposta
       try {
         resposta = await remoto.lerComanda(await paraBase64(f.jpeg))
       } catch (e) {
-        if (!(e instanceof ErroRemoto) || (!e.permanente && !online())) return // sem internet: tenta na próxima
+        // Sem resposta da função (sem internet, rede caiu, demorou demais): tenta na próxima.
+        if (!(e instanceof ErroRemoto) || (!e.permanente && e.status === 0)) return
         if (!e.permanente) {
           // A função respondeu que a IA não leu agora: esta foto espera, as outras seguem.
           const adiadas = (f.adiadas ?? 0) + 1
@@ -535,6 +541,11 @@ export function criarRepoNuvem(opcoes: {
             envio: 'pendente',
             leitura: 'registro' in leitura ? 'feita' : leitura.pendente ? 'pendente' : 'falhou',
             tentativas: 0,
+            // Pendente com internet: a leitura ao vivo não veio (IA ocupada ou o motoboy digitou).
+            // A fila espera um pouco em vez de reenviar a foto logo em seguida.
+            ...('pendente' in leitura && leitura.pendente && online()
+              ? { proximaEm: new Date(Date.now() + 2 * 60_000).toISOString() }
+              : {}),
           })
           if ('registro' in leitura) {
             await db.leituras.put(leitura.registro)

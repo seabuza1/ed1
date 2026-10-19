@@ -39,7 +39,8 @@ function usuarioLogado(req: Request): boolean {
  * leituras por hora por conta, que segura o gasto de uma conta que não é da pizzaria. A chave anon
  * nem executa a função. Sem as variáveis do Supabase, fica só a conferência do token.
  */
-async function acesso(req: Request, sinal: AbortSignal): Promise<'ok' | 'inativo' | 'limite'> {
+/** 'ok', 'inativo', 'limite' ou o motivo da falha na checagem (para o log). */
+async function acesso(req: Request, sinal: AbortSignal): Promise<string> {
   if (!usuarioLogado(req)) return 'inativo'
   const url = Deno.env.get('SUPABASE_URL')
   const chave = Deno.env.get('SUPABASE_ANON_KEY')
@@ -50,8 +51,10 @@ async function acesso(req: Request, sinal: AbortSignal): Promise<'ok' | 'inativo
     body: '{}',
     signal: sinal,
   })
+  if (r.status === 401) return 'inativo'
   const v = r.ok ? await r.json() : null
-  return v === 'ok' || v === 'limite' ? v : 'inativo'
+  // Outra resposta (banco fora, 008 sem rodar): o motivo vai para o log, e não é culpa do motoboy.
+  return v === 'ok' || v === 'limite' || v === 'inativo' ? v : `pode_ler_comanda ${r.status}`
 }
 
 async function atender(req: Request, sinal: AbortSignal, inicio: number): Promise<Response> {
@@ -71,9 +74,13 @@ async function atender(req: Request, sinal: AbortSignal, inicio: number): Promis
   if (!imagem) return resposta({ erro: 'Foto não recebida.' }, 400)
   if (tamanhoBase64(imagem) > LIMITE_FOTO) return resposta({ erro: 'Foto acima de 2 MB.' }, 413)
 
-  const pode = await acesso(req, sinal).catch(() => 'inativo' as const)
+  const pode = await acesso(req, sinal).catch(() => (sinal.aborted ? 'pode_ler_comanda tempo esgotado' : 'pode_ler_comanda rede'))
   if (pode === 'inativo') return resposta({ erro: 'Entre no app para ler a comanda.' }, 401)
   if (pode === 'limite') return resposta({ erro: 'Muitas leituras nesta hora.' }, 429)
+  if (pode !== 'ok') {
+    console.error(`ler-comanda: ${pode} (${Date.now() - inicio} ms)`)
+    return resposta({ erro: 'A IA não respondeu agora.' }, 503)
+  }
 
   try {
     return resposta(await lerDuasVezes(config, imagem, { cardapio, exemplos: EXEMPLOS, sinal }))
@@ -82,8 +89,8 @@ async function atender(req: Request, sinal: AbortSignal, inicio: number): Promis
     const motivo = sinal.aborted ? 'tempo esgotado' : e instanceof ErroIA ? e.message : 'erro inesperado'
     console.error(`ler-comanda: ${config.provedor} ${motivo} (${Date.now() - inicio} ms)`)
     const status = e instanceof ErroIA && !sinal.aborted ? (e.status ?? 0) : 0
-    // Chave recusada ou modelo que não existe (desligado): 503, a foto espera a correção dos secrets.
-    if (status === 401 || status === 403 || status === 404)
+    // Chave recusada, sem crédito ou modelo que não existe (desligado): 503, a foto espera a correção.
+    if (status === 401 || status === 402 || status === 403 || status === 404)
       return resposta({ erro: 'Leitura ainda não configurada. Lance à mão.' }, 503)
     // Provedor ocupado ou fora do ar: 503, o app lê a foto mais tarde.
     if (status === 408 || status === 429 || status >= 500) return resposta({ erro: 'A IA não respondeu agora.' }, 503)

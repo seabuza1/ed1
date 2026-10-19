@@ -349,11 +349,13 @@ describe('fotos das comandas (leitura)', () => {
   it('IA fora do ar não segura a fila: a comanda e a foto sobem, a leitura espera e volta depois', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     try {
-      const { nuvem, repo } = montar()
+      const { nuvem, repo, modoAviao } = montar()
       await repo.sincronizar()
+      modoAviao(true) // fotos da R28: tiradas sem internet
       const noite = await abrir(repo)
       const c = await comFoto(repo, noite, true)
       await comFoto(repo, noite, true)
+      modoAviao(false)
       nuvem.estado.ia = { erro: 'IA fora do ar', fora: true }
       await repo.sincronizar()
       await repo.lerFotos()
@@ -368,6 +370,49 @@ describe('fotos das comandas (leitura)', () => {
       await repo.lerFotos()
       await repo.sincronizar()
       expect(nuvem.leituras.size).toBe(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('leitura ao vivo que não veio: a fila espera 2 min antes de mandar a foto de novo', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      const { nuvem, repo } = montar()
+      await repo.sincronizar()
+      await comFoto(repo, await abrir(repo), true) // com internet: a IA não respondeu na hora
+      nuvem.estado.ia = exemplo
+      await repo.sincronizar()
+      await repo.lerFotos()
+      expect(nuvem.estado.leiturasIA).toBe(0)
+      vi.setSystemTime(Date.now() + 3 * 60_000)
+      await repo.lerFotos()
+      expect(nuvem.estado.leiturasIA).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('caixa com acerto confirmado: a foto adiada não vai mais para a IA (a nuvem recusaria a leitura)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      const { nuvem, repo, modoAviao } = montar()
+      await repo.sincronizar()
+      modoAviao(true)
+      const noite = await abrir(repo)
+      await comFoto(repo, noite, true)
+      modoAviao(false)
+      nuvem.estado.ia = { erro: 'IA fora do ar', fora: true }
+      await repo.sincronizar()
+      await repo.lerFotos() // adiada
+      expect(nuvem.estado.leiturasIA).toBe(1)
+
+      nuvem.equipe.confirmar(noite.id, LUAN)
+      nuvem.estado.ia = exemplo
+      await repo.sincronizar()
+      vi.setSystemTime(Date.now() + 3 * 60_000)
+      await repo.lerFotos()
+      expect(nuvem.estado.leiturasIA).toBe(1)
     } finally {
       vi.useRealTimers()
     }
@@ -391,10 +436,12 @@ describe('fotos das comandas (leitura)', () => {
   })
 
   it('a IA não leu: tenta 3 vezes e desiste; leitura de comanda excluída não sobe', async () => {
-    const { nuvem, repo } = montar()
+    const { nuvem, repo, modoAviao } = montar()
     await repo.sincronizar()
+    modoAviao(true)
     const noite = await abrir(repo)
     await comFoto(repo, noite, true)
+    modoAviao(false)
     nuvem.estado.ia = { erro: 'ilegível' }
     for (let i = 0; i < 5; i++) {
       await repo.sincronizar()
@@ -402,7 +449,9 @@ describe('fotos das comandas (leitura)', () => {
     }
     expect(nuvem.estado.leiturasIA).toBe(3)
 
+    modoAviao(true)
     const outra = await comFoto(repo, noite, true)
+    modoAviao(false)
     nuvem.estado.ia = exemplo
     await repo.excluirComanda(outra.id)
     await repo.sincronizar()

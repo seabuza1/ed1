@@ -1,15 +1,20 @@
 // O que o app pede à nuvem. A implementação real é com o supabase-js; nos testes, uma
 // nuvem falsa em memória (remotoFalso.ts).
-import { FunctionsHttpError, type PostgrestError, type SupabaseClient } from '@supabase/supabase-js'
+import { FunctionsHttpError, FunctionsRelayError, type PostgrestError, type SupabaseClient } from '@supabase/supabase-js'
 import type { RespostaLeitura } from '../../domain/leitura'
 import type { AcertoLinha, AreaLinha, CaixaLinha, ComandaLinha, Gravavel, PerfilLinha, Tabela } from './linhas'
 
-/** permanente = a nuvem recusou (não adianta tentar de novo); senão é falta de internet. */
+/**
+ * permanente = a nuvem recusou (não adianta tentar de novo); senão é falta de internet. status: o
+ * HTTP da resposta, quando houve uma (0 = não chegou resposta).
+ */
 export class ErroRemoto extends Error {
   readonly permanente: boolean
-  constructor(mensagem: string, permanente: boolean) {
+  readonly status: number
+  constructor(mensagem: string, permanente: boolean, status = 0) {
     super(mensagem)
     this.permanente = permanente
+    this.status = status
   }
 }
 
@@ -171,14 +176,16 @@ export function criarRemotoSupabase(sb: SupabaseClient): Remoto {
         timeout: 45_000, // a função desiste em 30 s desde a chegada; sobra para subir a foto
       })
       if (error) {
-        const resposta = error instanceof FunctionsHttpError ? (error.context as Response) : null
+        const resposta =
+          error instanceof FunctionsHttpError || error instanceof FunctionsRelayError ? (error.context as Response) : null
         let motivo = 'Não deu para ler a foto.'
         try {
           motivo = (await resposta?.json())?.erro ?? motivo
         } catch {
           // corpo sem JSON
         }
-        throw new ErroRemoto(motivo, !transitorio(resposta?.status ?? 0))
+        const status = resposta?.status ?? 0
+        throw new ErroRemoto(motivo, !transitorio(status), status)
       }
       if (!data || 'erro' in data) throw new ErroRemoto(data?.erro ?? 'Não deu para ler a foto.', true)
       return data

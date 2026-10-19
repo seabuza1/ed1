@@ -15,6 +15,7 @@ Sistema para a pizzaria onde trabalho como motoboy, construído aos poucos. O MV
 - `supabase/006_pix_da_equipe.sql`: só a equipe marca o Pix "caiu". Rodar depois do 005.
 - `supabase/007_leitura_provedor.sql`: provedor e tokens de cada leitura. Rodar depois do 006.
 - `supabase/008_leitura_limite.sql`: até 60 leituras da IA por hora por conta. Rodar depois do 007.
+- `supabase/009_leitura_limite_trava.sql`: trava no limite do 008 para chamadas ao mesmo tempo. Rodar depois do 008.
 - `supabase/teste/`: teste das regras de acesso num Postgres local.
 - `supabase/functions/_shared/cardapio-mel.json`: cardápio, regras e glossário. Fonte única para a Edge Function e para o front.
 - `supabase/functions/_shared/` (`prompt.ts`, `schema.ts`, `ia/`) e `ler-comanda/`: prompt, schema, adaptadores dos provedores e Edge Function da leitura. Depois de mudar um exemplo, `npm run exemplos`.

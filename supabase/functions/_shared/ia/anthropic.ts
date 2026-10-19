@@ -41,6 +41,9 @@ export function criarAnthropic(o: OpcoesAdaptador): Adaptador {
         'Anthropic',
       )
       const msg = await r.json().catch(() => null)
+      // Sem crédito ou no limite de gasto vem 400: é configuração da conta, como um 402.
+      if (r.status === 400 && /credit balance|usage limit|billing/i.test(msg?.error?.message ?? ''))
+        throw new ErroIA('Anthropic sem crédito', 402)
       if (!r.ok) throw new ErroIA(`Anthropic ${r.status}`, r.status)
       if (msg?.stop_reason === 'refusal') throw new ErroIA('recusa')
       if (msg?.stop_reason === 'max_tokens') throw new ErroIA('resposta cortada')

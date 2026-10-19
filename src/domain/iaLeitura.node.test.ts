@@ -125,6 +125,10 @@ describe('Anthropic (Messages)', () => {
     expect(lida.tokens).toEqual({ entrada: 60, cache: 2000, saida: 80 })
     expect(pedidos[0].url).toBe(URL_ANTHROPIC)
     expect(pedidos[0].headers).toMatchObject({ 'x-api-key': 'k', 'anthropic-version': '2023-06-01' })
+    const semCredito = { type: 'error', error: { type: 'invalid_request_error', message: 'Your credit balance is too low to access the Anthropic API.' } }
+    await expect(
+      criarAnthropic({ chave: 'k', cardapio: CARDAPIO, exemplos: [], fetch: falso(() => ({ status: 400, json: semCredito })).f }).ler('FOTO', 'completa', 'm'),
+    ).rejects.toMatchObject({ status: 402 })
     for (const [stop, erro] of [
       ['refusal', 'recusa'],
       ['max_tokens', 'resposta cortada'],
