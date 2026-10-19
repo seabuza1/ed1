@@ -38,8 +38,8 @@ function usuarioLogado(req: Request): boolean {
  * Antes de cada foto (008): perfil ativo (conta desativada pelo admin não gasta a IA) e até 60
  * leituras por hora por conta, que segura o gasto de uma conta que não é da pizzaria. A chave anon
  * nem executa a função. Sem as variáveis do Supabase, fica só a conferência do token.
+ * Devolve 'ok', 'inativo', 'limite' ou o motivo da falha na checagem (para o log).
  */
-/** 'ok', 'inativo', 'limite' ou o motivo da falha na checagem (para o log). */
 async function acesso(req: Request, sinal: AbortSignal): Promise<string> {
   if (!usuarioLogado(req)) return 'inativo'
   const url = Deno.env.get('SUPABASE_URL')
