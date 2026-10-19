@@ -1,16 +1,16 @@
 // Edge Function ler-comanda (docs/SPEC-leitura.md): recebe a foto da comanda e devolve duas
-// leituras da IA, a completa e a de conferência (R25). Só transcreve; a conta é do app (R19).
-// POST { imagem } (JPEG em base64) → { leitura, conferencia, modelo, ms } ou { erro }.
-// Secrets: ANTHROPIC_API_KEY (nunca vai para o front nem para os logs) e ANTHROPIC_MODEL.
-import Anthropic from 'npm:@anthropic-ai/sdk@0.131.0'
+// leituras da IA configurada, a completa e a de conferência (R25). Só transcreve; a conta é do app (R19).
+// POST { imagem } (JPEG em base64) → { leitura, conferencia, provedor, modelo, ms, tokens } ou { erro }.
+// Secrets: IA_PROVEDOR (google, o padrão, ou anthropic), IA_MODELO, IA_MODELO_CONFERENCIA,
+// GEMINI_API_KEY e ANTHROPIC_API_KEY. Nenhuma chave vai para o front nem para os logs.
 import cardapio from '../_shared/cardapio-mel.json' with { type: 'json' }
 import { EXEMPLOS } from '../_shared/exemplos/exemplos.ts'
-import { LIMITE_FOTO, lerSaida, montarPedido, tamanhoBase64, type TipoLeitura } from '../_shared/prompt.ts'
+import { configurar, lerDuasVezes } from '../_shared/ia/ler.ts'
+import { ErroIA } from '../_shared/ia/tipos.ts'
+import { LIMITE_FOTO, tamanhoBase64 } from '../_shared/prompt.ts'
 
-const MODELO_PADRAO = 'claude-sonnet-5-5'
-const TEMPO_LIMITE = 20_000
-// Modelos que aceitam o fallback do servidor na forma "default".
-const COM_FALLBACK = new Set(['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-opus-5', 'claude-fable-5-1'])
+// As duas chamadas juntas; sem novas tentativas: passou do tempo, o motoboy lança à mão.
+const TEMPO_LIMITE = 30_000
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -35,45 +35,34 @@ function usuarioLogado(req: Request): boolean {
 }
 
 /**
- * Perfil ativo (meu_papel não nulo): conta desativada pelo admin não gasta a API. A chave anon
- * nem executa meu_papel (003). Sem as variáveis do Supabase, fica só a conferência do token.
+ * Antes de cada foto (008): perfil ativo (conta desativada pelo admin não gasta a IA) e até 60
+ * leituras por hora por conta, que segura o gasto de uma conta que não é da pizzaria. A chave anon
+ * nem executa a função. Sem as variáveis do Supabase, fica só a conferência do token.
+ * Devolve 'ok', 'inativo', 'limite' ou o motivo da falha na checagem (para o log).
  */
-async function perfilAtivo(req: Request): Promise<boolean> {
-  if (!usuarioLogado(req)) return false
+async function acesso(req: Request, sinal: AbortSignal): Promise<string> {
+  if (!usuarioLogado(req)) return 'inativo'
   const url = Deno.env.get('SUPABASE_URL')
   const chave = Deno.env.get('SUPABASE_ANON_KEY')
-  if (!url || !chave) return true
-  const r = await fetch(`${url}/rest/v1/rpc/meu_papel`, {
+  if (!url || !chave) return 'ok'
+  const r = await fetch(`${url}/rest/v1/rpc/pode_ler_comanda`, {
     method: 'POST',
     headers: { apikey: chave, Authorization: req.headers.get('Authorization')!, 'Content-Type': 'application/json' },
     body: '{}',
+    signal: sinal,
   })
-  return r.ok && (await r.json()) !== null
+  if (r.status === 401) return 'inativo'
+  const v = r.ok ? await r.json() : null
+  // Outra resposta (banco fora, 008 sem rodar): o motivo vai para o log, e não é culpa do motoboy.
+  return v === 'ok' || v === 'limite' || v === 'inativo' ? v : `pode_ler_comanda ${r.status}`
 }
 
-class ErroLeitura extends Error {}
-
-async function ler(cliente: Anthropic, modelo: string, tipo: TipoLeitura, imagem: string) {
-  const pedido = montarPedido(tipo, { cardapio, exemplos: EXEMPLOS, imagem, modelo })
-  const msg = await cliente.beta.messages.create({
-    ...pedido,
-    ...(COM_FALLBACK.has(modelo) ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const } : {}),
-  })
-  if (msg.stop_reason === 'refusal') throw new ErroLeitura('recusa')
-  if (msg.stop_reason === 'max_tokens') throw new ErroLeitura('resposta cortada')
-  const texto = msg.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('')
-  const saida = lerSaida(tipo, texto)
-  if (!saida) throw new ErroLeitura('formato inesperado')
-  return saida
-}
-
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
-  if (req.method !== 'POST') return resposta({ erro: 'Use POST.' }, 405)
-  if (!(await perfilAtivo(req))) return resposta({ erro: 'Entre no app para ler a comanda.' }, 401)
-
-  const chave = Deno.env.get('ANTHROPIC_API_KEY')
-  if (!chave) return resposta({ erro: 'Leitura ainda não configurada. Lance à mão.' }, 503)
+async function atender(req: Request, sinal: AbortSignal, inicio: number): Promise<Response> {
+  const config = configurar((nome) => Deno.env.get(nome))
+  if ('falta' in config) {
+    console.error(`ler-comanda: falta o secret ${config.falta}`)
+    return resposta({ erro: 'Leitura ainda não configurada. Lance à mão.' }, 503)
+  }
 
   let imagem = ''
   try {
@@ -85,29 +74,44 @@ Deno.serve(async (req) => {
   if (!imagem) return resposta({ erro: 'Foto não recebida.' }, 400)
   if (tamanhoBase64(imagem) > LIMITE_FOTO) return resposta({ erro: 'Foto acima de 2 MB.' }, 413)
 
-  const modelo = Deno.env.get('ANTHROPIC_MODEL') || MODELO_PADRAO
-  // Sem novas tentativas: passou do tempo, o motoboy lança à mão.
-  const cliente = new Anthropic({ apiKey: chave, timeout: TEMPO_LIMITE, maxRetries: 0 })
-  const inicio = Date.now()
+  const pode = await acesso(req, sinal).catch(() => (sinal.aborted ? 'pode_ler_comanda tempo esgotado' : 'pode_ler_comanda rede'))
+  if (pode === 'inativo') return resposta({ erro: 'Entre no app para ler a comanda.' }, 401)
+  if (pode === 'limite') return resposta({ erro: 'Muitas leituras nesta hora.' }, 429)
+  if (pode !== 'ok') {
+    console.error(`ler-comanda: ${pode} (${Date.now() - inicio} ms)`)
+    return resposta({ erro: 'A IA não respondeu agora.' }, 503)
+  }
+
   try {
-    const [leitura, conferencia] = await Promise.all([
-      ler(cliente, modelo, 'completa', imagem),
-      ler(cliente, modelo, 'conferencia', imagem),
-    ])
-    return resposta({ leitura, conferencia, modelo, ms: Date.now() - inicio })
+    return resposta(await lerDuasVezes(config, imagem, { cardapio, exemplos: EXEMPLOS, sinal }))
   } catch (e) {
     // No log só o tipo do erro: nada da chave, da foto ou da resposta.
-    const motivo =
-      e instanceof ErroLeitura
-        ? e.message
-        : e instanceof Anthropic.APIConnectionTimeoutError
-          ? 'tempo esgotado'
-          : e instanceof Anthropic.APIError
-            ? `API ${e.status ?? ''}`.trim()
-            : 'erro inesperado'
-    console.error(`ler-comanda: ${motivo} (${Date.now() - inicio} ms)`)
+    const motivo = sinal.aborted ? 'tempo esgotado' : e instanceof ErroIA ? e.message : 'erro inesperado'
+    console.error(`ler-comanda: ${config.provedor} ${motivo} (${Date.now() - inicio} ms)`)
+    const status = e instanceof ErroIA && !sinal.aborted ? (e.status ?? 0) : 0
+    // Chave recusada, sem crédito ou modelo que não existe (desligado): 503, a foto espera a correção.
+    if (status === 401 || status === 402 || status === 403 || status === 404)
+      return resposta({ erro: 'Leitura ainda não configurada. Lance à mão.' }, 503)
+    // Provedor ocupado ou fora do ar: 503, o app lê a foto mais tarde.
+    if (status === 408 || status === 429 || status >= 500) return resposta({ erro: 'A IA não respondeu agora.' }, 503)
     const texto = motivo === 'tempo esgotado' ? 'A leitura demorou demais. Lance à mão.' : 'Não deu para ler a foto. Lance à mão.'
     // 200 com { erro }: a chamada chegou e a IA não leu (o app conta como tentativa, não como falta de internet).
     return resposta({ erro: texto })
+  }
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
+  if (req.method !== 'POST') return resposta({ erro: 'Use POST.' }, 405)
+  // O relógio conta da chegada do pedido. Se o app desiste (Digitar, outra foto), a função para também.
+  const ctrl = new AbortController()
+  const parar = () => ctrl.abort()
+  const relogio = setTimeout(parar, TEMPO_LIMITE)
+  req.signal.addEventListener('abort', parar)
+  try {
+    return await atender(req, ctrl.signal, Date.now())
+  } finally {
+    clearTimeout(relogio)
+    req.signal.removeEventListener('abort', parar)
   }
 })

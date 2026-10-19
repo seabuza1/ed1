@@ -9,8 +9,8 @@ sh supabase/teste/rodar.sh
 ```
 
 Cria o banco `acerto_teste` com `stub-supabase.sql` (o mínimo do Supabase: `auth.users`,
-`auth.uid()`, papéis `anon` e `authenticated`), roda `001_schema.sql` a `006_pix_da_equipe.sql`,
-`rls.sql`, `rls-leitura.sql` e `rls-pix.sql`. Termina com `RLS ok`, `RLS leitura ok` e `RLS Pix ok`, ou para no primeiro erro. Confere, com duas contas de
+`auth.uid()`, papéis `anon` e `authenticated`), roda `001_schema.sql` a `009_leitura_limite_trava.sql`,
+`rls.sql`, `rls-leitura.sql`, `rls-pix.sql` e `rls-limite.sql`. Termina com `RLS ok`, `RLS leitura ok`, `RLS Pix ok` e `RLS limite ok`, ou para no primeiro erro (e sai com código de erro). Confere, com duas contas de
 motoboy, a do Luan e a do admin:
 
 - um motoboy não vê nem altera o caixa do outro;
@@ -20,7 +20,8 @@ motoboy, a do Luan e a do admin:
 - ordem de chegada e área sugerida (`area_do_codigo`);
 - leitura por foto: leituras e fotos só do dono do caixa ou da equipe, nada depois do acerto, caminho da foto
   `{caixa}/{comanda}.jpg` e só o admin apaga foto;
-- só a equipe marca ou desmarca o Pix "caiu".
+- só a equipe marca ou desmarca o Pix "caiu";
+- até 60 leituras da IA por hora por conta, e conta desativada não lê.
 
 ## App contra o banco (supabase-js + PostgREST)
 

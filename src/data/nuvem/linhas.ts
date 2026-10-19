@@ -112,8 +112,12 @@ export interface LeituraLinha {
   lancado: RegistroLeitura['lancado']
   corrigido: boolean
   forcado: boolean
+  provedor: string | null
   modelo: string | null
   ms: number | null
+  tokens_entrada: number | null
+  tokens_cache: number | null
+  tokens_saida: number | null
   criado_em: string
 }
 
@@ -128,8 +132,11 @@ export const linhaParaLeitura = (l: LeituraLinha): RegistroLeitura => ({
   lancado: l.lancado,
   corrigido: l.corrigido,
   forcado: l.forcado,
+  provedor: l.provedor,
   modelo: l.modelo ?? '',
   ms: l.ms ?? 0,
+  tokens:
+    l.tokens_entrada === null ? null : { entrada: l.tokens_entrada, cache: l.tokens_cache ?? 0, saida: l.tokens_saida ?? 0 },
   criadaEm: iso(l.criado_em)!,
 })
 
@@ -145,8 +152,12 @@ export const leituraParaGravar = (r: RegistroLeitura) => ({
   lancado: r.lancado,
   corrigido: r.corrigido,
   forcado: r.forcado,
+  provedor: r.provedor ?? null,
   modelo: r.modelo,
   ms: r.ms,
+  tokens_entrada: r.tokens?.entrada ?? null,
+  tokens_cache: r.tokens?.cache ?? null,
+  tokens_saida: r.tokens?.saida ?? null,
   criado_em: r.criadaEm,
 })
 

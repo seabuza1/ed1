@@ -1,51 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { EXEMPLOS } from '../../supabase/functions/_shared/exemplos/exemplos.ts'
-import {
-  ESQUEMA_COMPLETA,
-  ESQUEMA_CONFERENCIA,
-  LIMITE_FOTO,
-  lerSaida,
-  montarPedido,
-  montarSistema,
-  tamanhoBase64,
-} from '../../supabase/functions/_shared/prompt.ts'
+import { LIMITE_FOTO, montarPedido, montarSistema, tamanhoBase64 } from '../../supabase/functions/_shared/prompt.ts'
+import { ESQUEMA_COMPLETA, ESQUEMA_CONFERENCIA, lerSaida, valida } from '../../supabase/functions/_shared/schema.ts'
 import { CARDAPIO } from './cardapio'
 import { conferirLeitura, type LeituraCompleta, type LeituraConferencia } from './leitura'
-
-/** Confere um valor contra o subconjunto de JSON Schema que o prompt usa. */
-function confere(schema: Record<string, unknown>, v: unknown, caminho = '$'): string[] {
-  if (schema.anyOf) {
-    const opcoes = schema.anyOf as Record<string, unknown>[]
-    return opcoes.some((o) => confere(o, v).length === 0) ? [] : [`${caminho}: nenhuma opção do anyOf`]
-  }
-  if (schema.enum && !(schema.enum as unknown[]).includes(v)) return [`${caminho}: fora do enum`]
-  switch (schema.type) {
-    case 'null':
-      return v === null ? [] : [`${caminho}: não é null`]
-    case 'string':
-      return typeof v === 'string' ? [] : [`${caminho}: não é texto`]
-    case 'boolean':
-      return typeof v === 'boolean' ? [] : [`${caminho}: não é booleano`]
-    case 'integer':
-      return Number.isInteger(v) ? [] : [`${caminho}: não é inteiro`]
-    case 'array':
-      return Array.isArray(v)
-        ? v.flatMap((x, i) => confere(schema.items as Record<string, unknown>, x, `${caminho}[${i}]`))
-        : [`${caminho}: não é lista`]
-    case 'object': {
-      if (!v || typeof v !== 'object') return [`${caminho}: não é objeto`]
-      const props = schema.properties as Record<string, Record<string, unknown>>
-      const obj = v as Record<string, unknown>
-      const faltam = (schema.required as string[]).filter((k) => !(k in obj)).map((k) => `${caminho}.${k}: falta`)
-      const sobram = Object.keys(obj)
-        .filter((k) => !(k in props))
-        .map((k) => `${caminho}.${k}: sobra`)
-      return [...faltam, ...sobram, ...Object.keys(props).flatMap((k) => (k in obj ? confere(props[k], obj[k], `${caminho}.${k}`) : []))]
-    }
-  }
-  return [`${caminho}: tipo ${String(schema.type)} não previsto`]
-}
 
 describe('prompt da leitura', () => {
   const sistema = montarSistema(CARDAPIO)
@@ -62,8 +21,8 @@ describe('prompt da leitura', () => {
 
   it('os exemplos seguem o formato pedido à IA e o do domínio', () => {
     for (const x of EXEMPLOS) {
-      expect(confere(ESQUEMA_COMPLETA, x.leitura)).toEqual([])
-      expect(confere(ESQUEMA_CONFERENCIA, x.conferencia)).toEqual([])
+      expect(valida(ESQUEMA_COMPLETA, x.leitura)).toBe(true)
+      expect(valida(ESQUEMA_CONFERENCIA, x.conferencia)).toBe(true)
     }
     // Os tipos do domínio aceitam a saída como está.
     const leitura: LeituraCompleta = EXEMPLOS[0].leitura as LeituraCompleta
@@ -81,17 +40,12 @@ describe('prompt da leitura', () => {
     }
   })
 
-  it('pedido: sistema e exemplos com cache, a foto da vez no fim, saída estruturada', () => {
-    const p = montarPedido('conferencia', { cardapio: CARDAPIO, exemplos: EXEMPLOS, imagem: 'FOTO', modelo: 'm' })
-    expect(p.system[0].cache_control).toEqual({ type: 'ephemeral' })
-    expect(p.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user'])
-    expect(p.messages[1].content[0]).toMatchObject({
-      text: JSON.stringify(EXEMPLOS[0].conferencia),
-      cache_control: { type: 'ephemeral' },
-    })
-    const ultima = p.messages[2].content[0]
-    expect(ultima.type === 'image' && ultima.source.data).toBe('FOTO')
-    expect(p.output_config.format.schema).toBe(ESQUEMA_CONFERENCIA)
+  it('pedido igual para todo provedor: parte fixa primeiro, a foto da vez no fim', () => {
+    const p = montarPedido('conferencia', { cardapio: CARDAPIO, exemplos: EXEMPLOS, imagem: 'FOTO' })
+    expect(p.sistema).toBe(sistema)
+    expect(p.exemplos).toEqual([{ imagem: EXEMPLOS[0].imagem, resposta: JSON.stringify(EXEMPLOS[0].conferencia) }])
+    expect(p.imagem).toBe('FOTO')
+    expect(p.esquema).toBe(ESQUEMA_CONFERENCIA)
   })
 
   it('tamanho do base64 e leitura da saída', () => {
@@ -101,5 +55,18 @@ describe('prompt da leitura', () => {
     expect(lerSaida('conferencia', JSON.stringify(EXEMPLOS[0].conferencia))).toEqual(EXEMPLOS[0].conferencia)
     expect(lerSaida('completa', JSON.stringify(EXEMPLOS[0].conferencia))).toBeNull()
     expect(lerSaida('completa', 'não é json')).toBeNull()
+    expect(lerSaida('conferencia', EXEMPLOS[0].conferencia)).toEqual(EXEMPLOS[0].conferencia)
+  })
+
+  it('esquema: campo a mais, fora do enum, nulo onde não pode e tipo errado não passam', () => {
+    const c = EXEMPLOS[0].conferencia as Record<string, unknown>
+    expect(valida(ESQUEMA_CONFERENCIA, { ...c, extra: 1 })).toBe(false)
+    expect(valida(ESQUEMA_CONFERENCIA, { ...c, promocao: null })).toBe(false)
+    expect(valida(ESQUEMA_CONFERENCIA, { ...c, forma_escrita: null })).toBe(true)
+    expect(valida(ESQUEMA_CONFERENCIA, { ...c, total_digitos: [1, 1, 3] })).toBe(false)
+    const l = EXEMPLOS[0].leitura as { itens: Record<string, unknown>[] }
+    expect(valida(ESQUEMA_COMPLETA, { ...l, itens: [{ ...l.itens[0], tamanho: 'GG' }] })).toBe(false)
+    expect(valida(ESQUEMA_COMPLETA, { ...l, itens: [{ ...l.itens[0], quantidade: 1.5 }] })).toBe(false)
+    expect(valida(ESQUEMA_COMPLETA, [])).toBe(false)
   })
 })

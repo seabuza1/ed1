@@ -507,11 +507,21 @@ export function comandaDaLeitura(
 // ---------- Registro da leitura (R27) e leitura que chega depois (R28) ----------
 
 /** Resposta da Edge Function ler-comanda. */
+/** Tokens das duas chamadas somados (R27): entrada sem o cache, o cache e a saída. */
+export interface TokensLeitura {
+  entrada: number
+  cache: number
+  saida: number
+}
+
 export interface RespostaLeitura {
   leitura: LeituraCompleta
   conferencia: LeituraConferencia
+  /** google ou anthropic (a função antiga não mandava). */
+  provedor?: string
   modelo: string
   ms: number
+  tokens?: TokensLeitura
 }
 
 /**
@@ -550,8 +560,10 @@ export interface RegistroLeitura {
   corrigido: boolean
   /** "Lançar assim" no vermelho. */
   forcado: boolean
+  provedor: string | null
   modelo: string
   ms: number
+  tokens: TokensLeitura | null
   criadaEm: string
 }
 
@@ -565,7 +577,7 @@ export const houveCorrecao = (cor: Correcoes, r: ResultadoLeitura) =>
   r.areaOrigem === 'manual'
 
 export function registroLeitura(
-  resposta: Pick<RespostaLeitura, 'leitura' | 'modelo' | 'ms'> & { conferencia: LeituraConferencia | null },
+  resposta: Pick<RespostaLeitura, 'leitura' | 'provedor' | 'modelo' | 'ms' | 'tokens'> & { conferencia: LeituraConferencia | null },
   /** A conferência sem correções. */
   r: ResultadoLeitura,
   ctx: {
@@ -610,8 +622,10 @@ export function registroLeitura(
     },
     corrigido: ctx.corrigido,
     forcado: ctx.forcado,
+    provedor: resposta.provedor ?? null,
     modelo: resposta.modelo,
     ms: resposta.ms,
+    tokens: resposta.tokens ?? null,
     criadaEm: ctx.agora,
   }
 }

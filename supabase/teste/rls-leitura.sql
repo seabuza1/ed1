@@ -1,4 +1,4 @@
--- Teste das regras da leitura (004 e 005): leituras e fotos no Storage. Roda depois do rls.sql
+-- Teste das regras da leitura (004, 005 e 007): leituras e fotos no Storage. Roda depois do rls.sql
 -- (João com o caixa ...01 reaberto, Maria com o ...02). Saída sem erro = tudo certo.
 \set ON_ERROR_STOP 1
 set role authenticated;
@@ -22,9 +22,20 @@ values ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-0000000
 on conflict (id) do update set corrigido = excluded.corrigido;
 do $$ begin
   if not (select corrigido from leituras) then raise exception 'reenvio da leitura'; end if;
-  -- A comanda que saiu de novo continua com a foto do mesmo papel (outro id no caminho).
-  update comandas set foto_path = '10000000-0000-0000-0000-000000000001/20000000-0000-0000-0000-000000000001.jpg'
-   where id = '20000000-0000-0000-0000-000000000002';
+  -- A foto é sempre a da própria comanda: a que sai de novo vai sem foto.
+  begin
+    update comandas set foto_path = '10000000-0000-0000-0000-000000000001/20000000-0000-0000-0000-000000000001.jpg'
+     where id = '20000000-0000-0000-0000-000000000002';
+    raise exception 'aceitou a foto de outra comanda';
+  exception when check_violation then null;
+  end;
+  -- Provedor e tokens da leitura (007).
+  update leituras set provedor = 'google', tokens_entrada = 2500, tokens_cache = 1800, tokens_saida = 400;
+  begin
+    update leituras set tokens_saida = -1;
+    raise exception 'aceitou tokens negativos';
+  exception when check_violation then null;
+  end;
   begin
     insert into storage.objects (bucket_id, name)
     values ('comandas', '10000000-0000-0000-0000-000000000002/20000000-0000-0000-0000-000000000009.jpg');
