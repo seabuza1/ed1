@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { calcularAcerto } from '../domain/acerto'
 import { dataDaNoite, formatarData } from '../domain/datas'
 import { formatarReais, lerReais, paraCampo } from '../domain/dinheiro'
-import { abrirNoite, editarValoresNoite, noiteAberta, reabrirNoite } from '../domain/noite'
+import { abrirNoite, editarPromocao, editarValoresNoite, noiteAberta, reabrirNoite } from '../domain/noite'
 import type { AcertoConfirmado, Ajustes, Area, Comanda, Noite } from '../domain/tipos'
 import { novoId } from '../data/id'
 import { repo } from '../data/repo'
@@ -48,7 +48,18 @@ export function TelaNoite(props: {
 }
 
 function AbrirNoite({ noites, ajustes, acertos }: { noites: Noite[]; ajustes: Ajustes; acertos: AcertoConfirmado[] }) {
-  const [data, setData] = useState(() => dataDaNoite(new Date()))
+  // A data segue o relógio até ser mudada à mão: o app volta do fundo na mesma tela, noutro dia.
+  const [dataEditada, setData] = useState<string | null>(null)
+  const [hoje, setHoje] = useState(() => dataDaNoite(new Date()))
+  useEffect(() => {
+    const aoVoltar = () => document.visibilityState === 'visible' && setHoje(dataDaNoite(new Date()))
+    document.addEventListener('visibilitychange', aoVoltar)
+    return () => document.removeEventListener('visibilitychange', aoVoltar)
+  }, [])
+  const data = dataEditada ?? hoje
+  // Toque duplo não abre duas noites: a lista só traz a nova depois de gravar.
+  const abrindo = useRef(false)
+  const [ocupado, setOcupado] = useState(false)
   const [caixa, setCaixa] = useState(paraCampo(ajustes.caixaPadrao))
   const [diaria, setDiaria] = useState(paraCampo(ajustes.diariaPadrao))
   const [erro, setErro] = useState<string | null>(null)
@@ -56,16 +67,22 @@ function AbrirNoite({ noites, ajustes, acertos }: { noites: Noite[]; ajustes: Aj
   const confirmada = existente && acertos.some((a) => a.caixaId === existente.id)
 
   async function abrir() {
+    if (abrindo.current) return
     const caixaInicial = lerReais(caixa)
     const valorDiaria = lerReais(diaria)
     if (caixaInicial === null) return setErro('Caixa inválido.')
     if (valorDiaria === null) return setErro('Diária inválida.')
     const r = abrirNoite({ data, caixaInicial, diaria: valorDiaria }, noites, novoId())
     if (!r.ok) return setErro(r.erro)
+    abrindo.current = true
+    setOcupado(true)
     try {
       await repo.salvarNoite(r.valor)
+      // Gravou: a tela troca quando a lista trouxer a noite; até lá, continua travado.
     } catch (e) {
       setErro(mensagemDeErro(e))
+      abrindo.current = false
+      setOcupado(false)
     }
   }
 
@@ -113,7 +130,7 @@ function AbrirNoite({ noites, ajustes, acertos }: { noites: Noite[]; ajustes: Aj
               <CampoReais rotulo="Caixa" valor={caixa} onChange={(t) => (setCaixa(t), setErro(null))} />
               <CampoReais rotulo="Diária" valor={diaria} onChange={(t) => (setDiaria(t), setErro(null))} />
             </div>
-            <button type="submit" className="primario">
+            <button type="submit" className="primario" disabled={ocupado}>
               Abrir noite
             </button>
           </>
@@ -128,17 +145,22 @@ function ValoresNoite({ noite, travada }: { noite: Noite; travada: boolean }) {
   const [editando, setEditando] = useState(false)
   const [caixa, setCaixa] = useState('')
   const [diaria, setDiaria] = useState('')
+  const [promo, setPromo] = useState('')
   const [erro, setErro] = useState<string | null>(null)
 
   async function salvar() {
     const caixaInicial = lerReais(caixa)
     const valorDiaria = lerReais(diaria)
+    const promoDesconto = promo.trim() === '' ? null : lerReais(promo)
     if (caixaInicial === null) return setErro('Caixa inválido.')
     if (valorDiaria === null) return setErro('Diária inválida.')
+    if (promo.trim() !== '' && promoDesconto === null) return setErro('Promoção inválida.')
     const r = editarValoresNoite(noite, { caixaInicial, diaria: valorDiaria })
     if (!r.ok) return setErro(r.erro)
+    const p = editarPromocao(r.valor, promoDesconto)
+    if (!p.ok) return setErro(p.erro)
     try {
-      await repo.atualizarNoite(noite.id, { caixaInicial, diaria: valorDiaria })
+      await repo.atualizarNoite(noite.id, { caixaInicial, diaria: valorDiaria, promoDesconto })
       setEditando(false)
     } catch (e) {
       setErro(mensagemDeErro(e))
@@ -153,6 +175,12 @@ function ValoresNoite({ noite, travada }: { noite: Noite; travada: boolean }) {
           <p className="discreto pequeno">
             Caixa <span className="num">{formatarReais(noite.caixaInicial)}</span> · Diária{' '}
             <span className="num">{formatarReais(noite.diaria)}</span>
+            {noite.promoDesconto != null && (
+              <>
+                {' '}
+                · Promoção <span className="num">{formatarReais(noite.promoDesconto)}</span>
+              </>
+            )}
           </p>
           <IndicadorNuvem />
         </div>
@@ -163,6 +191,7 @@ function ValoresNoite({ noite, travada }: { noite: Noite; travada: boolean }) {
             onClick={() => {
               setCaixa(paraCampo(noite.caixaInicial))
               setDiaria(paraCampo(noite.diaria))
+              setPromo(noite.promoDesconto == null ? '' : paraCampo(noite.promoDesconto))
               setErro(null)
               setEditando(true)
             }}
@@ -187,6 +216,7 @@ function ValoresNoite({ noite, travada }: { noite: Noite; travada: boolean }) {
         <CampoReais rotulo="Caixa" valor={caixa} onChange={setCaixa} />
         <CampoReais rotulo="Diária" valor={diaria} onChange={setDiaria} />
       </div>
+      <CampoReais rotulo="Promoção por pizza (vazio: sem)" valor={promo} onChange={setPromo} />
       <div className="lado-a-lado">
         <button type="button" className="secundario" onClick={() => setEditando(false)}>
           Cancelar

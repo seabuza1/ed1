@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   calcularAcerto,
   compararComLuan,
@@ -177,6 +177,12 @@ type Atualizar = (r: Resultado<Partial<Noite>>) => void
 
 function Conferencia(props: { noite: Noite; acerto: Acerto; leitura: boolean; atualizar: Atualizar }) {
   const [contado, setContado] = useState(campo(props.noite.dinheiroContado))
+  // O Luan também registra o dinheiro contado no painel: fora do campo, ele acompanha a nuvem.
+  const digitando = useRef(false)
+  const valorNuvem = props.noite.dinheiroContado
+  useEffect(() => {
+    if (!digitando.current) setContado(campo(valorNuvem))
+  }, [valorNuvem])
   const conf = props.acerto.conferencia
 
   return (
@@ -188,9 +194,13 @@ function Conferencia(props: { noite: Noite; acerto: Acerto; leitura: boolean; at
         desabilitado={props.leitura}
         placeholder={paraCampo(props.acerto.devolver)}
         onChange={(t) => {
+          digitando.current = true
           setContado(t)
           const v = lerOpcional(t)
           if (v !== undefined) props.atualizar(registrarContado(props.noite, v))
+        }}
+        aoSair={() => {
+          digitando.current = false
         }}
       />
       {conf && (

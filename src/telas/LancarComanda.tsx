@@ -10,6 +10,7 @@ import {
   type RespostaLeitura,
 } from '../domain/leitura'
 import type { Area, Comanda, Noite } from '../domain/tipos'
+import { useSegurarAtualizacao } from '../data/atualizacao'
 import { agora, novoId, segundosDesde } from '../data/id'
 import { ErroRemoto } from '../data/nuvem/remoto'
 import { repo } from '../data/repo'
@@ -38,10 +39,16 @@ interface Formulario {
 
 const vazio = (): Formulario => ({ codigo: '', total: '', areaId: null, pagamento: pagamentoVazio() })
 
-/** A foto em leitura ou em confirmação. */
+/** A foto em leitura ou em confirmação (com o pagamento refeito, que leva o troco). */
 type Leitura =
   | { fase: 'lendo' | 'tremida'; foto: FotoDaComanda }
-  | { fase: 'confirmar'; foto: FotoDaComanda; resposta: RespostaLeitura; correcoes: Correcoes }
+  | {
+      fase: 'confirmar'
+      foto: FotoDaComanda
+      resposta: RespostaLeitura
+      correcoes: Correcoes
+      pagamento: EstadoPagamento | null
+    }
 
 /** Foto que segue com o lançamento à mão: lida depois (R28), ou já lida e recusada pelo motoboy. */
 interface FotoNoManual {
@@ -76,7 +83,16 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
     urlFoto.current = blob && URL.createObjectURL(blob)
     return urlFoto.current
   }
-  useEffect(() => () => void trocarUrl(null), [])
+  // Ao sair, a leitura em andamento para (a função também, docs/SPEC-leitura.md).
+  useEffect(
+    () => () => {
+      pedido.current?.abort()
+      trocarUrl(null)
+    },
+    [],
+  )
+  // Versão nova do app espera a foto, a leitura ou a comanda digitada pela metade.
+  useSegurarAtualizacao(leitura !== null || fotoManual !== null || f.codigo !== '' || f.total !== '')
   // O Desfazer traz a foto de volta: endereço novo, o antigo pode já ter sido revogado.
   const comUrlNova = (foto: FotoDaComanda) => ({ ...foto, url: trocarUrl(foto.blob)! })
 
@@ -84,6 +100,8 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
     if (!fotos) return
     setErro(null)
     setAvisoFoto(null)
+    // A foto nova toma o lugar da que esperava no manual (o endereço dela é revogado abaixo).
+    setFotoManual(null)
     pedido.current?.abort()
     let pronta
     try {
@@ -100,7 +118,7 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
     pedido.current = ctrl
     try {
       const resposta = await fotos.ler(foto.base64, ctrl.signal)
-      if (!ctrl.signal.aborted) setLeitura({ fase: 'confirmar', foto, resposta, correcoes: {} })
+      if (!ctrl.signal.aborted) setLeitura({ fase: 'confirmar', foto, resposta, correcoes: {}, pagamento: null })
     } catch (e) {
       if (ctrl.signal.aborted) return
       // A IA não leu: segue à mão. Internet ou função fora: a foto fica para ler depois (R28).
@@ -127,17 +145,19 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
     comanda: Comanda,
     registro: RegistroLeitura,
     correcoes: Correcoes,
+    pagamento: EstadoPagamento | null,
   ) {
     if (!fotos) return
+    setErro(null)
     setLeitura(null)
     try {
       await fotos.lancar(comanda, foto.blob, { registro })
       aviso(`${comanda.codigo} lançada`, async () => {
         await repo.excluirComanda(comanda.id)
-        setLeitura({ fase: 'confirmar', foto: comUrlNova(foto), resposta, correcoes })
+        setLeitura({ fase: 'confirmar', foto: comUrlNova(foto), resposta, correcoes, pagamento })
       })
     } catch (e) {
-      setLeitura({ fase: 'confirmar', foto, resposta, correcoes })
+      setLeitura({ fase: 'confirmar', foto, resposta, correcoes, pagamento })
       setErro(mensagemDeErro(e))
     }
   }
@@ -232,18 +252,21 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
         foto={leitura.foto}
         resposta={leitura.resposta}
         correcoesIniciais={leitura.correcoes}
+        pagamentoInicial={leitura.pagamento}
         noite={props.noite}
         areas={props.areas}
         comandas={props.comandas}
+        erro={erro}
         onDigitar={(codigo, total) =>
           paraManual({ foto: leitura.foto, pendente: false, resposta: leitura.resposta }, null, { codigo, total })
         }
-        onLancar={(comanda, registro, correcoes) =>
-          lancarLida(leitura.foto, leitura.resposta, comanda, registro, correcoes)
+        onLancar={(comanda, registro, correcoes, pagamento) =>
+          lancarLida(leitura.foto, leitura.resposta, comanda, registro, correcoes, pagamento)
         }
-        onPromocao={(centavos) =>
+        onPromocao={(centavos) => {
+          setErro(null)
           repo.atualizarNoite(props.noite.id, { promoDesconto: centavos }).catch((e) => setErro(mensagemDeErro(e)))
-        }
+        }}
       />
     )
   if (leitura)
@@ -251,6 +274,7 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
       <LendoComanda
         foto={leitura.foto}
         tremida={leitura.fase === 'tremida'}
+        erro={erro}
         onDigitar={() => paraManual({ foto: leitura.foto, pendente: leitura.fase === 'lendo' }, null)}
         onTirarDeNovo={tirarFoto}
       />

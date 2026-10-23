@@ -41,9 +41,10 @@ export default function App({ abrirPainel }: { abrirPainel?: () => void }) {
 
   return (
     <>
-      {aba === 'noite' && (
+      {/* A Noite fica montada nas outras abas: a foto e a leitura em andamento não se perdem. */}
+      <div className="aba-guardada" hidden={aba !== 'noite'}>
         <TelaNoite noites={noites} ajustes={ajustes} areas={areas} comandas={comandas} acertos={acertos} />
-      )}
+      </div>
       {aba === 'acerto' && (
         <TelaAcerto noite={emFoco} noites={noites} comandas={comandas} areas={areas} acerto={acertoDe(emFoco?.id)} />
       )}

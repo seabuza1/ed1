@@ -56,6 +56,12 @@ export async function chamar(buscar: typeof fetch, url: string, init: RequestIni
   }
 }
 
+/**
+ * 400 do provedor: se o problema é a foto, a IA não leu esta (422, conta como tentativa); senão é o
+ * pedido (modelo que não aceita um parâmetro, schema): configuração, como um 404.
+ */
+export const status400 = (mensagem: string) => (/image|imagem/i.test(mensagem) ? 422 : 400)
+
 /** O texto da resposta como JSON; sem JSON, a IA não leu. */
 export function comoJson(texto: string): unknown {
   try {

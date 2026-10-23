@@ -136,7 +136,7 @@ export const linhaParaLeitura = (l: LeituraLinha): RegistroLeitura => ({
   modelo: l.modelo ?? '',
   ms: l.ms ?? 0,
   tokens:
-    l.tokens_entrada === null ? null : { entrada: l.tokens_entrada, cache: l.tokens_cache ?? 0, saida: l.tokens_saida ?? 0 },
+    l.tokens_entrada == null ? null : { entrada: l.tokens_entrada, cache: l.tokens_cache ?? 0, saida: l.tokens_saida ?? 0 },
   criadaEm: iso(l.criado_em)!,
 })
 

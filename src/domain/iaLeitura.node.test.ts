@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { EXEMPLOS } from '../../supabase/functions/_shared/exemplos/exemplos.ts'
 import { corpoAnthropic, criarAnthropic, URL_ANTHROPIC } from '../../supabase/functions/_shared/ia/anthropic.ts'
-import { corpoGemini, criarGoogle, textoGemini, tokensGemini, URL_GEMINI } from '../../supabase/functions/_shared/ia/google.ts'
+import { corpoGemini, criarGoogle, statusGemini, textoGemini, tokensGemini, URL_GEMINI } from '../../supabase/functions/_shared/ia/google.ts'
 import { configurar, lerDuasVezes } from '../../supabase/functions/_shared/ia/ler.ts'
 import { ErroIA } from '../../supabase/functions/_shared/ia/tipos.ts'
 import { montarPedido } from '../../supabase/functions/_shared/prompt.ts'
@@ -94,6 +94,18 @@ describe('Gemini (API Interactions)', () => {
     const chaveRuim = [{ error: { code: 400, status: 'INVALID_ARGUMENT', details: [{ reason: 'API_KEY_INVALID' }] } }]
     await expect(com(400, chaveRuim).ler('FOTO', 'completa', 'm')).rejects.toMatchObject({ status: 401 })
     await expect(com(200, { status: 'failed', errors: [{ code: 503 }] }).ler('FOTO', 'completa', 'm')).rejects.toMatchObject({ status: 503 })
+    // O código do erro também vem como gRPC ou texto; sem código conhecido, é do provedor (passageiro).
+    expect(statusGemini('failed', { code: 14 })).toBe(503)
+    expect(statusGemini('failed', { code: 8 })).toBe(429)
+    expect(statusGemini('failed', { code: 'https://x/resource-exhausted' })).toBe(429)
+    expect(statusGemini('failed', { code: 'https://x/unavailable' })).toBe(503)
+    expect(statusGemini('failed', {})).toBe(503)
+    expect(statusGemini('incomplete', {})).toBeUndefined()
+    // 400 por causa da foto conta como tentativa (422); outro 400 é configuração.
+    const fotoRuim = { error: { code: 400, status: 'INVALID_ARGUMENT', message: 'Unable to process input image.' } }
+    await expect(com(400, fotoRuim).ler('FOTO', 'completa', 'm')).rejects.toMatchObject({ status: 422 })
+    const parametro = { error: { code: 400, status: 'INVALID_ARGUMENT', message: 'thinking_level is not supported for this model.' } }
+    await expect(com(400, parametro).ler('FOTO', 'completa', 'm')).rejects.toMatchObject({ status: 400 })
     const semRede = (async () => {
       throw new TypeError('fetch failed')
     }) as unknown as typeof fetch

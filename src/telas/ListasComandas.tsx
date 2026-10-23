@@ -1,5 +1,14 @@
 import { useCallback, useState, type ReactNode } from 'react'
-import { filtrarPorCodigo, marcarEntregue, marcarVoltou, nomesFormas, saiuDeNovo, separarPorStatus } from '../domain/comanda'
+import {
+  comandaRepetida,
+  filtrarPorCodigo,
+  marcarEntregue,
+  marcarVoltou,
+  NOMES_STATUS,
+  nomesFormas,
+  saiuDeNovo,
+  separarPorStatus,
+} from '../domain/comanda'
 import { formatarHora } from '../domain/datas'
 import { formatarReais } from '../domain/dinheiro'
 import { avisoLeitura } from '../domain/leitura'
@@ -7,6 +16,7 @@ import type { Area, Comanda } from '../domain/tipos'
 import { agora, novoId } from '../data/id'
 import { repo } from '../data/repo'
 import { useConsulta } from '../data/useConsulta'
+import { BotaoConfirmar } from '../ui/BotaoConfirmar'
 import { useAviso } from '../ui/desfazer'
 import { mensagemDeErro } from '../ui/erro'
 import { Icone, type NomeIcone } from '../ui/Icone'
@@ -19,6 +29,28 @@ const ICONE_STATUS: Record<Comanda['status'], NomeIcone> = {
   em_rota: 'moto',
   entregue: 'check',
   voltou: 'voltou',
+}
+
+/** R1 no "Saiu de novo": já tendo outra com o mesmo código fora de "voltou", pede o segundo toque. */
+function SaiuDeNovo(props: { repetida: Comanda | undefined; onSair: () => void }) {
+  const rotulo = (
+    <>
+      <Icone nome="denovo" tamanho={18} />
+      Saiu de novo
+    </>
+  )
+  if (!props.repetida)
+    return (
+      <button type="button" onClick={props.onSair}>
+        {rotulo}
+      </button>
+    )
+  const status = NOMES_STATUS[props.repetida.status].toLowerCase()
+  return (
+    <BotaoConfirmar confirmacao={`${props.repetida.codigo} já ${status}: toque de novo`} onConfirmar={props.onSair}>
+      {rotulo}
+    </BotaoConfirmar>
+  )
 }
 
 /** Listas da noite. Sem `somenteLeitura`, com as ações (desfazer no lugar de confirmar) e a edição. */
@@ -115,17 +147,14 @@ export function ListasComandas(props: {
               </>
             )}
             {c.status === 'voltou' && (
-              <button
-                type="button"
-                onClick={() => {
+              <SaiuDeNovo
+                repetida={comandaRepetida(c.codigo, props.comandas)}
+                onSair={() => {
                   const r = saiuDeNovo(c, area, { id: novoId(), agora: agora() })
                   if (!r.ok) return setErro(r.erro)
                   gravar(r.valor, `${c.codigo} saiu de novo`, null)
                 }}
-              >
-                <Icone nome="denovo" tamanho={18} />
-                Saiu de novo
-              </button>
+              />
             )}
             <button type="button" onClick={() => abrir('editar')}>
               <Icone nome="lapis" tamanho={18} />

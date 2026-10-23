@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { detalharAcerto, entregasPorCidade, papeisParaConferir, resumoMaquininha, type Acerto } from '../domain/acerto'
 import { nomesFormas } from '../domain/comanda'
-import { formatarData, formatarHora } from '../domain/datas'
+import { formatarDataHora, formatarHora } from '../domain/datas'
 import { formatarReais } from '../domain/dinheiro'
 import type { AcertoConfirmado, Area, Comanda } from '../domain/tipos'
 import { mensagemDeErro } from './erro'
@@ -15,8 +15,8 @@ export function AcertoDoLuan({ confirmado: a, painel = false }: { confirmado: Ac
     <section className="bloco">
       <h2>Acerto confirmado</h2>
       <p className="discreto pequeno">
-        {a.confirmadoPorNome ? `Por ${a.confirmadoPorNome}` : 'Pela expedição'} em {formatarData(a.confirmadoEm.slice(0, 10))} às{' '}
-        {formatarHora(a.confirmadoEm)}. {painel ? 'O caixa fica travado para o motoboy.' : 'A noite fica travada; só o admin reabre.'}
+        {a.confirmadoPorNome ? `Por ${a.confirmadoPorNome}` : 'Pela expedição'} em {formatarDataHora(a.confirmadoEm)}.{' '}
+        {painel ? 'O caixa fica travado para o motoboy.' : 'A noite fica travada; só o admin reabre.'}
       </p>
       <dl className="liquidacao">
         <div>

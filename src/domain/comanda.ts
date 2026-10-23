@@ -132,6 +132,12 @@ export const marcarVoltou = (c: Comanda, agora: string): Comanda => ({
   finalizadaEm: agora,
 })
 
+const pixAntecipado = (ps: Pagamento[]) => ps.reduce((s, p) => s + (p.forma === 'pix_antecipado' ? p.valor : 0), 0)
+
+/** O "caiu" do Luan vale para o valor que ele conferiu: mudou o Pix antecipado, a marca sai (006, 010). */
+const pixAindaConfirmado = (c: Comanda, novos: Pagamento[]) =>
+  c.pixConfirmado === true && pixAntecipado(novos) === pixAntecipado(c.pagamentos)
+
 /** "Trocou a forma": grava os novos pagamentos e marca entregue. */
 export function trocarForma(
   c: Comanda,
@@ -146,6 +152,7 @@ export function trocarForma(
       ...c,
       pagamentos: pagamento.pagamentos.map((p) => ({ ...p })),
       troco: pagamento.troco,
+      pixConfirmado: pixAindaConfirmado(c, pagamento.pagamentos),
       status: 'entregue',
       atualizadaEm: agora,
       finalizadaEm: agora,
@@ -153,7 +160,10 @@ export function trocarForma(
   }
 }
 
-/** R7: o pedido que voltou e sai outra vez vira comanda nova, em rota, com outra taxa. */
+/**
+ * R7: o pedido que voltou e sai outra vez vira comanda nova, em rota, com outra taxa. A nova nasce
+ * sem papel conferido e sem o "caiu" do Pix (o 006 zera a marca na comanda nova do motoboy).
+ */
 export function saiuDeNovo(
   c: Comanda,
   area: Area | undefined,
@@ -174,6 +184,8 @@ export function saiuDeNovo(
       criadaEm: ctx.agora,
       atualizadaEm: ctx.agora,
       finalizadaEm: null,
+      papelConferido: false,
+      pixConfirmado: false,
       // A foto fica na comanda que voltou: o caminho dela leva o id daquela (supabase/004).
       fotoPath: null,
     },
@@ -209,6 +221,7 @@ export function editarComanda(
       total: entrada.total,
       pagamentos,
       troco: entrada.troco,
+      pixConfirmado: pixAindaConfirmado(c, pagamentos),
       areaId: area.id,
       taxa,
       status,

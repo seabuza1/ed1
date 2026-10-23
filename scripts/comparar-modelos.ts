@@ -17,7 +17,7 @@ import { LIMITE_FOTO } from '../supabase/functions/_shared/prompt.ts'
 import { CARDAPIO, normalizar } from '../src/domain/cardapio'
 import { formatarNumero, lerReais } from '../src/domain/dinheiro'
 import { conferirLeitura, type LeituraCompleta, type LeituraConferencia, type ResultadoLeitura } from '../src/domain/leitura'
-import { paraCsv } from '../src/domain/medicao'
+import { deCsv, paraCsv } from '../src/domain/medicao'
 import type { Area } from '../src/domain/tipos'
 
 const MODELOS_PADRAO = ['google:gemini-3.1-pro-preview', 'google:gemini-3.8-flash', 'anthropic:claude-haiku-5-5']
@@ -42,19 +42,24 @@ function opcao(nome: string): string | undefined {
   return i > 0 ? process.argv[i + 1] : undefined
 }
 
-/** Linhas de um CSV com ";" e cabeçalho, como objetos. */
-function lerCsv(arquivo: string): Record<string, string>[] {
-  const [cabecalho, ...linhas] = readFileSync(arquivo, 'utf8')
-    .split(/\r?\n/)
-    .filter((l) => l.trim())
-    .map((l) => l.split(';').map((c) => c.trim()))
-  return linhas.map((l) => Object.fromEntries(cabecalho.map((k, i) => [k.toLowerCase(), l[i] ?? ''])))
+/** Linhas de um CSV com cabeçalho, como objetos; avisa se faltar coluna. */
+function lerCsv(arquivo: string, colunas: string[]): Record<string, string>[] {
+  const [cabecalho = [], ...linhas] = deCsv(readFileSync(arquivo, 'utf8'))
+  const chaves = cabecalho.map((k) => k.toLowerCase())
+  const faltam = colunas.filter((c) => !chaves.includes(c))
+  if (faltam.length) {
+    console.error(`${arquivo}: falta a coluna ${faltam.join(', ')} no cabeçalho.`)
+    process.exit(1)
+  }
+  return linhas.map((l) => Object.fromEntries(chaves.map((k, i) => [k, l[i] ?? ''])))
 }
 
 /** Formas sem repetir e em ordem ("cartao+dinheiro"); Pix na máquina e antecipado contam como pix. */
 const formas = (fs: string[]) =>
   [...new Set(fs.map((f) => (f.startsWith('pix') ? 'pix' : f)))].sort().join('+')
 const formasLidas = (r: ResultadoLeitura) => formas(r.pagamentos.map((p) => (p.pedePix ? 'pix' : (p.forma ?? '?'))))
+
+const COLUNAS_GABARITO = ['foto', 'codigo', 'total', 'area', 'forma']
 
 const pasta = process.argv[2]
 if (!pasta || !existsSync(join(pasta, 'gabarito.csv'))) {
@@ -64,9 +69,9 @@ if (!pasta || !existsSync(join(pasta, 'gabarito.csv'))) {
 const modelos = (opcao('modelos') ?? MODELOS_PADRAO.join(',')).split(',').map((m) => m.trim())
 const promo = opcao('promo') ? lerReais(opcao('promo')!) : null
 const areas = existsSync(join(pasta, 'areas.csv'))
-  ? lerCsv(join(pasta, 'areas.csv')).map((a, i) => ({ id: `area${i}`, nome: a.nome, taxa: lerReais(a.taxa) ?? 0, ativa: true }))
+  ? lerCsv(join(pasta, 'areas.csv'), ['nome', 'taxa']).map((a, i) => ({ id: `area${i}`, nome: a.nome, taxa: lerReais(a.taxa) ?? 0, ativa: true }))
   : AREAS_001
-const gabarito = new Map(lerCsv(join(pasta, 'gabarito.csv')).map((g) => [g.foto, g]))
+const gabarito = new Map(lerCsv(join(pasta, 'gabarito.csv'), COLUNAS_GABARITO).map((g) => [g.foto, g]))
 const exemplos = new Set(EXEMPLOS.map((x) => `${x.nome}.jpg`))
 const fotos = readdirSync(pasta)
   .filter((f) => /\.jpe?g$/i.test(f) && gabarito.has(f) && !exemplos.has(f))

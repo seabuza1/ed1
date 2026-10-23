@@ -1,7 +1,7 @@
 // Adaptador do Gemini, API Interactions (https://ai.google.dev/api/interactions-api). Conta paga:
 // o Google não usa os dados para treinar, e store: false não guarda a interação.
 import { montarPedido, type Pedido } from '../prompt.ts'
-import { chamar, comoJson, ErroIA, type Adaptador, type OpcoesAdaptador, type Tokens } from './tipos.ts'
+import { chamar, comoJson, ErroIA, status400, type Adaptador, type OpcoesAdaptador, type Tokens } from './tipos.ts'
 
 export const URL_GEMINI = 'https://generativelanguage.googleapis.com/v1beta/interactions'
 
@@ -59,6 +59,28 @@ export function tokensGemini(u: Record<string, number | undefined> = {}): Tokens
   }
 }
 
+// Códigos gRPC (google.rpc.Code) que vêm em errors[].code no lugar do HTTP.
+const GRPC: Record<number, number> = { 4: 408, 5: 404, 7: 403, 8: 429, 13: 503, 14: 503, 16: 401 }
+
+/**
+ * Status de uma interação que voltou 200 sem "completed". O código do erro pode vir como HTTP, gRPC
+ * ou texto; "incomplete" (saída cortada) é desta foto. Falha sem código conhecido é do provedor:
+ * passageira (503), a foto é lida depois.
+ */
+export function statusGemini(estado: string | undefined, erro?: { code?: unknown; message?: unknown }): number | undefined {
+  if (estado === 'incomplete') return undefined
+  const n = Number(erro?.code)
+  if (Number.isInteger(n) && n >= 400) return n
+  if (GRPC[n]) return GRPC[n]
+  const t = `${erro?.code ?? ''} ${erro?.message ?? ''}`.toLowerCase()
+  if (/exhausted|rate/.test(t)) return 429
+  if (/deadline/.test(t)) return 408
+  if (/permission/.test(t)) return 403
+  if (/unauthenticated/.test(t)) return 401
+  if (/not.?found/.test(t)) return 404
+  return 503
+}
+
 export function criarGoogle(o: OpcoesAdaptador): Adaptador {
   const buscar = o.fetch ?? fetch
   return {
@@ -78,12 +100,11 @@ export function criarGoogle(o: OpcoesAdaptador): Adaptador {
       const corpo = await r.json().catch(() => null)
       // Chave inválida volta 400 com API_KEY_INVALID: é configuração, como um 401.
       if (r.status === 400 && JSON.stringify(corpo).includes('API_KEY_INVALID')) throw new ErroIA('Gemini chave inválida', 401)
+      if (r.status === 400) throw new ErroIA('Gemini 400', status400(JSON.stringify(corpo)))
       if (!r.ok) throw new ErroIA(`Gemini ${r.status}`, r.status)
       // 200 também volta "incomplete" (saída cortada) ou "failed" (com o código do erro, se veio).
-      if (corpo?.status !== 'completed') {
-        const codigo = Number(corpo?.errors?.[0]?.code)
-        throw new ErroIA(`Gemini ${corpo?.status ?? 'sem status'}`, Number.isInteger(codigo) ? codigo : undefined)
-      }
+      if (corpo?.status !== 'completed')
+        throw new ErroIA(`Gemini ${corpo?.status ?? 'sem status'}`, statusGemini(corpo?.status, corpo?.errors?.[0]))
       return { json: comoJson(textoGemini(corpo.steps)), tokens: tokensGemini(corpo.usage), ms: Date.now() - inicio }
     },
   }

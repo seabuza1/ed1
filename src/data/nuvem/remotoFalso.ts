@@ -1,6 +1,7 @@
 // Nuvem falsa, em memória, para os testes da sincronização. Imita as regras do
 // supabase/001_schema.sql que importam ao app: caixa travado depois do acerto, comanda
-// precisa do caixa, um caixa por motoboy e data, atualizado_em dado pelo banco.
+// precisa do caixa, um caixa por motoboy e data, atualizado_em dado pelo banco, e o "caiu" do
+// Pix só pela equipe (006 e 010).
 import type { RespostaLeitura } from '../../domain/leitura'
 import type { AcertoLinha, AreaLinha, CaixaLinha, ComandaLinha, Gravavel, PerfilLinha, Tabela } from './linhas'
 import { ErroRemoto, type EventoRemoto, type Remoto } from './remoto'
@@ -34,6 +35,11 @@ export function criarRemotoFalso() {
   const travado = (caixaId: string) => acertos.has(caixaId)
   const avisar = (e: EventoRemoto) => ouvintes.forEach((o) => o(structuredClone(e)))
   const copia = <T>(x: T): T => structuredClone(x)
+  const pixAntecipado = (l: Gravavel | undefined) =>
+    ((l?.pagamentos ?? []) as { forma: string; valor: number }[]).reduce((s, p) => s + (p.forma === 'pix_antecipado' ? p.valor : 0), 0)
+  /** O app escreve como motoboy: a comanda nova vem sem o "caiu"; a existente o mantém se o Pix não mudou. */
+  const pixDaEquipe = (antes: Gravavel | undefined, nova: Gravavel) =>
+    ({ ...nova, pix_confirmado: antes?.pix_confirmado === true && pixAntecipado(antes) === pixAntecipado(nova) })
 
   const remoto: Remoto = {
     perfis: async () => (rede(), [...perfis.values()].map(copia)),
@@ -61,7 +67,7 @@ export function criarRemotoFalso() {
         const existente = caixas.get(id)
         if (existente && travado(id)) throw recusa('sem permissão')
         if ([...caixas.values()].some((c) => c.id !== id && c.motoboy_id === linha.motoboy_id && c.data === linha.data))
-          throw recusa('já existe um registro igual na nuvem')
+          throw new ErroRemoto('já existe um registro igual na nuvem', true, 409, '23505')
         const nova = {
           ordem_chegada: [...caixas.values()].filter((c) => c.data === linha.data).length + 1,
           criado_em: agora(),
@@ -80,7 +86,7 @@ export function criarRemotoFalso() {
         return void leituras.set(id, copia(linha))
       }
       const existente = comandas.get(id)
-      const nova = { ...existente, ...copia(linha), atualizado_em: agora() } as ComandaLinha
+      const nova = pixDaEquipe(existente as Gravavel | undefined, { ...existente, ...copia(linha), atualizado_em: agora() }) as unknown as ComandaLinha
       comandas.set(id, nova)
       avisar({ tabela, tipo: existente ? 'UPDATE' : 'INSERT', nova: copia(nova) as never, antiga: null })
     },
@@ -90,7 +96,8 @@ export function criarRemotoFalso() {
       const atual = mapa.get(id)
       const caixaId = tabela === 'caixas' ? id : (atual?.caixa_id as string)
       if (!atual || (tabela !== 'areas' && travado(caixaId))) throw recusa('sem permissão')
-      const nova = { ...atual, ...copia(campos), atualizado_em: agora() }
+      const junta = { ...atual, ...copia(campos), atualizado_em: agora() }
+      const nova = tabela === 'comandas' ? pixDaEquipe(atual, junta) : junta
       mapa.set(id, nova)
       if (tabela === 'caixas' || tabela === 'comandas') avisar({ tabela, tipo: 'UPDATE', nova: copia(nova), antiga: null })
     },

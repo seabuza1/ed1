@@ -2,9 +2,9 @@
 // CSV, uma linha por comanda lida, e o resumo que importa (quantas verdes estavam erradas).
 import { formatarHora } from './datas'
 import { formatarNumero } from './dinheiro'
-import { pagamentoEscrito, type RegistroLeitura } from './leitura'
+import { formasDiscordam, pagamentoEscrito, valorLido, type RegistroLeitura } from './leitura'
 import { formaCurta } from './painel'
-import type { Area, Comanda } from './tipos'
+import type { Area, Comanda, Pagamento } from './tipos'
 
 /** Uma leitura com o que a nuvem sabe dela: a noite, o motoboy e a comanda como está agora. */
 export interface LeituraMedida {
@@ -15,21 +15,40 @@ export interface LeituraMedida {
   atual: Comanda | null
 }
 
-/** A comanda mudou depois de lançada (código, total, área ou pagamento)? */
+const partes = (ps: Pagamento[]) => ps.map((p) => `${p.forma}:${p.valor}`).join('+')
+
+/** A comanda mudou depois de lançada (código, total, área, partes do pagamento ou troco)? */
 function mudouDepois(m: LeituraMedida): 'sim' | 'não' | 'apagada' {
   const l = m.registro.lancado
   if (!l) return 'não'
   const c = m.atual
   if (!c) return 'apagada'
   const igual =
-    c.codigo === l.codigo && c.total === l.total && c.areaId === l.areaId && formaCurta(c.pagamentos) === formaCurta(l.pagamentos)
+    c.codigo === l.codigo &&
+    c.total === l.total &&
+    c.areaId === l.areaId &&
+    partes(c.pagamentos) === partes(l.pagamentos) &&
+    c.troco === l.troco
   return igual ? 'não' : 'sim'
 }
 
-/** Verde que precisou de correção (ou mudou depois): a meta é zero. Apagar a comanda (voltou,
- * lançada por engano) não diz que a leitura errou. */
+/** R28: a leitura feita depois do lançamento à mão discorda dele (código, total, área ou forma)? */
+function lidaDepoisDiscorda(r: RegistroLeitura): boolean {
+  const l = r.lancado
+  if (!r.resultado.posterior || !l) return false
+  return (
+    r.leitura.telefone_final !== l.codigo ||
+    valorLido(r.leitura.total_escrito) !== l.total ||
+    (r.resultado.areaSugerida !== null && r.resultado.areaSugerida !== l.areaId) ||
+    formasDiscordam(r.leitura, l.pagamentos)
+  )
+}
+
+/** Verde que precisou de correção, mudou depois ou discorda do lançado à mão: a meta é zero.
+ * Apagar a comanda (voltou, lançada por engano) não diz que a leitura errou. */
 export const verdeErrada = (m: LeituraMedida) =>
-  m.registro.resultado.estado === 'verde' && (m.registro.corrigido || mudouDepois(m) === 'sim')
+  m.registro.resultado.estado === 'verde' &&
+  (m.registro.corrigido || mudouDepois(m) === 'sim' || lidaDepoisDiscorda(m.registro))
 
 const COLUNAS = [
   'noite',
@@ -119,6 +138,43 @@ export function paraCsv(linhas: string[][]): string {
     return /[;"\r\n]/.test(seguro) ? `"${seguro.replace(/"/g, '""')}"` : seguro
   }
   return linhas.map((l) => l.map(celula).join(';')).join('\r\n') + '\r\n'
+}
+
+/**
+ * O inverso do paraCsv, para o gabarito e as áreas do comparar-modelos: ";" ou ",", aspas com ""
+ * dentro, BOM do Excel ("CSV UTF-8") e o ' que protege fórmula. Linhas vazias saem.
+ */
+export function deCsv(texto: string): string[][] {
+  const t = texto.replace(/^\uFEFF/, '')
+  const separador = (t.split(/\r?\n/, 1)[0].match(/;/g)?.length ?? 0) > 0 ? ';' : ','
+  const linhas: string[][] = []
+  let linha: string[] = []
+  let celula = ''
+  let aspas = false
+  const fecharCelula = () => {
+    linha.push(/^'[=+\-@]/.test(celula) ? celula.slice(1) : celula.trim())
+    celula = ''
+  }
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i]
+    if (aspas) {
+      if (ch === '"' && t[i + 1] === '"') {
+        celula += '"'
+        i++
+      } else if (ch === '"') aspas = false
+      else celula += ch
+    } else if (ch === '"') aspas = true
+    else if (ch === separador) fecharCelula()
+    else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && t[i + 1] === '\n') i++
+      fecharCelula()
+      if (linha.some((c) => c !== '')) linhas.push(linha)
+      linha = []
+    } else celula += ch
+  }
+  fecharCelula()
+  if (linha.some((c) => c !== '')) linhas.push(linha)
+  return linhas
 }
 
 export const nomeArquivoLeituras = (de: string, ate: string) =>

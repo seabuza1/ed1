@@ -98,9 +98,10 @@ export function valida(e: Esquema, v: unknown): boolean {
   if (Array.isArray(v)) return !e.items || v.every((x) => valida(e.items!, x))
   if (e.type !== 'object') return true
   const obj = v as Record<string, unknown>
-  if (!(e.required ?? []).every((k) => k in obj)) return false
+  // Object.hasOwn: "constructor" ou "toString" não contam como propriedade do esquema.
+  if (!(e.required ?? []).every((k) => Object.hasOwn(obj, k))) return false
   return Object.entries(obj).every(([k, x]) =>
-    e.properties?.[k] ? valida(e.properties[k], x) : e.additionalProperties !== false,
+    e.properties && Object.hasOwn(e.properties, k) ? valida(e.properties[k], x) : e.additionalProperties !== false,
   )
 }
 

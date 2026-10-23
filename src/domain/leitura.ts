@@ -4,6 +4,7 @@
 import { CARDAPIO, normalizar, precoAvulso, precoPizza, type Cardapio, type Faixa, type Tamanho } from './cardapio'
 import { comandaRepetida, criarComanda, NOMES_FORMA, NOMES_STATUS, type Resultado } from './comanda'
 import { formatarReais, lerReais } from './dinheiro'
+import { PROMO_MAX, PROMO_MIN } from './noite'
 import type { Area, Comanda, Forma, OrigemArea, Pagamento } from './tipos'
 
 // ---------- O que a IA devolve (tool use, mesmo formato do input_schema) ----------
@@ -66,6 +67,15 @@ function formasDoTexto(texto: string | null): FormaEscrita[] {
   if (/ cart/.test(t)) formas.push('cartao')
   if (/ din/.test(t)) formas.push('dinheiro')
   return formas
+}
+
+/**
+ * R19: as formas de uma parte saem do texto escrito; a classificação da IA só vale quando o texto não
+ * cita nenhuma forma conhecida ("C", "créd."). Mais de uma = misto que não veio dividido.
+ */
+function formasDaParte(p: PagamentoLido): FormaEscrita[] {
+  const citadas = formasDoTexto(p.forma_escrita)
+  return citadas.length ? [...new Set(citadas)] : p.forma ? [p.forma] : []
 }
 
 /** Formas sem repetir e em ordem, para comparar ("cartao+pix"). */
@@ -287,8 +297,6 @@ export interface ResultadoLeitura {
 }
 
 const DIGITOS_CONFUSOS = new Set(['3', '8', '1', '7', '5', '6', '0'])
-const PROMO_MIN = 300 // R23: a promoção vai de R$ 3 a R$ 23
-const PROMO_MAX = 2300
 const TOTAL_MIN = 2000 // R26: alertas de valor
 const TOTAL_MAX = 30000
 
@@ -392,10 +400,10 @@ export function conferirLeitura(e: EntradaConferencia): ResultadoLeitura {
     ? cor.pagamento.map((p) => ({ escrita: NOMES_FORMA[p.forma], forma: p.forma, pedePix: false, valor: valorLido(p.valor) }))
     : l.pagamento.map((p, i) => {
         const escolhida = cor.formas?.[i] ?? null
-        const citadas = formasDoTexto(p.forma_escrita)
+        const formas = formasDaParte(p)
         // "cart. e din" numa parte só é um misto que não veio dividido.
-        if (!escolhida && !p.forma && citadas.length > 1) juntas = true
-        const lida: FormaEscrita | null = p.forma ?? (citadas.length === 1 ? citadas[0] : null)
+        if (!escolhida && formas.length > 1) juntas = true
+        const lida: FormaEscrita | null = formas.length === 1 ? formas[0] : null
         const forma: Forma | null = escolhida ?? (lida === 'pix' ? null : lida)
         return { escrita: p.forma_escrita, forma, pedePix: !escolhida && lida === 'pix', valor: valorLido(p.valor_escrito) }
       })
@@ -506,7 +514,6 @@ export function comandaDaLeitura(
 
 // ---------- Registro da leitura (R27) e leitura que chega depois (R28) ----------
 
-/** Resposta da Edge Function ler-comanda. */
 /** Tokens das duas chamadas somados (R27): entrada sem o cache, o cache e a saída. */
 export interface TokensLeitura {
   entrada: number
@@ -514,6 +521,7 @@ export interface TokensLeitura {
   saida: number
 }
 
+/** Resposta da Edge Function ler-comanda. */
 export interface RespostaLeitura {
   leitura: LeituraCompleta
   conferencia: LeituraConferencia
@@ -649,9 +657,13 @@ export function avisoLeitura(reg: RegistroLeitura, c: Comanda, areas: Area[], pr
   if (r.total !== c.total) avisos.push(`Total lido: ${r.total === null ? '[?]' : formatarReais(r.total)}.`)
   else if (r.esperado !== null && r.esperado !== c.total && r.promocaoSugerida === null)
     avisos.push(`A conta pelo cardápio dá ${formatarReais(r.esperado)}.`)
-  const lidas = reg.leitura.pagamento.map((p) => p.forma ?? formasDoTexto(p.forma_escrita)[0] ?? null)
-  if (lidas.length > 0 && lidas.every((f) => f !== null) && conjunto(lidas) !== conjunto(c.pagamentos.map((p) => formaGeral(p.forma))))
-    avisos.push(`Forma lida: ${pagamentoEscrito(reg.leitura)}.`)
+  if (formasDiscordam(reg.leitura, c.pagamentos)) avisos.push(`Forma lida: ${pagamentoEscrito(reg.leitura)}.`)
   return avisos
+}
+
+/** As formas lidas (todas legíveis) são outras que as lançadas? Pix lido casa com os dois Pix. */
+export function formasDiscordam(l: LeituraCompleta, pagamentos: Pagamento[]): boolean {
+  const lidas = l.pagamento.map(formasDaParte)
+  return lidas.length > 0 && lidas.every((f) => f.length) && conjunto(lidas.flat()) !== conjunto(pagamentos.map((p) => formaGeral(p.forma)))
 }
 

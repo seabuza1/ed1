@@ -4,8 +4,6 @@
 // ingredientes.
 import { ESQUEMA, type TipoLeitura } from './schema.ts'
 
-export type { TipoLeitura }
-
 /** O pedaço do cardapio-mel.json que o prompt usa. */
 export interface CardapioPrompt {
   glossario: Record<string, string>

@@ -4,7 +4,8 @@
 //
 // Conflitos: cada alteração sobe só com as colunas que mudaram, então o motoboy marcando
 // "entregue" não desfaz o "Pix caiu" do Luan na mesma comanda. Na mesma coluna vale a
-// última alteração enviada. O que ainda está na fila tem prioridade sobre o que desce.
+// última alteração enviada; a coluna que volta ao valor de antes (marcou e desmarcou) não sobe.
+// O que ainda está na fila tem prioridade sobre o que desce. A exclusão espera o Desfazer.
 //
 // Fotos das comandas (leitura): ficam no aparelho e sobem ao Storage numa fila própria, depois
 // que a comanda subiu, para não travar a fila das alterações. Sem internet na hora da foto, a
@@ -12,6 +13,7 @@
 import Dexie, { type EntityTable, type Table } from 'dexie'
 import type { Dados } from '../../domain/backup'
 import { areaSugerida } from '../../domain/comanda'
+import { formatarData } from '../../domain/datas'
 import { conferirLeitura, registroLeitura, type RegistroLeitura } from '../../domain/leitura'
 import { planejarEnvioHistorico, type PlanoEnvio } from '../../domain/envioHistorico'
 import { AJUSTES_PADRAO } from '../../domain/padroes'
@@ -44,8 +46,12 @@ interface ItemFila {
   id: string
   op: 'inserir' | 'atualizar' | 'excluir'
   campos?: Gravavel
+  /** Valor de cada coluna antes da primeira alteração na fila: a que volta a ele não sobe mais. */
+  base?: Gravavel
   /** Muda quando o item é mesclado; quem enviou a versão antiga não apaga o item. */
   versao: number
+  /** Excluir: quando entrou na fila. Sobe só depois do tempo do Desfazer. */
+  em?: number
 }
 
 interface Meta {
@@ -69,10 +75,11 @@ interface FotoLocal {
 }
 
 const MAX_TENTATIVAS = 3
-// Adiada: espera 2, 4, 8... até 60 min entre as tentativas e desiste na 8ª (umas 4 horas).
+// Adiada: espera 2, 4, 8... até 60 min entre as tentativas e desiste na 8ª (umas 3 horas).
 const MAX_ADIADAS = 8
 const esperaAdiada = (n: number) => Math.min(2 ** n, 60) * 60_000
 const DIA = 24 * 60 * 60 * 1000
+const MARGEM_CURSOR = 2 * 60_000
 
 type Banco = Dexie & {
   noites: EntityTable<Noite, 'id'>
@@ -104,8 +111,16 @@ export function criarRepoNuvem(opcoes: {
   online?: () => boolean
   /** false nos testes: sem timers, a sincronização é chamada à mão. */
   automatico?: boolean
+  /**
+   * Dono da sessão do Supabase agora (o localStorage é dividido entre abas: outra conta pode ter
+   * entrado). Sem ser o dono deste banco, não sincroniza: a nuvem recusaria e a fila se perderia.
+   */
+  usuarioDaSessao?: () => Promise<string | null>
+  /** Quanto a exclusão espera antes de subir (o Desfazer dura 5 s). */
+  esperaExcluir?: number
 }): RepoNuvem {
   const { usuarioId: uid, remoto } = opcoes
+  const esperaExcluir = opcoes.esperaExcluir ?? 6000
   const online = opcoes.online ?? (() => (typeof navigator === 'undefined' ? true : navigator.onLine))
   const automatico = opcoes.automatico ?? true
 
@@ -161,26 +176,34 @@ export function criarRepoNuvem(opcoes: {
   const pendentesDe = async (tabela: Tabela, id: string) =>
     (await db.fila.where('id').equals(id).toArray()).filter((p) => p.tabela === tabela)
 
-  async function enfileirar(tabela: Tabela, id: string, op: ItemFila['op'], campos?: Gravavel) {
+  async function enfileirar(tabela: Tabela, id: string, op: ItemFila['op'], campos?: Gravavel, base?: Gravavel) {
     const pendentes = await pendentesDe(tabela, id)
     const inserir = pendentes.find((p) => p.op === 'inserir')
     if (op === 'excluir') {
       // O que estava pendente não importa mais. Exclui mesmo se o inserir não subiu:
       // ele pode estar a caminho, e excluir o que não existe não dá erro.
       await db.fila.bulkDelete(pendentes.map((p) => p.seq!))
-      await db.fila.add({ tabela, id, op, versao: 1 })
+      await db.fila.add({ tabela, id, op, versao: 1, em: Date.now() })
       return
     }
     if (op === 'inserir') {
+      // Desfazer da exclusão que ainda não subiu: sobe como reenvio (upsert), sem apagar na nuvem
+      // (apagar zera o "caiu" do Pix e solta a leitura da comanda).
+      await db.fila.bulkDelete(pendentes.filter((p) => p.op === 'excluir').map((p) => p.seq!))
       await db.fila.add({ tabela, id, op, versao: 1 })
       return
     }
     // atualizar: com inserir pendente, ele já manda a linha atual (só avisa que mudou).
     if (inserir) return void (await db.fila.update(inserir.seq!, { versao: inserir.versao + 1 }))
     const atualizar = pendentes.find((p) => p.op === 'atualizar')
-    if (atualizar)
-      await db.fila.update(atualizar.seq!, { campos: { ...atualizar.campos, ...campos }, versao: atualizar.versao + 1 })
-    else await db.fila.add({ tabela, id, op, campos, versao: 1 })
+    if (!atualizar) return void (await db.fila.add({ tabela, id, op, campos, base, versao: 1 }))
+    // Marcou e desmarcou sem internet: a coluna voltou ao que era e não sobe por cima da nuvem.
+    // O item que está subindo agora vai inteiro de novo (a nuvem já pode ter o valor do meio).
+    const juntos = { ...atualizar.campos, ...campos }
+    const bases = { ...base, ...atualizar.base }
+    const restantes = atualizar.base && atualizar.seq !== emEnvio ? camposAlterados(bases, juntos) : juntos
+    if (Object.keys(restantes).length === 0) return void (await db.fila.delete(atualizar.seq!))
+    await db.fila.update(atualizar.seq!, { campos: restantes, base: bases, versao: atualizar.versao + 1 })
   }
 
   async function gravar(tabela: Tabela, novo: Registro) {
@@ -188,18 +211,33 @@ export function criarRepoNuvem(opcoes: {
       const antes = await local[tabela].get(novo.id)
       await local[tabela].put(novo)
       if (!antes) return enfileirar(tabela, novo.id, 'inserir')
-      const campos = camposAlterados(paraGravar(tabela, antes, uid), paraGravar(tabela, novo, uid))
-      if (Object.keys(campos).length) await enfileirar(tabela, novo.id, 'atualizar', campos)
+      const linhaAntes = paraGravar(tabela, antes, uid)
+      const campos = camposAlterados(linhaAntes, paraGravar(tabela, novo, uid))
+      const base = Object.fromEntries(Object.keys(campos).map((k) => [k, linhaAntes[k]]))
+      if (Object.keys(campos).length) await enfileirar(tabela, novo.id, 'atualizar', campos, base)
     })
     mudou()
   }
+
+  let emEnvio: number | undefined
 
   /** Sobe a fila em ordem. Para no primeiro erro de internet; o que a nuvem recusa sai da fila. */
   async function enviar(): Promise<boolean> {
     let recusou = false
     for (;;) {
-      const item = await db.fila.orderBy('seq').first()
-      if (!item) return recusou
+      if (parado) return recusou // saiu da conta no meio do envio: o resto espera a próxima entrada
+      const pronto = (i: ItemFila) => i.op !== 'excluir' || Date.now() - (i.em ?? 0) >= esperaExcluir
+      const item = await db.fila.orderBy('seq').filter(pronto).first()
+      if (!item) {
+        // Exclusão no tempo do Desfazer: tenta de novo quando ele acabar.
+        if (automatico && !parado && (await db.fila.filter((i) => !pronto(i)).count())) {
+          clearTimeout(timerEnvio)
+          timerEnvio = setTimeout(() => sincronizar(), esperaExcluir)
+        }
+        return recusou
+      }
+      let enviado = false
+      emEnvio = item.seq
       try {
         if (item.op === 'inserir') {
           const registro = await local[item.tabela].get(item.id)
@@ -209,20 +247,55 @@ export function criarRepoNuvem(opcoes: {
           if (registro && !orfa) await remoto.inserir(item.tabela, paraGravar(item.tabela, registro, uid))
         } else if (item.op === 'atualizar') await remoto.atualizar(item.tabela, item.id, item.campos ?? {})
         else await remoto.excluir(item.tabela, item.id)
+        enviado = true
       } catch (e) {
         if (!(e instanceof ErroRemoto && e.permanente)) throw e
+        const juntou = item.tabela === 'caixas' && item.op === 'inserir' && e.codigo === '23505' && (await juntarNoite(item.id))
+        if (juntou) {
+          recusou = true // baixa tudo de novo, já com a noite da nuvem
+          mudarEstado({ recusa: `A noite de ${formatarData(juntou)} já estava na nuvem: as comandas deste celular foram para ela.` })
+        }
         // Leitura recusada é só dado de medição: sai da fila sem aviso.
-        if (item.tabela !== 'leituras') {
+        else if (item.tabela !== 'leituras') {
           recusou = true
           mudarEstado({ recusa: `Uma alteração foi recusada pela nuvem: ${e.message}.` })
         }
+      } finally {
+        emEnvio = undefined
       }
       await db.transaction('rw', db.fila, async () => {
         const atual = await db.fila.get(item.seq!)
         if (atual && atual.versao === item.versao) await db.fila.delete(item.seq!)
+        // Mudou enquanto subia: o que subiu é a nova base na nuvem.
+        else if (atual?.base && enviado && item.op === 'atualizar')
+          await db.fila.update(item.seq!, { base: { ...atual.base, ...item.campos } })
       })
       await contarPendentes()
     }
+  }
+
+  /**
+   * A nuvem já tem um caixa deste motoboy na mesma data (outro aparelho, abriu antes de baixar):
+   * as comandas, fotos e leituras daqui passam para ele, e a noite daqui sai. Devolve a data.
+   */
+  async function juntarNoite(id: string): Promise<string | null> {
+    const noite = await db.noites.get(id)
+    const outra = noite && (await remoto.caixas(uid)).find((c) => c.data === noite.data && c.id !== id)
+    if (!outra) return null
+    // O caminho da foto leva o caixa ({caixa}/{comanda}.jpg, regra do Storage).
+    const caminho = (comanda: string) => `${outra.id}/${comanda}.jpg`
+    await db.transaction('rw', [db.noites, db.comandas, db.fila, db.fotos, db.leituras], async () => {
+      for (const c of await db.comandas.where('noiteId').equals(id).toArray()) {
+        await db.comandas.put({ ...c, noiteId: outra.id, ...(c.fotoPath ? { fotoPath: caminho(c.id) } : {}) })
+        if (await db.fotos.get(c.id)) await db.fotos.update(c.id, { caminho: caminho(c.id) })
+      }
+      for (const l of await db.leituras.where('noiteId').equals(id).toArray())
+        await db.leituras.put({ ...l, noiteId: outra.id, fotoPath: caminho(l.id) })
+      await db.fila.bulkDelete((await pendentesDe('caixas', id)).map((p) => p.seq!))
+      await db.noites.delete(id)
+      await db.noites.put(linhaParaNoite(outra))
+    })
+    return noite.data
   }
 
   // ---------- O que desce da nuvem ----------
@@ -283,17 +356,26 @@ export function criarRepoNuvem(opcoes: {
       try {
         resposta = await remoto.lerComanda(await paraBase64(f.jpeg))
       } catch (e) {
-        // Sem resposta da função (sem internet, rede caiu, demorou demais): tenta na próxima.
-        if (!(e instanceof ErroRemoto) || (!e.permanente && e.status === 0)) return
-        if (!e.permanente) {
-          // A função respondeu que a IA não leu agora: esta foto espera, as outras seguem.
+        if (!(e instanceof ErroRemoto)) return
+        const adiar = () => {
           const adiadas = (f.adiadas ?? 0) + 1
-          await db.fotos.update(
+          return db.fotos.update(
             f.id,
             adiadas >= MAX_ADIADAS
               ? { adiadas, leitura: 'falhou' }
               : { adiadas, proximaEm: new Date(Date.now() + esperaAdiada(adiadas)).toISOString() },
           )
+        }
+        // Sem resposta da função: sem internet, tenta na próxima. Com internet (demorou demais, a
+        // conexão caiu no meio), a função pode ter chamado a IA: esta foto espera como adiada.
+        // Sessão vencida (401) renova sozinha e não conta.
+        if (!e.permanente && (e.status === 0 || e.status === 401)) {
+          if (e.status === 0 && online()) await adiar()
+          return
+        }
+        if (!e.permanente) {
+          // A função respondeu que a IA não leu agora: esta foto espera, as outras seguem.
+          await adiar()
           continue
         }
         const tentativas = f.tentativas + 1
@@ -324,7 +406,7 @@ export function criarRepoNuvem(opcoes: {
   }
 
   let lendo: Promise<void> | null = null
-  /** Lê as fotos pendentes fora da sincronização: a IA leva até 20 s por foto e a fila não espera. */
+  /** Lê as fotos pendentes fora da sincronização: a leitura leva até 30 s por foto e a fila não espera. */
   function lerFotos(): Promise<void> {
     lendo ??= lerPendentes()
       .catch(() => {}) // leitura é só medição; tenta de novo na próxima sincronização
@@ -348,12 +430,15 @@ export function criarRepoNuvem(opcoes: {
 
   async function baixar() {
     const cursor = recarregarTudo ? null : ((await db.meta.get('cursorComandas'))?.valor ?? null)
+    // A hora da linha é a do início da transação, não a do commit: a alteração que terminou depois
+    // da última descida pode ter hora menor que o cursor. A margem traz de novo (sem efeito) as recentes.
+    const desde = cursor && new Date(Date.parse(cursor) - MARGEM_CURSOR).toISOString()
     const [perfis, areas, caixas, acertos, comandas] = await Promise.all([
       remoto.perfis(),
       remoto.areas(),
       remoto.caixas(uid),
       remoto.acertos(uid),
-      remoto.comandas(uid, cursor),
+      remoto.comandas(uid, desde),
     ])
     recarregarTudo = false
     await db.transaction('rw', todasAsTabelas(), async () => {
@@ -409,6 +494,7 @@ export function criarRepoNuvem(opcoes: {
 
   async function umaVez() {
     if (!online()) return contarPendentes() // também marca offline
+    if (opcoes.usuarioDaSessao && (await opcoes.usuarioDaSessao().catch(() => null)) !== uid) return contarPendentes()
     mudarEstado({ enviando: true, online: true })
     try {
       // Com recusa, a nuvem manda a verdade de novo (desfaz aqui o que não foi aceito).

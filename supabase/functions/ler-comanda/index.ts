@@ -11,6 +11,8 @@ import { LIMITE_FOTO, tamanhoBase64 } from '../_shared/prompt.ts'
 
 // As duas chamadas juntas; sem novas tentativas: passou do tempo, o motoboy lança à mão.
 const TEMPO_LIMITE = 30_000
+// A foto de 2 MB em base64 (4/3) com folga para o JSON.
+const LIMITE_CORPO = Math.ceil((LIMITE_FOTO * 4) / 3) + 64 * 1024
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -37,11 +39,10 @@ function usuarioLogado(req: Request): boolean {
 /**
  * Antes de cada foto (008): perfil ativo (conta desativada pelo admin não gasta a IA) e até 60
  * leituras por hora por conta, que segura o gasto de uma conta que não é da pizzaria. A chave anon
- * nem executa a função. Sem as variáveis do Supabase, fica só a conferência do token.
+ * nem executa a função (o usuário logado é conferido antes). Sem as variáveis do Supabase, passa.
  * Devolve 'ok', 'inativo', 'limite' ou o motivo da falha na checagem (para o log).
  */
 async function acesso(req: Request, sinal: AbortSignal): Promise<string> {
-  if (!usuarioLogado(req)) return 'inativo'
   const url = Deno.env.get('SUPABASE_URL')
   const chave = Deno.env.get('SUPABASE_ANON_KEY')
   if (!url || !chave) return 'ok'
@@ -63,6 +64,10 @@ async function atender(req: Request, sinal: AbortSignal, inicio: number): Promis
     console.error(`ler-comanda: falta o secret ${config.falta}`)
     return resposta({ erro: 'Leitura ainda não configurada. Lance à mão.' }, 503)
   }
+
+  // Antes de ler o corpo: sem usuário logado (a chave anon é pública) ou corpo grande demais, nem lê.
+  if (!usuarioLogado(req)) return resposta({ erro: 'Entre no app para ler a comanda.' }, 401)
+  if (Number(req.headers.get('Content-Length') ?? 0) > LIMITE_CORPO) return resposta({ erro: 'Foto acima de 2 MB.' }, 413)
 
   let imagem = ''
   try {
@@ -89,8 +94,9 @@ async function atender(req: Request, sinal: AbortSignal, inicio: number): Promis
     const motivo = sinal.aborted ? 'tempo esgotado' : e instanceof ErroIA ? e.message : 'erro inesperado'
     console.error(`ler-comanda: ${config.provedor} ${motivo} (${Date.now() - inicio} ms)`)
     const status = e instanceof ErroIA && !sinal.aborted ? (e.status ?? 0) : 0
-    // Chave recusada, sem crédito ou modelo que não existe (desligado): 503, a foto espera a correção.
-    if (status === 401 || status === 402 || status === 403 || status === 404)
+    // Pedido recusado sem ser pela foto (parâmetro que o modelo não aceita), chave recusada, sem
+    // crédito ou modelo que não existe (desligado): 503, a foto espera a correção.
+    if (status === 400 || status === 401 || status === 402 || status === 403 || status === 404)
       return resposta({ erro: 'Leitura ainda não configurada. Lance à mão.' }, 503)
     // Provedor ocupado ou fora do ar: 503, o app lê a foto mais tarde.
     if (status === 408 || status === 429 || status >= 500) return resposta({ erro: 'A IA não respondeu agora.' }, 503)

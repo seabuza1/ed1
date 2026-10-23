@@ -1,6 +1,7 @@
 -- =====================================================================
 -- Acerto dos motoboys · Supabase · provedor e tokens de cada leitura (R27).
--- Rodar depois do 006_pix_da_equipe.sql. Para medir custo e comparar modelos.
+-- Rodar depois do 006_pix_da_equipe.sql e antes de publicar o app que grava provedor e tokens
+-- (sem estas colunas, a nuvem recusa as leituras novas). Para medir custo e comparar modelos.
 -- =====================================================================
 
 -- Tokens somando as duas chamadas (completa e conferência). Entrada sem o que veio do

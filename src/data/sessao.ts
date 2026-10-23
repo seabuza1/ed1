@@ -74,7 +74,12 @@ function entrarComo(u: Usuario) {
   guardar(u)
   if (estado.fase === 'dentro' && estado.usuario.id === u.id) return definir({ ...estado, usuario: u })
   if (estado.fase === 'dentro') estado.repo.parar()
-  const repo = criarRepoNuvem({ nome: `acerto-${u.id}`, usuarioId: u.id, remoto: criarRemotoSupabase(supabase!) })
+  const repo = criarRepoNuvem({
+    nome: `acerto-${u.id}`,
+    usuarioId: u.id,
+    remoto: criarRemotoSupabase(supabase!),
+    usuarioDaSessao: async () => (await supabase!.auth.getSession()).data.session?.user.id ?? null,
+  })
   usarRepo(repo)
   repo.iniciar()
   definir({ fase: 'dentro', usuario: u, repo })
@@ -94,18 +99,16 @@ async function usuarioDaSessao(id: string, email: string): Promise<Usuario> {
 export async function iniciarSessao(): Promise<void> {
   if (!supabase) return
   const guardado = lerGuardado()
-  // Sem internet, abre na hora com o último usuário: renovar a sessão pode levar até 30 s.
-  if (guardado && !navigator.onLine) entrarComo(guardado)
+  // Abre na hora com o último usuário: renovar a sessão pode levar 30 s ou mais, sem internet ou
+  // com sinal fraco (o celular diz que está online). A fila só sobe com a sessão dele (repoNuvem).
+  if (guardado) entrarComo(guardado)
   const { data, error } = await supabase.auth.getSession()
   const sessao = data.session
-  if (sessao) {
-    if (estado.fase !== 'dentro' || estado.usuario.id !== sessao.user.id)
-      entrarComo(await usuarioDaSessao(sessao.user.id, sessao.user.email ?? ''))
-  }
-  // A sessão não renovou por falta de internet: segue com o último usuário, só no aparelho.
-  else if (guardado && (error || !navigator.onLine)) {
-    if (estado.fase !== 'dentro') entrarComo(guardado)
-  } else {
+  // Com a sessão, confirma o usuário e atualiza nome e papel.
+  if (sessao) entrarComo(await usuarioDaSessao(sessao.user.id, sessao.user.email ?? ''))
+  // Sem sessão e sem falha de rede, saiu mesmo. Se não renovou por falta de internet, segue com o
+  // último usuário, só no aparelho.
+  else if (!guardado || (!error && navigator.onLine)) {
     if (estado.fase === 'dentro') estado.repo.parar()
     definir({ fase: 'fora' })
   }

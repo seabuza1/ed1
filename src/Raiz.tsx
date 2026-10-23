@@ -24,6 +24,8 @@ export function Raiz() {
     const aoVoltar = () => {
       setInicial(false)
       setCaminho(location.pathname)
+      // O próximo início abre onde o Voltar deixou (só pesa para o admin).
+      salvarModo(location.pathname.startsWith('/painel') ? 'painel' : 'app')
     }
     window.addEventListener('popstate', aoVoltar)
     return () => window.removeEventListener('popstate', aoVoltar)

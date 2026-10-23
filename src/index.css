@@ -1296,6 +1296,14 @@ dl.campo-problema {
 
 /* ---------- Abas ---------- */
 
+/* A aba Noite continua montada nas outras abas (App.tsx). */
+.aba-guardada {
+  display: contents;
+}
+.aba-guardada[hidden] {
+  display: none;
+}
+
 .abas {
   position: fixed;
   left: 0;
