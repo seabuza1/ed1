@@ -14,20 +14,24 @@ import { join } from 'node:path'
 import { EXEMPLOS } from '../supabase/functions/_shared/exemplos/exemplos.ts'
 import { lerDuasVezes, PROVEDORES, type Provedor } from '../supabase/functions/_shared/ia/ler.ts'
 import { LIMITE_FOTO } from '../supabase/functions/_shared/prompt.ts'
-import { CARDAPIO, normalizar } from '../src/domain/cardapio'
+import { CARDAPIO } from '../src/domain/cardapio'
+import { acertou, areaSugerida, contaVazia, custoUsd, formasLidas, juntarFormas, somarLida, type Preco } from '../src/domain/comparacao'
 import { formatarNumero, lerReais } from '../src/domain/dinheiro'
-import { conferirLeitura, type LeituraCompleta, type LeituraConferencia, type ResultadoLeitura } from '../src/domain/leitura'
-import { paraCsv } from '../src/domain/medicao'
+import { conferirLeitura, type LeituraCompleta, type LeituraConferencia } from '../src/domain/leitura'
+import { deCsv, paraCsv } from '../src/domain/medicao'
 import type { Area } from '../src/domain/tipos'
 
 const MODELOS_PADRAO = ['google:gemini-3.1-pro-preview', 'google:gemini-3.8-flash', 'anthropic:claude-haiku-5-5']
 
-/** US$ por milhão de tokens (entrada, entrada do cache, saída). Confira nas páginas de preço antes de decidir. */
-const PRECOS: Record<string, { entrada: number; cache: number; saida: number }> = {
+/**
+ * US$ por milhão de tokens (entrada, entrada do cache, saída e, na Anthropic, a escrita no cache, a
+ * 1,25 × a entrada). Confira nas páginas de preço antes de decidir.
+ */
+const PRECOS: Record<string, Preco> = {
   'google:gemini-3.1-pro-preview': { entrada: 2, cache: 0.2, saida: 12 },
   'google:gemini-3.8-flash': { entrada: 0.75, cache: 0.075, saida: 3.75 }, // promocional até 31/12/2026
-  'anthropic:claude-haiku-5-5': { entrada: 0.1, cache: 0.01, saida: 0.5 },
-  'anthropic:claude-sonnet-5-5': { entrada: 2, cache: 0.1, saida: 10 },
+  'anthropic:claude-haiku-5-5': { entrada: 0.1, cache: 0.01, saida: 0.5, escritaCache: 0.125 },
+  'anthropic:claude-sonnet-5-5': { entrada: 2, cache: 0.1, saida: 10, escritaCache: 2.5 },
 }
 
 const AREAS_001: Area[] = [
@@ -42,19 +46,20 @@ function opcao(nome: string): string | undefined {
   return i > 0 ? process.argv[i + 1] : undefined
 }
 
-/** Linhas de um CSV com ";" e cabeçalho, como objetos. */
-function lerCsv(arquivo: string): Record<string, string>[] {
-  const [cabecalho, ...linhas] = readFileSync(arquivo, 'utf8')
-    .split(/\r?\n/)
-    .filter((l) => l.trim())
-    .map((l) => l.split(';').map((c) => c.trim()))
-  return linhas.map((l) => Object.fromEntries(cabecalho.map((k, i) => [k.toLowerCase(), l[i] ?? ''])))
+/** Linhas de um CSV com cabeçalho, como objetos; avisa se faltar coluna. */
+function lerCsv<C extends string>(arquivo: string, colunas: readonly C[]): Record<C, string>[] {
+  const [cabecalho = [], ...linhas] = deCsv(readFileSync(arquivo, 'utf8'))
+  const chaves = cabecalho.map((k) => k.toLowerCase())
+  const faltam = colunas.filter((c) => !chaves.includes(c))
+  if (faltam.length) {
+    console.error(`${arquivo}: falta a coluna ${faltam.join(', ')} no cabeçalho.`)
+    process.exit(1)
+  }
+  return linhas.map((l) => Object.fromEntries(chaves.map((k, i) => [k, l[i] ?? ''])) as Record<C, string>)
 }
 
-/** Formas sem repetir e em ordem ("cartao+dinheiro"); Pix na máquina e antecipado contam como pix. */
-const formas = (fs: string[]) =>
-  [...new Set(fs.map((f) => (f.startsWith('pix') ? 'pix' : f)))].sort().join('+')
-const formasLidas = (r: ResultadoLeitura) => formas(r.pagamentos.map((p) => (p.pedePix ? 'pix' : (p.forma ?? '?'))))
+
+const COLUNAS_GABARITO = ['foto', 'codigo', 'total', 'area', 'forma'] as const
 
 const pasta = process.argv[2]
 if (!pasta || !existsSync(join(pasta, 'gabarito.csv'))) {
@@ -64,9 +69,9 @@ if (!pasta || !existsSync(join(pasta, 'gabarito.csv'))) {
 const modelos = (opcao('modelos') ?? MODELOS_PADRAO.join(',')).split(',').map((m) => m.trim())
 const promo = opcao('promo') ? lerReais(opcao('promo')!) : null
 const areas = existsSync(join(pasta, 'areas.csv'))
-  ? lerCsv(join(pasta, 'areas.csv')).map((a, i) => ({ id: `area${i}`, nome: a.nome, taxa: lerReais(a.taxa) ?? 0, ativa: true }))
+  ? lerCsv(join(pasta, 'areas.csv'), ['nome', 'taxa']).map((a, i) => ({ id: `area${i}`, nome: a.nome, taxa: lerReais(a.taxa) ?? 0, ativa: true }))
   : AREAS_001
-const gabarito = new Map(lerCsv(join(pasta, 'gabarito.csv')).map((g) => [g.foto, g]))
+const gabarito = new Map(lerCsv(join(pasta, 'gabarito.csv'), COLUNAS_GABARITO).map((g) => [g.foto, g]))
 const exemplos = new Set(EXEMPLOS.map((x) => `${x.nome}.jpg`))
 const fotos = readdirSync(pasta)
   .filter((f) => /\.jpe?g$/i.test(f) && gabarito.has(f) && !exemplos.has(f))
@@ -86,14 +91,13 @@ for (const id of modelos) {
     continue
   }
   const preco = PRECOS[id]
-  const conta = { verdesCertas: 0, verdesErradas: 0, amarelas: 0, vermelhas: 0, erros: 0, ms: 0, custo: 0, lidas: 0 }
+  let conta = contaVazia()
   for (const foto of fotos) {
     const g = gabarito.get(foto)!
-    const certo = { codigo: g.codigo, total: lerReais(g.total), area: normalizar(g.area), forma: formas(g.forma.split('+')) }
     const jpeg = readFileSync(join(pasta, foto))
     if (jpeg.length > LIMITE_FOTO) {
       linhas.push([id, foto, '', '', '', g.codigo, '', g.total, '', '', g.area, '', g.forma, '', '', '', '', '', '', 'foto acima de 2 MB'])
-      conta.erros++
+      conta = { ...conta, erros: conta.erros + 1 }
       continue
     }
     try {
@@ -108,15 +112,10 @@ for (const id of modelos) {
         areas,
         promoDesconto: promo,
       })
-      const area = areas.find((a) => a.id === c.sugestao?.areaId)?.nome ?? ''
-      const ok =
-        c.codigo === certo.codigo && c.total === certo.total && normalizar(area) === certo.area && formasLidas(c) === certo.forma
-      const custo = preco ? (r.tokens.entrada * preco.entrada + r.tokens.cache * preco.cache + r.tokens.saida * preco.saida) / 1e6 : null
-      if (c.estado === 'verde') conta[ok ? 'verdesCertas' : 'verdesErradas']++
-      else conta[c.estado === 'amarelo' ? 'amarelas' : 'vermelhas']++
-      conta.ms += r.ms
-      conta.custo += custo ?? 0
-      conta.lidas++
+      const area = areaSugerida(c, areas)
+      const ok = acertou(c, areas, g)
+      const custo = preco ? custoUsd(r.tokens, preco) : null
+      conta = somarLida(conta, c.estado, ok, r.ms, custo ?? 0)
       linhas.push([
         id,
         foto,
@@ -130,7 +129,7 @@ for (const id of modelos) {
         c.sugestao?.origem ?? '',
         g.area,
         formasLidas(c),
-        certo.forma,
+        juntarFormas(g.forma.split('+')),
         c.motivos.join(' | '),
         String(r.ms),
         String(r.tokens.entrada),
@@ -140,7 +139,7 @@ for (const id of modelos) {
         '',
       ])
     } catch (e) {
-      conta.erros++
+      conta = { ...conta, erros: conta.erros + 1 }
       linhas.push([id, foto, '', '', '', g.codigo, '', g.total, '', '', g.area, '', g.forma, '', '', '', '', '', '', e instanceof Error ? e.message : String(e)])
     }
     process.stdout.write('.')

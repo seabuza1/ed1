@@ -1,14 +1,33 @@
+import { useEffect } from 'react'
 import { registerSW } from 'virtual:pwa-register'
 
 // Service worker em modo autoUpdate: quando sai versão nova, ela é instalada e a página
 // recarrega sozinha. Sem isso, o app instalado no celular continuava mostrando a versão
-// antiga, porque reabrir só retoma a tela que já estava aberta.
+// antiga, porque reabrir só retoma a tela que já estava aberta. Com uma foto, leitura ou
+// comanda pela metade, o recarregamento espera ela terminar.
 
 let registro: ServiceWorkerRegistration | undefined
+let ocupados = 0
+let recarregar = false
+
+/** Enquanto `ocupado`, a versão nova não recarrega a página (o que está na tela se perderia). */
+export function useSegurarAtualizacao(ocupado: boolean): void {
+  useEffect(() => {
+    if (!ocupado) return
+    ocupados++
+    return () => {
+      if (--ocupados === 0 && recarregar) location.reload()
+    }
+  }, [ocupado])
+}
 
 export function iniciarAtualizacao(): void {
   registerSW({
     immediate: true,
+    onNeedReload() {
+      recarregar = true
+      if (ocupados === 0) location.reload()
+    },
     onRegisteredSW(_url, reg) {
       registro = reg
       if (!reg) return

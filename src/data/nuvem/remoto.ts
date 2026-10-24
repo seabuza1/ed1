@@ -6,15 +6,17 @@ import type { AcertoLinha, AreaLinha, CaixaLinha, ComandaLinha, Gravavel, Perfil
 
 /**
  * permanente = a nuvem recusou (não adianta tentar de novo); senão é falta de internet. status: o
- * HTTP da resposta, quando houve uma (0 = não chegou resposta).
+ * HTTP da resposta, quando houve uma (0 = não chegou resposta). codigo: o do Postgres ("23505").
  */
 export class ErroRemoto extends Error {
   readonly permanente: boolean
   readonly status: number
-  constructor(mensagem: string, permanente: boolean, status = 0) {
+  readonly codigo: string | null
+  constructor(mensagem: string, permanente: boolean, status = 0, codigo: string | null = null) {
     super(mensagem)
     this.permanente = permanente
     this.status = status
+    this.codigo = codigo
   }
 }
 
@@ -39,6 +41,8 @@ export interface Remoto {
 
   /** Insere ou, se já existe (reenvio), atualiza. */
   inserir(tabela: Tabela, linha: Gravavel): Promise<void>
+  /** A linha como está na nuvem agora (null se não existe ou não pode ser lida). */
+  linha(tabela: Tabela, id: string): Promise<Gravavel | null>
   /** Atualiza só as colunas informadas; recusa se a linha não puder ser alterada. */
   atualizar(tabela: Tabela, id: string, campos: Gravavel): Promise<void>
   excluir(tabela: Tabela, id: string): Promise<void>
@@ -68,7 +72,7 @@ const transitorio = (status: number) => status === 0 || status === 401 || status
 
 export function verificar<T>(r: Resposta<T>): T {
   if (!r.error) return r.data as T
-  throw new ErroRemoto(MOTIVOS[r.error.code] ?? r.error.message, !transitorio(r.status))
+  throw new ErroRemoto(MOTIVOS[r.error.code] ?? r.error.message, !transitorio(r.status), r.status, r.error.code)
 }
 
 const BUCKET = 'comandas'
@@ -104,12 +108,20 @@ export function criarRemotoSupabase(sb: SupabaseClient): Remoto {
     caixas: (motoboyId) =>
       todas<CaixaLinha>((de, ate) => sb.from('caixas').select('*').eq('motoboy_id', motoboyId).order('id').range(de, ate)),
     comandas: async (motoboyId, desde) => {
-      const linhas = await todas<ComandaLinha>((de, ate) => {
+      // Página pela chave (atualizado_em, id), não pela posição: comanda alterada entre duas páginas
+      // vai para o fim sem fazer a vizinha pular.
+      const linhas: ComandaLinha[] = []
+      for (let ultima: ComandaLinha | undefined; ; ) {
         let q = sb.from('comandas').select('*, caixas!inner(motoboy_id)').eq('caixas.motoboy_id', motoboyId)
-        if (desde) q = q.gte('atualizado_em', desde)
-        return q.order('atualizado_em').order('id').range(de, ate)
-      })
-      return linhas.map(semJuncao)
+        if (ultima) {
+          const em = `"${ultima.atualizado_em}"`
+          q = q.or(`atualizado_em.gt.${em},and(atualizado_em.eq.${em},id.gt.${ultima.id})`)
+        } else if (desde) q = q.gte('atualizado_em', desde)
+        const parte = verificar(await q.order('atualizado_em').order('id').limit(PAGINA)) ?? []
+        linhas.push(...parte)
+        if (parte.length < PAGINA) return linhas.map(semJuncao)
+        ultima = parte[parte.length - 1]
+      }
     },
     idsComandas: async (caixaIds) => {
       if (caixaIds.length === 0) return []
@@ -126,6 +138,7 @@ export function criarRemotoSupabase(sb: SupabaseClient): Remoto {
     },
     areaDoCodigo: async (codigo) => verificar<string | null>(await sb.rpc('area_do_codigo', { c: codigo })),
 
+    linha: async (tabela, id) => verificar<Gravavel | null>(await sb.from(tabela).select('*').eq('id', id).maybeSingle()),
     inserir: async (tabela, linha) => {
       verificar(await sb.from(tabela).upsert(linha, { onConflict: 'id' }))
     },

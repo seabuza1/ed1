@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { calcularAcerto } from '../domain/acerto'
 import { mudarPerfil, NOMES_PAPEL } from '../domain/ajustes'
 import { dataDaNoite, formatarData, formatarHora, partesData, somarDias } from '../domain/datas'
@@ -17,6 +17,7 @@ import {
 } from '../domain/painel'
 import type { Area, Comanda, Papel, Perfil } from '../domain/tipos'
 import { linhasMedicao, nomeArquivoLeituras, paraCsv, resumirMedicao, type ResumoMedicao } from '../domain/medicao'
+import { avisoAoFechar } from '../domain/noite'
 import { baixarTexto } from '../data/arquivo'
 import { acoesPainel, carregarLeituras, usePainel } from '../data/painel'
 import { sair, type Usuario } from '../data/sessao'
@@ -29,6 +30,7 @@ import { EscolherTema } from '../ui/EscolherTema'
 import { mensagemDeErro, textoDoErro } from '../ui/erro'
 import { Icone, type NomeIcone } from '../ui/Icone'
 import { VerFoto } from '../ui/VerFoto'
+import { AreasSoLeitura } from './TelaAjustes'
 
 type Acoes = ReturnType<typeof acoesPainel>
 type Vista = 'folha' | 'resumo' | 'ajustes'
@@ -44,8 +46,28 @@ const VISTAS: { id: Vista; rotulo: string; curto: string; icone: NomeIcone }[] =
  * as áreas e a equipe. No computador, menu na lateral; no celular, abas embaixo.
  */
 export function Painel({ sb, usuario, abrirApp }: { sb: SupabaseClient; usuario: Usuario; abrirApp?: () => void }) {
-  const [hoje] = useState(() => dataDaNoite(new Date()))
+  // O painel fica aberto no computador de uma noite para a outra: "hoje" acompanha o relógio, e
+  // quem estava na noite de hoje passa para a nova.
+  const [hoje, setHoje] = useState(() => dataDaNoite(new Date()))
   const [data, setData] = useState(hoje)
+  const hojeAntes = useRef(hoje)
+  useEffect(() => {
+    const conferir = () => {
+      const antes = hojeAntes.current
+      const agora = dataDaNoite(new Date())
+      if (agora === antes) return
+      hojeAntes.current = agora
+      setHoje(agora)
+      setData((d) => (d === antes ? agora : d))
+    }
+    const aoVoltar = () => document.visibilityState === 'visible' && conferir()
+    const relogio = setInterval(conferir, 60_000)
+    document.addEventListener('visibilitychange', aoVoltar)
+    return () => {
+      clearInterval(relogio)
+      document.removeEventListener('visibilitychange', aoVoltar)
+    }
+  }, [])
   const [vista, setVista] = useState<Vista>('folha')
   const [caixaId, setCaixaId] = useState<string | null>(null)
   const { dados, erro, recarregar } = usePainel(sb, data)
@@ -53,6 +75,21 @@ export function Painel({ sb, usuario, abrirApp }: { sb: SupabaseClient; usuario:
   const colunas = useMemo(() => (dados ? montarFolha(dados.caixas, dados.comandas, dados.acertos) : []), [dados])
   const aberta = colunas.find((c) => c.caixa.noite.id === caixaId)
   const aviso = useAviso()
+  // SPEC-leitura: no painel, tocar no código abre a foto.
+  const [fotoFolha, setFotoFolha] = useState<Comanda | null>(null)
+  const carregarFotoFolha = useCallback(() => acoes.urlDaFoto(fotoFolha!.fotoPath!), [acoes, fotoFolha])
+
+  // O caixa aberto entra no histórico do navegador: o Voltar do celular volta para a folha.
+  useEffect(() => {
+    const aoVoltar = () => setCaixaId((history.state as { caixa?: string } | null)?.caixa ?? null)
+    window.addEventListener('popstate', aoVoltar)
+    return () => window.removeEventListener('popstate', aoVoltar)
+  }, [])
+  const abrirCaixa = (id: string) => {
+    history.pushState({ caixa: id }, '')
+    setCaixaId(id)
+  }
+  const fecharCaixa = () => ((history.state as { caixa?: string } | null)?.caixa ? history.back() : setCaixaId(null))
 
   const irPara = (v: Vista) => {
     setVista(v)
@@ -84,6 +121,9 @@ export function Painel({ sb, usuario, abrirApp }: { sb: SupabaseClient; usuario:
 
   return (
     <div className="painel-casca">
+      {fotoFolha?.fotoPath && (
+        <VerFoto titulo={fotoFolha.codigo} carregar={carregarFotoFolha} fechar={() => setFotoFolha(null)} />
+      )}
       <nav className="abas painel-nav" aria-label="Painel">
         <div className="painel-marca">
           <Icone nome="painel" tamanho={22} />
@@ -157,7 +197,7 @@ export function Painel({ sb, usuario, abrirApp }: { sb: SupabaseClient; usuario:
             acoes={acoes}
             admin={usuario.papel === 'admin'}
             recarregar={recarregar}
-            voltar={() => setCaixaId(null)}
+            voltar={fecharCaixa}
           />
         ) : colunas.length === 0 ? (
           <div className="vazio">
@@ -168,7 +208,7 @@ export function Painel({ sb, usuario, abrirApp }: { sb: SupabaseClient; usuario:
         ) : vista === 'folha' ? (
           <>
             <NumerosNoite n={numerosDaNoite(colunas)} />
-            <Folha colunas={colunas} abrir={setCaixaId} marcarPix={marcarPix} />
+            <Folha colunas={colunas} abrir={abrirCaixa} marcarPix={marcarPix} verFoto={setFotoFolha} />
           </>
         ) : (
           <Resumo
@@ -247,33 +287,41 @@ function NumerosNoite({ n }: { n: NumerosDaNoite }) {
 const ICONE_STATUS: Record<Comanda['status'], NomeIcone> = { em_rota: 'moto', entregue: 'check', voltou: 'voltou' }
 
 /** Como a folha de papel: uma coluna por motoboy, na ordem de chegada. */
-function Folha(props: { colunas: ColunaFolha[]; abrir: (id: string) => void; marcarPix: (c: Comanda) => void }) {
+function Folha(props: {
+  colunas: ColunaFolha[]
+  abrir: (id: string) => void
+  marcarPix: (c: Comanda) => void
+  verFoto: (c: Comanda) => void
+}) {
   const { colunas, abrir } = props
   const pix = colunaPix(colunas)
   const caiu = pix.filter((p) => p.comanda.pixConfirmado).length
   return (
     <div className="folha">
       {colunas.map((col) => (
-        <button
-          key={col.caixa.noite.id}
-          type="button"
-          className="coluna-folha"
-          onClick={() => abrir(col.caixa.noite.id)}
-        >
-          <span className="coluna-titulo">
+        // A coluna inteira abre o caixa (o botão do título cobre a coluna); o código com foto abre a foto.
+        <div key={col.caixa.noite.id} className="coluna-folha">
+          <button type="button" className="coluna-titulo abrir-caixa" onClick={() => abrir(col.caixa.noite.id)}>
             <span className="num">{col.posicao}</span> {col.caixa.nome}
-          </span>
+          </button>
           <span className="itens-folha">
             {col.itens.map((i) => (
               <span key={i.comanda.id} className={`item-folha status-${i.comanda.status}`}>
                 <span className="icone-status">
                   <Icone nome={ICONE_STATUS[i.comanda.status]} tamanho={14} />
                 </span>
-                <span className="codigo">{i.comanda.codigo}</span>
-                {i.comanda.fotoPath && (
-                  <span className="tem-foto" aria-label="com foto">
+                {i.comanda.fotoPath ? (
+                  <button
+                    type="button"
+                    className="codigo ver-foto"
+                    aria-label={`Ver a foto da ${i.comanda.codigo}`}
+                    onClick={() => props.verFoto(i.comanda)}
+                  >
+                    {i.comanda.codigo}
                     <Icone nome="camera" tamanho={12} />
-                  </span>
+                  </button>
+                ) : (
+                  <span className="codigo">{i.comanda.codigo}</span>
                 )}
                 <span className="forma">{i.comanda.status === 'voltou' ? 'voltou' : i.forma}</span>
                 {i.trocoPix > 0 && <span className="num troco">→{formatarNumero(i.trocoPix)}</span>}
@@ -303,7 +351,7 @@ function Folha(props: { colunas: ColunaFolha[]; abrir: (id: string) => void; mar
               {col.confirmado ? 'Confirmado' : col.caixa.noite.fechadaEm ? 'Pendente · fechou' : 'Pendente'}
             </span>
           </span>
-        </button>
+        </div>
       ))}
       <section className="coluna-folha coluna-pix" aria-label="PIX">
         <span className="coluna-titulo">PIX</span>
@@ -341,6 +389,8 @@ function Folha(props: { colunas: ColunaFolha[]; abrir: (id: string) => void; mar
 }
 
 /** Caixa do motoboy: conta completa, cidades, maquininha, papéis, dinheiro contado e confirmação. */
+const textoContado = (v: number | null) => (v === null ? '' : paraCampo(v))
+
 function CaixaNoPainel(props: {
   col: ColunaFolha
   comandas: Comanda[]
@@ -352,7 +402,13 @@ function CaixaNoPainel(props: {
 }) {
   const { col, acoes } = props
   const noite = col.caixa.noite
-  const [contado, setContado] = useState(noite.dinheiroContado === null ? '' : paraCampo(noite.dinheiroContado))
+  const [contado, setContado] = useState(textoContado(noite.dinheiroContado))
+  // O motoboy também grava o dinheiro contado: enquanto o Luan não mexe no campo, ele acompanha a
+  // nuvem; ao sair, só grava se o Luan mudou o texto (e não regrava um valor velho).
+  const mexeu = useRef(false)
+  useEffect(() => {
+    if (!mexeu.current) setContado(textoContado(noite.dinheiroContado))
+  }, [noite.dinheiroContado])
   const [erro, setErro] = useState<string | null>(null)
   const [foto, setFoto] = useState<Comanda | null>(null)
   const carregarFoto = useCallback(() => acoes.urlDaFoto(foto!.fotoPath!), [acoes, foto])
@@ -361,20 +417,25 @@ function CaixaNoPainel(props: {
   const conta = calcularAcerto({ ...noite, dinheiroContado: valorContado }, props.comandas)
   const conf = conta.conferencia
   const faltamPapeis = props.comandas.filter((c) => !c.papelConferido).length
+  // R6: comanda ainda em rota conta como entregue; depois de confirmar, o motoboy não corrige mais.
+  const emRota = avisoAoFechar(props.comandas)
 
   async function agir(acao: () => Promise<void>) {
     try {
       await acao()
       setErro(null)
-      props.recarregar()
     } catch (e) {
       setErro(mensagemDeErro(e))
     }
+    // Também na recusa: a tela mostra o que vale agora.
+    props.recarregar()
   }
 
   const gravarContado = () => {
+    if (!mexeu.current) return
     if (valorContado === undefined || (contado.trim() !== '' && valorContado === null))
       return setErro('Valor inválido.')
+    mexeu.current = false
     if (valorContado !== noite.dinheiroContado) agir(() => acoes.registrarContado(noite.id, valorContado))
   }
 
@@ -383,7 +444,7 @@ function CaixaNoPainel(props: {
     if (!r.ok) return setErro(r.erro)
     await agir(async () => {
       if (valorContado !== noite.dinheiroContado) await acoes.registrarContado(noite.id, valorContado)
-      await acoes.confirmarAcerto(r.valor)
+      await acoes.confirmarAcerto(r.valor, { noite, comandas: props.comandas })
     })
   }
 
@@ -430,7 +491,11 @@ function CaixaNoPainel(props: {
                 rotulo="Dinheiro contado"
                 valor={contado}
                 placeholder={paraCampo(conta.devolver)}
-                onChange={(t) => (setContado(t), setErro(null))}
+                onChange={(t) => {
+                  mexeu.current = true
+                  setContado(t)
+                  setErro(null)
+                }}
                 aoSair={gravarContado}
               />
               {conf && (
@@ -471,9 +536,10 @@ function CaixaNoPainel(props: {
                   antes de confirmar.
                 </p>
               )}
+              {emRota && conf && <p className="aviso">{emRota} Confira com o motoboy antes de confirmar.</p>}
               <BotaoConfirmar
                 className="primario"
-                confirmacao="Toque de novo para confirmar e travar"
+                confirmacao={emRota ? 'Há comanda em rota: toque de novo para confirmar' : 'Toque de novo para confirmar e travar'}
                 onConfirmar={confirmar}
                 desabilitado={!conf}
               >
@@ -545,7 +611,7 @@ function Resumo({ resumo: r, areas, extra }: { resumo: ResumoDaNoite; areas: Are
 
 const PAPEIS: Papel[] = ['motoboy', 'expedicao', 'admin']
 
-/** Áreas e taxas (expedição e admin), a equipe (o admin muda os papéis), o tema e a conta. */
+/** Áreas e taxas e a equipe (só o admin muda, R18), o tema e a conta. */
 function AjustesDoPainel(props: {
   areas: Area[]
   perfis: Perfil[]
@@ -556,13 +622,17 @@ function AjustesDoPainel(props: {
   const { acoes, recarregar } = props
   return (
     <div className="grade-blocos">
-      <EditorAreas
-        areas={props.areas}
-        salvar={async (a) => {
-          await acoes.salvarArea(a)
-          recarregar()
-        }}
-      />
+      {props.usuario.papel === 'admin' ? (
+        <EditorAreas
+          areas={props.areas}
+          salvar={async (a) => {
+            await acoes.salvarArea(a)
+            recarregar()
+          }}
+        />
+      ) : (
+        <AreasSoLeitura areas={props.areas} />
+      )}
       <Equipe perfis={props.perfis} eu={props.usuario} acoes={acoes} recarregar={recarregar} />
       <EscolherTema />
       <section className="bloco pilha-curta so-celular">

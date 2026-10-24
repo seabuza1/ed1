@@ -10,6 +10,8 @@ export interface Tokens {
   cache: number
   /** Saída, com o raciocínio do modelo. */
   saida: number
+  /** Parte da entrada gravada no cache (a Anthropic cobra 1,25 ×); só para o custo do comparador. */
+  escritaCache?: number
 }
 
 /** Uma chamada: o JSON como veio (a validação é depois), os tokens e o tempo. */
@@ -55,6 +57,12 @@ export async function chamar(buscar: typeof fetch, url: string, init: RequestIni
     throw new ErroIA(`${nome} rede`, 503)
   }
 }
+
+/**
+ * 400 do provedor: se o problema é a foto, a IA não leu esta (422, conta como tentativa); senão é o
+ * pedido (modelo que não aceita um parâmetro, schema): configuração, como um 404.
+ */
+export const status400 = (mensagem: string) => (/image|imagem/i.test(mensagem) ? 422 : 400)
 
 /** O texto da resposta como JSON; sem JSON, a IA não leu. */
 export function comoJson(texto: string): unknown {

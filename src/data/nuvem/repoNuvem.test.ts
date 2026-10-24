@@ -1,10 +1,11 @@
 import 'fake-indexeddb/auto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { calcularAcerto } from '../../domain/acerto'
-import { criarComanda, marcarEntregue } from '../../domain/comanda'
+import { criarComanda, marcarEntregue, marcarPapel } from '../../domain/comanda'
 import { abrirNoite } from '../../domain/noite'
 import type { Area, Comanda, Noite } from '../../domain/tipos'
 import { criarRepoLocal } from '../repoLocal'
+import { ErroRemoto } from './remoto'
 import { criarRemotoFalso } from './remotoFalso'
 import { criarRepoNuvem, type RepoNuvem } from './repoNuvem'
 
@@ -15,7 +16,7 @@ let n = 0
 const abertos: RepoNuvem[] = []
 afterEach(() => abertos.splice(0).forEach((r) => r.parar()))
 
-function montar() {
+function montar(opcoes: { esperaExcluir?: number } = {}) {
   const nuvem = criarRemotoFalso()
   nuvem.perfis.set(JOAO, { id: JOAO, nome: 'João', papel: 'motoboy', ativo: true })
   nuvem.perfis.set(LUAN, { id: LUAN, nome: 'Luan', papel: 'expedicao', ativo: true })
@@ -32,6 +33,7 @@ function montar() {
     remoto: nuvem.remoto,
     online: () => online && !nuvem.estado.offline,
     automatico: false,
+    esperaExcluir: opcoes.esperaExcluir ?? 0,
   })
   abertos.push(repo)
   const modoAviao = (ligado: boolean) => {
@@ -139,6 +141,74 @@ describe('nuvem com fila offline', () => {
     expect(repo.sync!.obter().pendentes).toBe(0)
   })
 
+  it('marcar e desmarcar sem internet não sobe por cima da marca do Luan', async () => {
+    const { nuvem, repo, modoAviao } = montar()
+    await repo.sincronizar()
+    const noite = await abrir(repo)
+    const c = await lancar(repo, noite, '2672', 9000, 'a2', 'cartao')
+    await repo.sincronizar()
+    modoAviao(true)
+    await repo.salvarComanda(marcarPapel(c, true, '2026-10-16T23:30:00Z'))
+    await repo.salvarComanda(marcarPapel(c, false, '2026-10-16T23:31:00Z'))
+    await repo.sincronizar()
+    expect(repo.sync!.obter().pendentes).toBe(0)
+    // O Luan marca no painel; quando a internet volta, a marca dele fica.
+    nuvem.comandas.set(c.id, { ...nuvem.comandas.get(c.id)!, papel_conferido: true })
+    modoAviao(false)
+    await repo.sincronizar()
+    expect(nuvem.comandas.get(c.id)?.papel_conferido).toBe(true)
+  })
+
+  it('desmarcar enquanto a marca sobe: o desmarcado chega na nuvem', async () => {
+    const { nuvem, repo } = montar()
+    await repo.sincronizar()
+    const noite = await abrir(repo)
+    const c = await lancar(repo, noite, '2672', 9000, 'a2', 'cartao')
+    await repo.sincronizar()
+    const atualizar = nuvem.remoto.atualizar
+    let uma = true
+    nuvem.remoto.atualizar = async (tabela, id, campos) => {
+      await atualizar(tabela, id, campos)
+      if (tabela === 'comandas' && uma) {
+        uma = false
+        await repo.salvarComanda(marcarPapel(c, false, '2026-10-16T23:31:00Z'))
+      }
+    }
+    await repo.salvarComanda(marcarPapel(c, true, '2026-10-16T23:30:00Z'))
+    await repo.sincronizar()
+    expect(nuvem.comandas.get(c.id)?.papel_conferido).toBe(false)
+    expect(repo.sync!.obter().pendentes).toBe(0)
+  })
+
+  it('mesma coluna mudada aqui e no painel: vale a última alteração', async () => {
+    const { nuvem, repo, modoAviao } = montar()
+    await repo.sincronizar()
+    const noite = await abrir(repo)
+    await repo.sincronizar()
+    const luanConta = (valor: number, em: string) =>
+      nuvem.caixas.set(noite.id, { ...nuvem.caixas.get(noite.id)!, dinheiro_contado: valor, atualizado_em: em })
+
+    // O motoboy digitou 240 sem internet às 21:10; o Luan registrou 243 às 21:20: vale a do Luan.
+    modoAviao(true)
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-16T21:10:00Z'))
+    await repo.atualizarNoite(noite.id, { dinheiroContado: 24000 })
+    vi.useRealTimers()
+    luanConta(24300, '2026-10-16T21:20:00Z')
+    modoAviao(false)
+    await repo.sincronizar()
+    expect(nuvem.caixas.get(noite.id)?.dinheiro_contado).toBe(24300)
+    expect((await repo.listarNoites()).find((n) => n.id === noite.id)?.dinheiroContado).toBe(24300)
+
+    // Agora o motoboy muda depois do Luan: vale a dele.
+    modoAviao(true)
+    await repo.atualizarNoite(noite.id, { dinheiroContado: 25000 })
+    luanConta(24500, '2026-10-16T21:30:00Z')
+    modoAviao(false)
+    await repo.sincronizar()
+    expect(nuvem.caixas.get(noite.id)?.dinheiro_contado).toBe(25000)
+  })
+
   it('depois do acerto confirmado a nuvem recusa; o app avisa e volta ao que vale', async () => {
     const { nuvem, repo, modoAviao } = montar()
     await repo.sincronizar()
@@ -196,6 +266,24 @@ describe('nuvem com fila offline', () => {
     expect((await repo.listarComandas(noite.id)).map((x) => x.codigo)).toEqual(['0017'])
   })
 
+  it('Desfazer da exclusão: a comanda não é apagada na nuvem e o Pix "caiu" fica', async () => {
+    const { nuvem, repo } = montar({ esperaExcluir: 60_000 })
+    await repo.sincronizar()
+    const noite = await abrir(repo)
+    const c = await lancar(repo, noite, '0017', 6000, 'a1', 'pix_antecipado')
+    await repo.sincronizar()
+    nuvem.comandas.set(c.id, { ...nuvem.comandas.get(c.id)!, pix_confirmado: true })
+    const excluir = vi.spyOn(nuvem.remoto, 'excluir')
+    await repo.excluirComanda(c.id)
+    await repo.sincronizar()
+    expect(nuvem.comandas.has(c.id)).toBe(true) // ainda no tempo do Desfazer
+    await repo.salvarComanda(c) // Desfazer
+    await repo.sincronizar()
+    expect(excluir).not.toHaveBeenCalled()
+    expect(nuvem.comandas.get(c.id)?.pix_confirmado).toBe(true)
+    expect(repo.sync!.obter().pendentes).toBe(0)
+  })
+
   it('lançar e excluir sem internet não deixa nada na nuvem', async () => {
     const { nuvem, repo, modoAviao } = montar()
     await repo.sincronizar()
@@ -207,6 +295,51 @@ describe('nuvem com fila offline', () => {
     modoAviao(false)
     await repo.sincronizar()
     expect(nuvem.comandas.size).toBe(0)
+    expect(repo.sync!.obter().pendentes).toBe(0)
+  })
+
+  it('noite que já estava na nuvem com a mesma data: as comandas daqui vão para ela', async () => {
+    const { nuvem, repo, modoAviao } = montar()
+    await repo.sincronizar()
+    // Outro aparelho já abriu a noite; este abre a dele sem internet e lança.
+    nuvem.caixas.set('outro', {
+      id: 'outro', motoboy_id: JOAO, data: '2026-10-16', caixa_inicial: 8000, diaria: 3000, ordem_chegada: 1,
+      dinheiro_contado: null, fechado_em: null, obs: '', criado_em: '2026-10-16T19:00:00Z', atualizado_em: '2026-10-16T19:00:00Z',
+    })
+    modoAviao(true)
+    const noite = await abrir(repo)
+    const c = await lancar(repo, noite, '3557', 11300, 'a3', 'dinheiro')
+    modoAviao(false)
+    await repo.sincronizar()
+
+    expect((await repo.listarNoites()).map((n) => n.id)).toEqual(['outro'])
+    expect(nuvem.comandas.get(c.id)).toMatchObject({ caixa_id: 'outro' })
+    expect((await repo.listarComandas('outro')).map((x) => x.codigo)).toEqual(['3557'])
+    expect(repo.sync!.obter()).toMatchObject({ pendentes: 0, recusa: expect.stringContaining('já estava na nuvem') })
+  })
+
+  it('com a sessão de outra conta no aparelho, não sincroniza e a fila fica', async () => {
+    const { nuvem } = montar()
+    let dono: string | null = JOAO
+    const repo = criarRepoNuvem({
+      nome: `nuvem-${++n}`,
+      usuarioId: JOAO,
+      remoto: nuvem.remoto,
+      online: () => true,
+      automatico: false,
+      usuarioDaSessao: async () => dono,
+    })
+    abertos.push(repo)
+    await repo.sincronizar()
+    dono = LUAN // outra conta entrou numa aba do mesmo navegador
+    const noite = await abrir(repo)
+    await lancar(repo, noite, '3557', 11300, 'a3', 'dinheiro')
+    await repo.sincronizar()
+    expect(nuvem.caixas.size).toBe(0)
+    expect(repo.sync!.obter()).toMatchObject({ pendentes: 2, recusa: null })
+    dono = JOAO
+    await repo.sincronizar()
+    expect(nuvem.caixas.size).toBe(1)
     expect(repo.sync!.obter().pendentes).toBe(0)
   })
 
@@ -375,6 +508,25 @@ describe('fotos das comandas (leitura)', () => {
     }
   })
 
+  it('sem resposta com internet (demorou, a conexão caiu): a foto espera, sem reenviar a cada sincronização', async () => {
+    const { nuvem, repo, modoAviao } = montar()
+    await repo.sincronizar()
+    modoAviao(true)
+    const noite = await abrir(repo)
+    await comFoto(repo, noite, true)
+    modoAviao(false)
+    let chamadas = 0
+    nuvem.remoto.lerComanda = async () => {
+      chamadas++
+      throw new ErroRemoto('Failed to fetch', false)
+    }
+    await repo.sincronizar()
+    await repo.lerFotos()
+    await repo.sincronizar()
+    await repo.lerFotos()
+    expect(chamadas).toBe(1)
+  })
+
   it('leitura ao vivo que não veio: a fila espera 2 min antes de mandar a foto de novo', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     try {
@@ -388,12 +540,13 @@ describe('fotos das comandas (leitura)', () => {
       vi.setSystemTime(Date.now() + 3 * 60_000)
       await repo.lerFotos()
       expect(nuvem.estado.leiturasIA).toBe(1)
+
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('caixa com acerto confirmado: a foto adiada não vai mais para a IA (a nuvem recusaria a leitura)', async () => {
+  it('caixa com acerto confirmado: a foto espera sem ir para a IA; reaberto, é lida', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     try {
       const { nuvem, repo, modoAviao } = montar()
@@ -413,6 +566,16 @@ describe('fotos das comandas (leitura)', () => {
       vi.setSystemTime(Date.now() + 3 * 60_000)
       await repo.lerFotos()
       expect(nuvem.estado.leiturasIA).toBe(1)
+
+      // O admin reabre: a foto sobe e é lida.
+      nuvem.equipe.reabrir(noite.id)
+      await repo.sincronizar()
+      vi.setSystemTime(Date.now() + 10 * 60_000)
+      await repo.lerFotos()
+      expect(nuvem.estado.leiturasIA).toBe(2)
+      await repo.sincronizar()
+      expect(nuvem.fotos.size).toBe(1)
+      expect(nuvem.leituras.size).toBe(1)
     } finally {
       vi.useRealTimers()
     }

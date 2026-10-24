@@ -17,6 +17,18 @@ export interface EntradaNoite {
 
 const ehCentavos = (n: number) => Number.isInteger(n) && n >= 0
 
+/** R23: a promoção da noite vai de R$ 3 a R$ 23 por pizza tradicional. */
+export const PROMO_MIN = 300
+export const PROMO_MAX = 2300
+
+/** Promoção da noite, por pizza tradicional; null = ainda não definida (a leitura sugere). */
+export function editarPromocao(noite: Noite, centavos: number | null): Resultado<Noite> {
+  if (noite.fechadaEm !== null) return { ok: false, erro: 'Noite fechada. Reabra para editar.' }
+  if (centavos !== null && (!ehCentavos(centavos) || centavos < PROMO_MIN || centavos > PROMO_MAX))
+    return { ok: false, erro: 'A promoção vai de R$ 3,00 a R$ 23,00 por pizza.' }
+  return { ok: true, valor: { ...noite, promoDesconto: centavos } }
+}
+
 function validarValores(e: Omit<EntradaNoite, 'data'>): string | null {
   if (!ehCentavos(e.caixaInicial)) return 'Caixa inválido.'
   if (!ehCentavos(e.diaria)) return 'Diária inválida.'

@@ -336,6 +336,35 @@ describe('ações sobre a comanda', () => {
     expect(a.receber).toBe(R(98))
   })
 
+  it('saiu de novo nasce sem papel conferido e sem o Pix "caiu"', () => {
+    const areas = areasPadrao()
+    const voltou = { ...noiteBase(areas).find((c) => c.codigo === '8094')!, papelConferido: true, pixConfirmado: true }
+    const r = saiuDeNovo(voltou, areas[2], { id: 'nova', agora })
+    expect(r.ok && [r.valor.papelConferido, r.valor.pixConfirmado]).toEqual([false, false])
+  })
+
+  it('o Pix "caiu" sai quando o valor em Pix antecipado muda', () => {
+    const areas = areasPadrao()
+    const c = {
+      ...noiteBase(areas)[0],
+      total: R(50),
+      pagamentos: [{ forma: 'pix_antecipado' as const, valor: R(20) }, { forma: 'dinheiro' as const, valor: R(30) }],
+      pixConfirmado: true,
+    }
+    const entrada = (pix: number) => ({
+      codigo: c.codigo,
+      total: R(50),
+      pagamentos: [{ forma: 'pix_antecipado' as const, valor: R(pix) }, { forma: 'dinheiro' as const, valor: R(50 - pix) }],
+      troco: 0,
+    })
+    const mesmo = editarComanda(c, entrada(20), areas[2], 'entregue', agora)
+    expect(mesmo.ok && mesmo.valor.pixConfirmado).toBe(true)
+    const mudou = editarComanda(c, entrada(40), areas[2], 'entregue', agora)
+    expect(mudou.ok && mudou.valor.pixConfirmado).toBe(false)
+    const trocou = trocarForma({ ...c, status: 'em_rota' }, { pagamentos: [{ forma: 'pix_antecipado', valor: R(50) }], troco: 0 }, agora)
+    expect(trocou.ok && trocou.valor.pixConfirmado).toBe(false)
+  })
+
   it('só sai de novo quem voltou', () => {
     const areas = areasPadrao()
     const entregue = noiteBase(areas)[0]

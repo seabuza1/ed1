@@ -1,7 +1,7 @@
 // Adaptador da Anthropic, Messages API. Saída estruturada (output_config.format) em vez de tool use
 // forçado: o Sonnet 5.5 e o Opus 5.5 recusam tool_choice forçado, e o formato vale para todos.
 import { montarPedido, type Pedido } from '../prompt.ts'
-import { chamar, comoJson, ErroIA, type Adaptador, type OpcoesAdaptador } from './tipos.ts'
+import { chamar, comoJson, ErroIA, status400, type Adaptador, type OpcoesAdaptador } from './tipos.ts'
 
 export const URL_ANTHROPIC = 'https://api.anthropic.com/v1/messages'
 
@@ -44,6 +44,7 @@ export function criarAnthropic(o: OpcoesAdaptador): Adaptador {
       // Sem crédito ou no limite de gasto vem 400: é configuração da conta, como um 402.
       if (r.status === 400 && /credit balance|usage limit|billing/i.test(msg?.error?.message ?? ''))
         throw new ErroIA('Anthropic sem crédito', 402)
+      if (r.status === 400) throw new ErroIA('Anthropic 400', status400(msg?.error?.message ?? ''))
       if (!r.ok) throw new ErroIA(`Anthropic ${r.status}`, r.status)
       if (msg?.stop_reason === 'refusal') throw new ErroIA('recusa')
       if (msg?.stop_reason === 'max_tokens') throw new ErroIA('resposta cortada')
@@ -51,11 +52,12 @@ export function criarAnthropic(o: OpcoesAdaptador): Adaptador {
       const u = msg?.usage ?? {}
       return {
         json: comoJson(blocos.flatMap((b) => (b.type === 'text' && b.text ? [b.text] : [])).join('')),
-        // A escrita no cache entra como entrada (custa um pouco mais, na primeira chamada).
+        // A escrita no cache entra como entrada e vem também à parte (custa 1,25 × a entrada).
         tokens: {
           entrada: (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0),
           cache: u.cache_read_input_tokens ?? 0,
           saida: u.output_tokens ?? 0,
+          escritaCache: u.cache_creation_input_tokens ?? 0,
         },
         ms: Date.now() - inicio,
       }

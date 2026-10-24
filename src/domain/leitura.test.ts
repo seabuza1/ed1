@@ -292,6 +292,18 @@ describe('leitura: pagamento', () => {
   const pagos = (...partes: [string, 'dinheiro' | 'cartao' | 'pix' | null, string | null][]) =>
     partes.map(([forma_escrita, forma, valor_escrito]) => ({ forma_escrita, forma, valor_escrito }))
 
+  it('a forma vem do texto escrito, não da classificação da IA (R19)', () => {
+    const errada = conferir(comanda({ pagamento: pagos(['Cartão', 'dinheiro', null]) }))
+    expect(pagamentosParaLancar(errada)).toEqual([{ forma: 'cartao', valor: R(113) }])
+    const junta = conferir(comanda({ pagamento: pagos(['Din + Cartão', 'dinheiro', null]) }))
+    expect(junta.estado).toBe('vermelho')
+    expect(junta.motivos).toContain('Mais de uma forma na mesma parte: divida o pagamento.')
+    // Texto que não cita forma conhecida: vale a classificação.
+    expect(pagamentosParaLancar(conferir(comanda({ pagamento: pagos(['C', 'cartao', null]) })))).toEqual([
+      { forma: 'cartao', valor: R(113) },
+    ])
+  })
+
   it('misto cujas partes não fecham o total fica vermelho e não lança', () => {
     const r = conferir(comanda({ pagamento: pagos(['Cartão', 'cartao', '100'], ['din', 'dinheiro', '10']) }))
     expect(r.estado).toBe('vermelho')

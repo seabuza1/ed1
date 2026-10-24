@@ -5,7 +5,7 @@ import { formatarReais, lerReais, paraCampo } from '../domain/dinheiro'
 import type { Ajustes, Area } from '../domain/tipos'
 import { procurarAtualizacao } from '../data/atualizacao'
 import { repo } from '../data/repo'
-import { ehEquipe, sair, useUsuario, type Usuario } from '../data/sessao'
+import { sair, useUsuario, type Usuario } from '../data/sessao'
 import { BotaoConfirmar } from '../ui/BotaoConfirmar'
 import { CampoReais } from '../ui/CampoReais'
 import { mensagemDeErro } from '../ui/erro'
@@ -15,8 +15,8 @@ import { EscolherTema } from '../ui/EscolherTema'
 
 export function TelaAjustes(props: { areas: Area[]; ajustes: Ajustes; voltar: () => void }) {
   const usuario = useUsuario()
-  // Com nuvem, as áreas são da pizzaria: só a expedição e o admin mudam.
-  const editaAreas = !repo.nuvem || ehEquipe(usuario)
+  // Com nuvem, as áreas são da pizzaria: só o admin muda (R18).
+  const editaAreas = !repo.nuvem || usuario?.papel === 'admin'
   return (
     <main className="app pilha">
       <button type="button" className="link alinha-inicio" onClick={props.voltar}>
@@ -27,7 +27,7 @@ export function TelaAjustes(props: { areas: Area[]; ajustes: Ajustes; voltar: ()
       {usuario && <Conta usuario={usuario} />}
       <EscolherTema />
       {editaAreas ? <EditorAreas areas={props.areas} salvar={repo.salvarArea} /> : <AreasSoLeitura areas={props.areas} />}
-      <ValoresPadrao key={`${props.ajustes.caixaPadrao}-${props.ajustes.diariaPadrao}`} ajustes={props.ajustes} />
+      <ValoresPadrao ajustes={props.ajustes} />
       <SobreApp />
     </main>
   )
@@ -64,11 +64,11 @@ function Conta({ usuario }: { usuario: Usuario }) {
   )
 }
 
-function AreasSoLeitura({ areas }: { areas: Area[] }) {
+export function AreasSoLeitura({ areas }: { areas: Area[] }) {
   return (
     <section className="bloco">
       <h2>Áreas e taxas</h2>
-      <p className="discreto pequeno">Definidas pela expedição.</p>
+      <p className="discreto pequeno">Definidas pelo admin.</p>
       {areas
         .filter((a) => a.ativa)
         .map((a) => (

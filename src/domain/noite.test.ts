@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { dataDaNoite, formatarData, formatarDataHora, partesData } from './datas'
 import { lerReais, paraCampo } from './dinheiro'
-import { abrirNoite, avisoAoFechar, editarValoresNoite, fecharNoite, noiteAberta, reabrirNoite } from './noite'
+import { abrirNoite, avisoAoFechar, editarPromocao, editarValoresNoite, fecharNoite, noiteAberta, reabrirNoite } from './noite'
 import type { Comanda, Noite } from './tipos'
 import { r$ } from '../teste/r$'
 
@@ -97,5 +97,17 @@ describe('abrir e fechar noite', () => {
     expect(avisoAoFechar([c('entregue'), c('voltou')])).toBeNull()
     expect(avisoAoFechar([c('em_rota'), c('entregue')])).toBe('1 comanda ainda em rota. Ela vai contar como entregue.')
     expect(avisoAoFechar([c('em_rota'), c('em_rota')])).toMatch(/^2 comandas/)
+  })
+
+  it('promoção da noite: de R$ 3 a R$ 23, ou sem promoção; noite fechada não muda', () => {
+    const r = abrirNoite({ data: '2026-10-16', caixaInicial: 8000, diaria: 3000 }, [], 'n')
+    if (!r.ok) throw new Error(r.erro)
+    const com = editarPromocao(r.valor, 500)
+    expect(com.ok && com.valor.promoDesconto).toBe(500)
+    const sem = editarPromocao({ ...r.valor, promoDesconto: 500 }, null)
+    expect(sem.ok && sem.valor.promoDesconto).toBeNull()
+    expect(editarPromocao(r.valor, 200).ok).toBe(false)
+    expect(editarPromocao(r.valor, 2400).ok).toBe(false)
+    expect(editarPromocao(fecharNoite(r.valor, 'x'), 500).ok).toBe(false)
   })
 })

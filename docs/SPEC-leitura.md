@@ -17,7 +17,7 @@ Com letra de mão não existe leitura 100% certa. A segurança vem de três cois
 3. Edge Function `ler-comanda`: recebe a foto, faz duas leituras com a IA configurada (Gemini 3.1 Pro por padrão) e devolve as duas.
 4. Botão de foto, tela "Lendo" e tela de confirmação.
 5. Fila offline das fotos e leitura posterior.
-6. Fotos no Storage e tabela `leituras` para medir: `supabase/004_leitura.sql` (o 002 e o 003 já eram da v1), `005_leitura_ajustes.sql`, `007_leitura_provedor.sql`, `008_leitura_limite.sql` e `009_leitura_limite_trava.sql`.
+6. Fotos no Storage e tabela `leituras` para medir: `supabase/004_leitura.sql` (o 002 e o 003 já eram da v1), `005_leitura_ajustes.sql`, `007_leitura_provedor.sql`, `008_leitura_limite.sql`, `009_leitura_limite_trava.sql` e `011_acerto_e_leitura.sql`.
 7. Foto da comanda no painel do Luan.
 8. Script `scripts/comparar-modelos.ts` para comparar modelos com as fotos da noite de teste.
 
@@ -98,7 +98,7 @@ A parte fixa (system e exemplos) vem sempre primeiro e idêntica em toda chamada
 ## Edge Function `ler-comanda`
 
 - `POST { imagem: string }` (JPEG em base64) → `{ leitura, conferencia, provedor, modelo, ms, tokens }` ou `{ erro }`. `tokens` soma as duas chamadas: `{ entrada, cache, saida }` (com modelos diferentes, o custo por comanda sai aproximado).
-- Exige usuário logado (verificação de JWT padrão) com perfil ativo e no máximo 60 leituras por hora por conta (`pode_ler_comanda`, no 008 e no 009): conta nova nasce ativa, e o limite segura o gasto de quem não é da pizzaria até o admin desativar.
+- Exige usuário logado (verificação de JWT padrão) com perfil ativo e no máximo 60 leituras por hora por conta (`reservar_leitura`, no 011; antes `pode_ler_comanda`, do 008 e 009): conta nova nasce ativa, e o limite segura o gasto de quem não é da pizzaria até o admin desativar. Quando o provedor cai ou está mal configurado (nada foi cobrado), a função devolve a vaga (`devolver_leitura`).
 - Faz as duas chamadas em paralelo, com timeout de 30 s contado da chegada do pedido. Se uma falha, a outra é cancelada; se o app desiste (Digitar, outra foto), a função para também. Em qualquer erro, devolve `{ erro }` e o front volta para o lançamento manual.
 - Erro que não é da foto devolve 503 e a foto fica na fila: provedor ocupado ou fora do ar (408, 429, 5xx, falha de rede) ou configuração (secret faltando, chave recusada, modelo que não existe). A fila espera 2, 4, 8... até 60 min entre as tentativas e desiste na 8ª; as outras fotos seguem. Sem resposta da função (sem internet, rede caiu), a fila para e tenta na próxima sincronização, sem contar. Foto de caixa com acerto confirmado não vai mais para a IA. A IA não ter lido a foto (resposta fora do formato, recusa, tempo esgotado) conta como uma das 3 tentativas.
 - Recusa imagem acima de 2 MB.
@@ -161,7 +161,7 @@ API Interactions:
 - **Lista da noite:** ícone de câmera nas comandas com foto e aviso de "leitura não confere" (R28).
 - **Painel do Luan:** tocar no código abre a foto.
 
-## Banco: `004_leitura.sql`, `005_leitura_ajustes.sql`, `007_leitura_provedor.sql`, `008_leitura_limite.sql` e `009_leitura_limite_trava.sql`
+## Banco: `004_leitura.sql`, `005_leitura_ajustes.sql`, `007_leitura_provedor.sql`, `008_leitura_limite.sql`, `009_leitura_limite_trava.sql` e `011_acerto_e_leitura.sql`
 
 Rodar nessa ordem, depois do `003_v1_avisos.sql` (o `006_pix_da_equipe.sql` é da v1).
 
@@ -173,7 +173,7 @@ Rodar nessa ordem, depois do `003_v1_avisos.sql` (o `006_pix_da_equipe.sql` é d
   - Envia o dono do caixa enquanto o acerto não foi confirmado, ou a equipe.
   - Apaga só o admin.
   - Fotos com mais de 30 dias podem ser apagadas (o plano grátis do Supabase tem 1 GB); o que a IA leu continua em `leituras`.
-- Tabela `uso_leitura` e função `pode_ler_comanda()` (008; o 009 põe uma trava para chamadas ao mesmo tempo da mesma conta): perfil ativo e até 60 leituras por hora por conta. Ninguém lê a tabela direto.
+- Tabela `uso_leitura` e função `pode_ler_comanda()` (008; o 009 põe uma trava para chamadas ao mesmo tempo da mesma conta): perfil ativo e até 60 leituras por hora por conta. Ninguém lê a tabela direto. O 011 troca por `reservar_leitura()`, que devolve o id da vaga, e `devolver_leitura(vaga)`, que só quem reservou sabe usar.
 
 ## Comparar modelos: `scripts/comparar-modelos.ts`
 
@@ -216,7 +216,7 @@ Os valores esperados foram conferidos por um cálculo à parte.
 ## Ordem de construção
 
 1. `leitura.ts` com L1 a L14 passando, local e sem rede.
-2. Rodar `004_leitura.sql`, `005_leitura_ajustes.sql`, `007_leitura_provedor.sql`, `008_leitura_limite.sql` e `009_leitura_limite_trava.sql`.
+2. Rodar `004_leitura.sql`, `005_leitura_ajustes.sql`, `007_leitura_provedor.sql`, `008_leitura_limite.sql`, `009_leitura_limite_trava.sql` e `011_acerto_e_leitura.sql`.
 3. Edge Function com o adaptador `google.ts` e os secrets. Testar com `exemplos/3557.jpg`: tem que dar verde em Aragarças.
 4. Botão de foto, "Lendo" e tela de confirmação.
 5. Fila offline e leitura posterior (R28).

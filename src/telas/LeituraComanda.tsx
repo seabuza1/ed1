@@ -2,7 +2,7 @@
 // confirmação. A conta e o estado vêm de conferirLeitura; aqui só se mostra e se corrige.
 import { useState } from 'react'
 import { comandaRepetida, FORMAS, NOMES_FORMA } from '../domain/comanda'
-import { formatarReais, lerReais, paraCampo } from '../domain/dinheiro'
+import { formatarReais, paraCampo } from '../domain/dinheiro'
 import {
   comandaDaLeitura,
   conferirLeitura,
@@ -13,6 +13,7 @@ import {
   type RegistroLeitura,
   type RespostaLeitura,
   type ResultadoLeitura,
+  valorLido,
 } from '../domain/leitura'
 import type { Area, Comanda, Forma, Noite } from '../domain/tipos'
 import { agora, segundosDesde } from '../data/id'
@@ -71,6 +72,7 @@ function FotoComanda({ url }: { url: string }) {
 export function LendoComanda(props: {
   foto: FotoDaComanda
   tremida: boolean
+  erro: string | null
   onDigitar: () => void
   onTirarDeNovo: (arquivo: File) => void
 }) {
@@ -93,6 +95,7 @@ export function LendoComanda(props: {
           Lendo a comanda. Se demorar, toque em Digitar.
         </p>
       )}
+      {props.erro && <p className="erro">{props.erro}</p>}
     </section>
   )
 }
@@ -124,19 +127,20 @@ export function ConfirmarLeitura(props: {
   foto: FotoDaComanda
   resposta: RespostaLeitura
   correcoesIniciais: Correcoes
+  /** O pagamento refeito no editor (com o troco), de volta no Desfazer. */
+  pagamentoInicial: EstadoPagamento | null
   noite: Noite
   areas: Area[]
   comandas: Comanda[]
+  /** Falha ao lançar ou ao gravar a promoção, vinda de fora. */
+  erro: string | null
   onDigitar: (codigo: string, total: string) => void
-  onLancar: (comanda: Comanda, registro: RegistroLeitura, correcoes: Correcoes) => void
+  onLancar: (comanda: Comanda, registro: RegistroLeitura, correcoes: Correcoes, pagamento: EstadoPagamento | null) => void
   onPromocao: (centavos: number) => void
 }) {
   const { resposta, noite } = props
   const [cor, setCor] = useState<Correcoes>(props.correcoesIniciais)
-  const [troco, setTroco] = useState('')
-  const [editarPagamento, setEditarPagamento] = useState<EstadoPagamento | null>(null)
-  /** O editor de pagamento aberto com algo que ainda não fecha: não lança até corrigir. */
-  const [pagamentoInvalido, setPagamentoInvalido] = useState<string | null>(null)
+  const [editarPagamento, setEditarPagamento] = useState<EstadoPagamento | null>(props.pagamentoInicial)
   const [repetidaOk, setRepetidaOk] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
@@ -147,7 +151,21 @@ export function ConfirmarLeitura(props: {
     promoDesconto: noite.promoDesconto ?? null,
     comandasDaNoite: props.comandas,
   }
-  const r = conferirLeitura({ ...entrada, correcoes: cor })
+  // O editor de pagamento vale contra o total de agora: corrigir o total depois refaz as partes.
+  const totalAtual = valorLido(cor.total ?? resposta.leitura.total_escrito)
+  const pagamentoEditado =
+    editarPagamento && (totalAtual === null ? null : lerPagamento(editarPagamento, totalAtual))
+  /** O editor aberto com algo que ainda não fecha: não lança até corrigir. */
+  const pagamentoInvalido = !editarPagamento ? null : !pagamentoEditado ? 'Informe o total.' : pagamentoEditado.ok ? null : pagamentoEditado.erro
+  const corEfetiva: Correcoes = pagamentoEditado?.ok
+    ? {
+        ...cor,
+        pagamento: pagamentoEditado.valor.pagamentos.map((x) => ({ forma: x.forma, valor: paraCampo(x.valor) })),
+        formas: undefined,
+      }
+    : cor
+  const troco = pagamentoEditado?.ok ? pagamentoEditado.valor.troco : 0
+  const r = conferirLeitura({ ...entrada, correcoes: corEfetiva })
   const repetida = r.codigo !== null && comandaRepetida(r.codigo, props.comandas) !== undefined
 
   function corrigir(parcial: Correcoes) {
@@ -159,10 +177,8 @@ export function ConfirmarLeitura(props: {
   function lancar(final: Correcoes, forcado: boolean) {
     if (pagamentoInvalido) return setErro(pagamentoInvalido)
     const rf = conferirLeitura({ ...entrada, correcoes: final })
-    const valorTroco = troco.trim() === '' ? 0 : lerReais(troco)
-    if (valorTroco === null) return setErro('Troco por Pix inválido.')
     const fotoPath = `${noite.id}/${props.foto.id}.jpg`
-    const c = comandaDaLeitura(rf, props.areas, valorTroco, {
+    const c = comandaDaLeitura(rf, props.areas, troco, {
       id: props.foto.id,
       noiteId: noite.id,
       agora: agora(),
@@ -181,12 +197,12 @@ export function ConfirmarLeitura(props: {
       posterior: false,
       agora: agora(),
     })
-    props.onLancar(c.valor, registro, final)
+    props.onLancar(c.valor, registro, final, editarPagamento)
   }
 
   /** Verde ou amarelo: o toque na área lança (como o toque na forma no manual). */
   function tocarArea(areaId: string) {
-    const final = { ...cor, areaId }
+    const final = { ...corEfetiva, areaId }
     corrigir({ areaId })
     const rf = conferirLeitura({ ...entrada, correcoes: final })
     if (rf.estado === 'vermelho') return
@@ -204,15 +220,8 @@ export function ConfirmarLeitura(props: {
 
   function aplicarPagamento(e: EstadoPagamento) {
     setEditarPagamento(e)
-    if (r.total === null) return setPagamentoInvalido('Informe o total.')
-    const p = lerPagamento(e, r.total)
-    setPagamentoInvalido(p.ok ? null : p.erro)
-    if (!p.ok) return
-    corrigir({
-      pagamento: p.valor.pagamentos.map((x) => ({ forma: x.forma, valor: paraCampo(x.valor) })),
-      formas: undefined,
-    })
-    setTroco(e.troco)
+    setErro(null)
+    setRepetidaOk(false)
   }
 
   /** O editor começa com o que foi lido, quando a forma de cada parte já está certa. */
@@ -252,13 +261,13 @@ export function ConfirmarLeitura(props: {
           <span key={m}>{m}</span>
         ))}
         {r.promocaoSugerida !== null && (
-          <button
-            type="button"
+          <BotaoConfirmar
             className="secundario alinha-inicio"
-            onClick={() => props.onPromocao(r.promocaoSugerida!)}
+            confirmacao={`Vale para a noite toda: toque de novo`}
+            onConfirmar={() => props.onPromocao(r.promocaoSugerida!)}
           >
             Sim, promoção de {formatarReais(r.promocaoSugerida)} hoje
-          </button>
+          </BotaoConfirmar>
         )}
       </div>
 
@@ -453,12 +462,12 @@ export function ConfirmarLeitura(props: {
         <BotaoConfirmar
           className="perigo"
           confirmacao="Toque de novo para lançar assim"
-          onConfirmar={() => lancar({ ...cor, areaId: cor.areaId ?? r.areaId ?? undefined }, true)}
+          onConfirmar={() => lancar({ ...corEfetiva, areaId: cor.areaId ?? r.areaId ?? undefined }, true)}
         >
           Lançar assim
         </BotaoConfirmar>
       )}
-      {erro && <p className="erro">{erro}</p>}
+      {(erro ?? props.erro) && <p className="erro">{erro ?? props.erro}</p>}
     </section>
   )
 }
