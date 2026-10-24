@@ -24,6 +24,9 @@ Sistema para a pizzaria onde trabalho como motoboy, construído aos poucos. O MV
 - `supabase/functions/_shared/` (`prompt.ts`, `schema.ts`, `ia/`) e `ler-comanda/`: prompt, schema, adaptadores dos provedores e Edge Function da leitura. Depois de mudar um exemplo, `npm run exemplos`.
 - `scripts/comparar-modelos.ts`: compara modelos com as fotos da noite de teste (`npm run comparar -- <pasta>`).
 - `.claude/skills/graphify/`: `/graphify` monta o grafo do código e dos docs (graphify 0.9.85, Apache-2.0, versão fixada). A saída vai para `graphify-out/`, fora do git.
+- `PRODUCT.md`: quem usa, onde e para quê (o Luan usa o painel no celular). Lido pelas skills de interface.
+- `.interface-design/system.md`: as decisões de visual (cores por papel, superfícies, padrões, topo do painel, folha). Seguir ao mexer na interface.
+- `.claude/skills/impeccable/` (4.7.1, Apache-2.0) e `.claude/skills/interface-design/` (MIT), com `/design-review` e `/design-deslop` em `.claude/commands/`: crítica, auditoria e polimento da interface. O detector da Impeccable baixa um programa no primeiro uso; sem ele, a skill lê o `PRODUCT.md` e o `system.md` direto.
 
 ## Stack
 Vite + React + TypeScript, PWA offline. Supabase (Postgres, Auth, Realtime, Storage, Edge Functions). Local-first: IndexedDB (Dexie) com fila de sincronização, atrás de `src/data/repo.ts`. Testes com Vitest. Deploy na Vercel. No front só a anon key; a service role nunca. A Edge Function `ler-comanda` chama a IA configurada nos secrets (`IA_PROVEDOR`: Gemini por padrão, Anthropic, Qwen ou um servidor compatível com o OpenAI); `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `DASHSCOPE_API_KEY` e `COMPATIVEL_API_KEY` ficam só nos secrets do Supabase, nunca no front.

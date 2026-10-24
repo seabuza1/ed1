@@ -13,7 +13,8 @@
 /* Claro em :root; escuro pelo sistema (sem tema manual) ou por data-tema="escuro". */
 
 :root {
-  --marca: #d9480f;
+  /* Escuro o bastante para texto pequeno: 4,5:1 ou mais no branco, no fundo, no campo e no realce. */
+  --marca: #b83d0c;
   --marca-suave: #ffe8dc;
   --sobre-marca: #ffffff;
 
@@ -30,7 +31,7 @@
   --ok-suave: #dcfce7;
   --info: #1d4ed8;
   --info-suave: #dbeafe;
-  --alerta: #b45309;
+  --alerta: #a84d08;
   --alerta-suave: #fef3c7;
   --perigo: #c81e1e;
   --perigo-suave: #fee2e2;
@@ -46,6 +47,8 @@
   color-scheme: light;
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -119,8 +122,24 @@ h2 {
   margin: 0;
 }
 
+h1,
+h2 {
+  text-wrap: balance;
+}
+
 p {
   margin: 0;
+  text-wrap: pretty;
+}
+
+::selection {
+  background: var(--marca-suave);
+  color: var(--texto);
+}
+
+input,
+textarea {
+  caret-color: var(--marca);
 }
 
 ul {
@@ -988,6 +1007,7 @@ button.item-maquininha .hora {
   color: var(--discreto);
   font-size: 0.9rem;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 button.item-maquininha .codigo {
@@ -1391,8 +1411,7 @@ button.item-papel {
   width: 100%;
   min-height: 60px;
   padding: 6px 12px;
-  border: 1.5px solid var(--alerta);
-  background: transparent;
+  background: var(--campo);
   text-align: left;
   font-weight: inherit;
 }
@@ -1403,13 +1422,14 @@ button.item-papel .marca {
   justify-content: center;
   width: 24px;
   height: 24px;
-  border: 2px solid var(--linha);
+  border: 2px solid var(--discreto);
   border-radius: 7px;
   color: var(--fundo);
 }
 
 button.item-papel[aria-pressed='true'] {
-  border-color: var(--linha);
+  background: transparent;
+  color: var(--texto-2);
 }
 
 button.item-papel[aria-pressed='true'] .marca {
@@ -1510,45 +1530,63 @@ button.so-icone {
   padding: 0;
 }
 
-/* A noite num relance: tudo à vista, em três colunas no celular. */
-.numeros-noite {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+/* A noite num relance: o que pede ação do Luan vem primeiro e leva à coluna; os números ficam
+   numa faixa só, sem R$, como no rodapé da folha. O amarelo é só das pendências. */
+.noite-relance {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
-  margin: 0;
 }
 
-.numeros-noite > div {
-  min-width: 0;
-  padding: 10px 12px;
+.pendencias {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+button.pendencia {
+  justify-content: space-between;
+  padding: 0 12px 0 14px;
+  background: var(--alerta-suave);
+  color: var(--alerta);
+  text-align: left;
+}
+
+button.pendencia strong {
+  margin-right: 2px;
+  font-size: 1.15rem;
+}
+
+.numeros-noite {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
   border-radius: var(--raio);
   background: var(--superficie);
 }
 
+.numeros-noite > div {
+  min-width: 0;
+}
+
 .numeros-noite dt {
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--discreto);
 }
 
 .numeros-noite dd {
   margin: 0;
-  /* Cabe "R$ 392,00" num terço da tela do celular; valor maior quebra no espaço depois do R$. */
-  font-size: clamp(0.95rem, 3.9vw, 1.25rem);
+  /* Cabe "1.234,00" num quarto da tela do celular. */
+  font-size: clamp(0.95rem, 4.2vw, 1.2rem);
   font-weight: 700;
 }
 
 .numeros-noite dd.pequeno {
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   font-weight: 500;
-}
-
-.numeros-noite .alerta {
-  box-shadow: inset 0 0 0 1.5px var(--alerta);
-}
-
-.numeros-noite .alerta dd.num {
-  color: var(--alerta);
 }
 
 /* Caixa do motoboy, resumo e ajustes: uma coluna no celular, grade no computador. */
@@ -1593,6 +1631,9 @@ button.so-icone {
   gap: 10px;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
+  scroll-padding: 0 16px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--linha) transparent;
   padding-bottom: 8px;
   margin: 0 -16px;
   padding-left: 16px;
@@ -1603,14 +1644,16 @@ button.so-icone {
    foto fica por cima (abre a foto). */
 .coluna-folha {
   position: relative;
-  flex: 1 0 172px;
+  /* Duas colunas e um pedaço da terceira na largura do celular (16 + 10 + 10 de margens e vãos,
+     40 da terceira): o pedaço mostra que a folha rola para o lado. */
+  flex: 0 0 max(136px, calc((100vw - 76px) / 2));
   max-width: 280px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
   gap: 8px;
-  padding: 12px;
+  padding: 12px 10px;
   border-radius: var(--raio);
   background: var(--superficie);
   text-align: left;
@@ -1651,7 +1694,7 @@ button.abrir-caixa::after {
   flex-direction: row;
   align-items: center;
   gap: 4px;
-  min-height: 28px;
+  min-height: 32px;
   padding: 0 6px;
   margin: 0 -6px;
   border-radius: 8px;
@@ -1665,6 +1708,17 @@ button.abrir-caixa::after {
   color: var(--discreto);
 }
 
+/* O atalho do topo chegou nesta coluna. */
+.coluna-alvo {
+  animation: alvo 1.2s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@keyframes alvo {
+  from {
+    box-shadow: inset 0 0 0 2px var(--marca);
+  }
+}
+
 .itens-folha {
   display: flex;
   flex-direction: column;
@@ -1676,7 +1730,7 @@ button.abrir-caixa::after {
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 28px;
+  min-height: 32px;
 }
 
 .item-folha .codigo {
@@ -1741,12 +1795,10 @@ button.abrir-caixa::after {
 }
 
 .coluna-pix {
-  flex: 1 0 172px;
-  max-width: 280px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px;
+  padding: 12px 10px;
   border-radius: var(--raio);
   background: var(--superficie);
   scroll-snap-align: start;
@@ -1763,15 +1815,13 @@ button.item-pix {
   gap: 0 8px;
   min-height: 52px;
   padding: 6px 10px;
-  border: 1.5px solid var(--alerta);
-  background: transparent;
+  background: var(--campo);
   text-align: left;
   font-weight: inherit;
 }
 
 button.item-pix[aria-pressed='true'] {
-  border-color: var(--ok);
-  background: var(--ok-suave);
+  background: transparent;
 }
 
 .item-pix .codigo {
@@ -1900,12 +1950,16 @@ button.item-pix[aria-pressed='true'] {
     font-size: 1.7rem;
   }
 
-  .numeros-noite {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    margin: 0;
-    padding: 0;
-    overflow: visible;
+  .noite-relance {
+    max-width: 760px;
+  }
+
+  .pendencias {
+    flex-direction: row;
+  }
+
+  button.pendencia {
+    flex: 1;
   }
 
   .folha {
@@ -1989,5 +2043,23 @@ button.item-pix[aria-pressed='true'] {
   .totais {
     padding-left: max(12px, calc((100% - 1120px) / 2));
     padding-right: max(12px, calc((100% - 1120px) / 2));
+  }
+}
+
+/* ---------- Movimento reduzido ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .aviso-rapido {
+    animation-name: aparecer;
+  }
+
+  @keyframes aparecer {
+    from {
+      opacity: 0;
+    }
+  }
+
+  html {
+    scroll-behavior: auto;
   }
 }
