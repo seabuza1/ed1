@@ -3,7 +3,7 @@
 // POST { imagem } (JPEG em base64) → { leitura, conferencia, provedor, modelo, ms, tokens } ou { erro }.
 // Secrets: IA_PROVEDOR (google, o padrão, anthropic, qwen ou compativel), IA_MODELO, IA_MODELO_CONFERENCIA,
 // a chave do provedor (GEMINI_API_KEY, ANTHROPIC_API_KEY, DASHSCOPE_API_KEY ou COMPATIVEL_API_KEY) e, no
-// compatível, COMPATIVEL_URL. Nenhuma chave vai para o front nem para os logs.
+// compatível, COMPATIVEL_URL (e COMPATIVEL_EXTRA, opcional). Nenhuma chave vai para o front nem para os logs.
 import cardapio from '../_shared/cardapio-mel.json' with { type: 'json' }
 import { EXEMPLOS } from '../_shared/exemplos/exemplos.ts'
 import { configurar, lerDuasVezes } from '../_shared/ia/ler.ts'

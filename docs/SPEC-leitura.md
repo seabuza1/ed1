@@ -126,12 +126,14 @@ Secrets:
 | `DASHSCOPE_API_KEY` | | só se usar o Qwen (Alibaba Model Studio, Singapura) |
 | `COMPATIVEL_URL` | | só no compatível: o endereço da API, `https://.../v1` |
 | `COMPATIVEL_API_KEY` | | só no compatível |
+| `COMPATIVEL_EXTRA` | | só no compatível, opcional: parâmetros a mais no corpo, em JSON (ex.: `{"reasoning":{"max_tokens":1500}}`) |
 
 ### Qwen e servidor compatível (`compativel.ts`)
 
 - `POST <endereço>/chat/completions`, com `Authorization: Bearer`. O Qwen usa `https://dashscope-intl.aliyuncs.com/compatible-mode/v1`; o compatível, o `COMPATIVEL_URL` (só `https`).
 - Exemplos como conversa (foto e instrução, depois a resposta certa) e a foto da vez por último, em `data:image/jpeg;base64`.
 - JSON por `response_format: { type: "json_object" }`, com o esquema no prompt de sistema: com foto, o Qwen não aceita `json_schema`. No Qwen, `enable_thinking: false` (com raciocínio, não devolve JSON de foto).
+- O `COMPATIVEL_EXTRA` vai no corpo como veio. Serve para o que cada servidor chama de outro jeito; na flatt, o `qwen3.8-27b` raciocina até estourar a saída numa foto difícil (e a flatt responde 400) sem `{"reasoning":{"max_tokens":1500}}`.
 - Tokens: `prompt_tokens` menos `cached_tokens` é a entrada; `completion_tokens` é a saída.
 - Erros: chave inválida 401, sem saldo 402, entrada barrada pela moderação ou foto ruim 422; `finish_reason` `length` é resposta cortada e `content_filter` é recusa.
 

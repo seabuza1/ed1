@@ -61,6 +61,7 @@ export function criarCompativel(nome: string, url?: string, extra: Record<string
   return (o: OpcoesAdaptador): Adaptador => {
     const buscar = o.fetch ?? fetch
     const endereco = `${(url ?? o.url ?? '').replace(/\/+$/, '')}/chat/completions`
+    const corpoExtra = { ...extra, ...o.extra }
     return {
       async ler(imagem, modo, modelo) {
         const inicio = Date.now()
@@ -70,7 +71,7 @@ export function criarCompativel(nome: string, url?: string, extra: Record<string
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${o.chave}` },
-            body: JSON.stringify(corpoCompativel(montarPedido(modo, { cardapio: o.cardapio, exemplos: o.exemplos, imagem }), modelo, extra)),
+            body: JSON.stringify(corpoCompativel(montarPedido(modo, { cardapio: o.cardapio, exemplos: o.exemplos, imagem }), modelo, corpoExtra)),
             signal: o.sinal,
           },
           nome,

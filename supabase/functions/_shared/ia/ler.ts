@@ -17,6 +17,8 @@ interface DefProvedor {
   prefixo: string
   /** O secret com o endereço da API, quando não é fixo. */
   url?: string
+  /** O secret com parâmetros a mais no corpo (JSON). */
+  extra?: string
 }
 
 export const PROVEDORES: Record<Provedor, DefProvedor> = {
@@ -24,7 +26,7 @@ export const PROVEDORES: Record<Provedor, DefProvedor> = {
   anthropic: { criar: criarAnthropic, chave: 'ANTHROPIC_API_KEY', modelo: 'claude-sonnet-5-5', prefixo: 'claude-' },
   // Sem raciocínio: com foto, o Qwen só devolve JSON assim.
   qwen: { criar: criarCompativel('Qwen', URL_QWEN, { enable_thinking: false }), chave: 'DASHSCOPE_API_KEY', modelo: 'qwen3-vl-plus', prefixo: 'qwen' },
-  compativel: { criar: criarCompativel('Compatível'), chave: 'COMPATIVEL_API_KEY', modelo: '', prefixo: '', url: 'COMPATIVEL_URL' },
+  compativel: { criar: criarCompativel('Compatível'), chave: 'COMPATIVEL_API_KEY', modelo: '', prefixo: '', url: 'COMPATIVEL_URL', extra: 'COMPATIVEL_EXTRA' },
 }
 
 export interface Config {
@@ -34,6 +36,17 @@ export interface Config {
   modeloConferencia: string
   /** Só do provedor compatível. */
   url?: string
+  extra?: Record<string, unknown>
+}
+
+/** Um objeto JSON; outra coisa (ou JSON inválido) é null. */
+function objetoJson(texto: string): Record<string, unknown> | null {
+  try {
+    const v = JSON.parse(texto)
+    return v && typeof v === 'object' && !Array.isArray(v) ? v : null
+  } catch {
+    return null
+  }
 }
 
 /** Os secrets viram a configuração; sem o provedor ou a chave, diz o que falta (o nome, nunca o valor). */
@@ -46,13 +59,17 @@ export function configurar(env: (nome: string) => string | undefined): Config | 
   // A chave não sai sem criptografia.
   const url = p.url && env(p.url)
   if (p.url && !url?.startsWith('https://')) return { falta: `${p.url} (https://...)` }
+  // Ex.: {"reasoning":{"max_tokens":1500}}, para o modelo não raciocinar até estourar a saída.
+  const textoExtra = p.extra && env(p.extra)
+  const extra = textoExtra ? objetoJson(textoExtra) : null
+  if (textoExtra && !extra) return { falta: `${p.extra} (um objeto JSON)` }
   const modelo = env('IA_MODELO') || p.modelo
   if (!modelo) return { falta: 'IA_MODELO' }
   const modeloConferencia = env('IA_MODELO_CONFERENCIA') || modelo
   // As duas chamadas vão para o mesmo provedor: um modelo de outro só daria erro em toda foto.
   if (![modelo, modeloConferencia].every((m) => m.startsWith(p.prefixo)))
     return { falta: `IA_MODELO e IA_MODELO_CONFERENCIA do provedor ${provedor} (${p.prefixo}...)` }
-  return { provedor: provedor as Provedor, chave, modelo, modeloConferencia, ...(url ? { url } : {}) }
+  return { provedor: provedor as Provedor, chave, modelo, modeloConferencia, ...(url ? { url } : {}), ...(extra ? { extra } : {}) }
 }
 
 export interface RespostaIA {
@@ -84,7 +101,7 @@ export async function lerDuasVezes(c: Config, imagem: string, o: Omit<OpcoesAdap
   // Já cancelado (o app desistiu durante a checagem do limite): nenhuma das duas é cobrada.
   if (o.sinal?.aborted) ctrl.abort()
   else o.sinal?.addEventListener('abort', () => ctrl.abort())
-  const ia = PROVEDORES[c.provedor].criar({ ...o, sinal: ctrl.signal, chave: c.chave, url: c.url })
+  const ia = PROVEDORES[c.provedor].criar({ ...o, sinal: ctrl.signal, chave: c.chave, url: c.url, extra: c.extra })
   const ler = (modo: 'completa' | 'conferencia', modelo: string) =>
     ia.ler(imagem, modo, modelo).catch((e) => {
       ctrl.abort()

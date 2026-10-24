@@ -207,6 +207,11 @@ describe('Qwen e servidor compatível (Chat Completions)', () => {
       .ler('FOTO', 'completa', 'm')
     expect(pedidos[1].url).toBe('https://ia.exemplo.com/v1/chat/completions')
     expect(pedidos[1].corpo).not.toHaveProperty('enable_thinking')
+    // Os parâmetros dos secrets vão no corpo.
+    await PROVEDORES.compativel
+      .criar({ chave: 'c', url: 'https://x/v1', extra: { reasoning: { max_tokens: 1500 } }, cardapio: CARDAPIO, exemplos: [], fetch: f })
+      .ler('FOTO', 'completa', 'm')
+    expect(pedidos[2].corpo.reasoning).toEqual({ max_tokens: 1500 })
   })
 
   it('erros: chave, saldo, moderação, foto, parâmetro, cortada, recusa e rede', async () => {
@@ -276,6 +281,13 @@ describe('provedor pelos secrets e leitura dupla (R25)', () => {
       url: 'https://ia.exemplo.com/v1',
     })
     expect(configurar(env({ IA_PROVEDOR: 'compativel' }))).toEqual({ falta: 'COMPATIVEL_API_KEY' })
+    // Parâmetros a mais: só um objeto JSON.
+    const comUrl = { ...compativel, COMPATIVEL_URL: 'https://ia.exemplo.com/v1', IA_MODELO: 'm' }
+    expect(configurar(env({ ...comUrl, COMPATIVEL_EXTRA: '{"reasoning":{"max_tokens":1500}}' }))).toMatchObject({
+      extra: { reasoning: { max_tokens: 1500 } },
+    })
+    for (const ruim of ['{reasoning', '[1]', '"x"', 'null'])
+      expect(configurar(env({ ...comUrl, COMPATIVEL_EXTRA: ruim }))).toEqual({ falta: 'COMPATIVEL_EXTRA (um objeto JSON)' })
   })
 
   it('duas chamadas em paralelo, validadas, com os tokens somados', async () => {

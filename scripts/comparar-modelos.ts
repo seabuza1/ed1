@@ -8,8 +8,8 @@
 //   3557.jpg;3557;113,00;Aragarças;cartao        (forma: dinheiro, cartao ou pix; misto: cartao+dinheiro)
 // Opcional: areas.csv (nome;taxa, ex.: Pontal do Araguaia;10,00); sem ele, as áreas do 001.
 // Chaves no .env, fora do repositório: GEMINI_API_KEY, ANTHROPIC_API_KEY, DASHSCOPE_API_KEY (Qwen) e, para
-// um servidor no formato do OpenAI, COMPATIVEL_URL (https://.../v1) e COMPATIVEL_API_KEY, com os modelos
-// como compativel:<modelo>. O app só leva as VITE_.
+// um servidor no formato do OpenAI, COMPATIVEL_URL (https://.../v1), COMPATIVEL_API_KEY e, opcional,
+// COMPATIVEL_EXTRA (JSON), com os modelos como compativel:<modelo>. O app só leva as VITE_.
 // Saída: <pasta>/comparacao.csv e o resumo por modelo. Meta: zero verdes erradas.
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
