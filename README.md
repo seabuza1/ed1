@@ -1,6 +1,6 @@
 # Acerto dos motoboys
 
-Nuvem: projeto Supabase `acerto-motoboys` (São Paulo), com 001 a 011 aplicados; as variáveis estão na Vercel. Função `ler-comanda` publicada (falta só o secret `GEMINI_API_KEY`).
+Nuvem: projeto Supabase `acerto-motoboys` (São Paulo), com 001 a 011 aplicados; as variáveis estão na Vercel. Função `ler-comanda` publicada (falta só o secret `GEMINI_API_KEY`). O plano grátis pausa o projeto depois de uma semana sem uso: o workflow `manter-supabase-ativo.yml` faz uma consulta por dia para isso não acontecer.
 
 App de celular (PWA offline) para o motoboy lançar as comandas da noite e ter a conta do acerto pronta, e painel para o Luan acompanhar a folha da noite e confirmar os acertos. Veja `CLAUDE.md`, `docs/SPEC-v1.md` (o que está sendo feito) e `docs/SPEC-mvp-acerto.md` (a base).
 

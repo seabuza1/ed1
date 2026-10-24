@@ -1,0 +1,26 @@
+# O Supabase grátis pausa o projeto depois de uma semana sem uso (aconteceu em 10/2026). Uma
+# consulta por dia mantém o banco ativo nas semanas em que a pizzaria não abre. A chave é a anon,
+# a mesma que já vai no app publicado (pública por natureza; o acesso é protegido pelas regras do
+# banco, e a anon não lê nada).
+name: Manter o Supabase ativo
+
+on:
+  schedule:
+    - cron: '17 11 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  consulta:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Uma consulta ao banco
+        env:
+          URL: https://ueahsvfmbpthujnvmahl.supabase.co
+          ANON: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlYWhzdmZtYnB0aHVqbnZtYWhsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNzA3NTUsImV4cCI6MjEwNzc0Njc1NX0.xUybQBUoP74J_ZSXDvYDPSK_alVOQPyBvxd6SG4-oYA
+        run: |
+          codigo=$(curl -sS -o /dev/null -w '%{http_code}' -m 30 "$URL/rest/v1/areas?select=id&limit=1" -H "apikey: $ANON" -H "Authorization: Bearer $ANON")
+          echo "Supabase respondeu $codigo"
+          # 401/403: a anon não lê, mas o banco respondeu (está ativo). Outro código: avisa.
+          case "$codigo" in 200|401|403) ;; *) echo "::warning::O Supabase respondeu $codigo. Confira se o projeto está pausado."; exit 1 ;; esac
