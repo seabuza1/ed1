@@ -1,18 +1,20 @@
 // Compara modelos com as fotos da noite de teste (docs/SPEC-leitura.md, "Comparar modelos").
 // Usa os mesmos adaptadores, prompt e leitura.ts da Edge Function e do app.
 //
-//   npm run comparar -- <pasta> [--modelos google:gemini-3.1-pro-preview,anthropic:claude-haiku-5-5] [--promo 10]
+//   npm run comparar -- <pasta> [--modelos google:gemini-3.1-pro-preview,qwen:qwen3-vl-plus] [--promo 10]
 //
 // <pasta>: as fotos .jpg (as do Storage, já reduzidas pelo app) e o gabarito.csv, separado por ";":
 //   foto;codigo;total;area;forma
 //   3557.jpg;3557;113,00;Aragarças;cartao        (forma: dinheiro, cartao ou pix; misto: cartao+dinheiro)
 // Opcional: areas.csv (nome;taxa, ex.: Pontal do Araguaia;10,00); sem ele, as áreas do 001.
-// Chaves no .env, fora do repositório: GEMINI_API_KEY e ANTHROPIC_API_KEY. O app só leva as VITE_.
+// Chaves no .env, fora do repositório: GEMINI_API_KEY, ANTHROPIC_API_KEY, DASHSCOPE_API_KEY (Qwen) e, para
+// um servidor no formato do OpenAI, COMPATIVEL_URL (https://.../v1), COMPATIVEL_API_KEY e, opcional,
+// COMPATIVEL_EXTRA (JSON), com os modelos como compativel:<modelo>. O app só leva as VITE_.
 // Saída: <pasta>/comparacao.csv e o resumo por modelo. Meta: zero verdes erradas.
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { EXEMPLOS } from '../supabase/functions/_shared/exemplos/exemplos.ts'
-import { lerDuasVezes, PROVEDORES, type Provedor } from '../supabase/functions/_shared/ia/ler.ts'
+import { configurar, lerDuasVezes } from '../supabase/functions/_shared/ia/ler.ts'
 import { LIMITE_FOTO } from '../supabase/functions/_shared/prompt.ts'
 import { CARDAPIO } from '../src/domain/cardapio'
 import { acertou, areaSugerida, contaVazia, custoUsd, formasLidas, juntarFormas, somarLida, type Preco } from '../src/domain/comparacao'
@@ -21,7 +23,7 @@ import { conferirLeitura, type LeituraCompleta, type LeituraConferencia } from '
 import { deCsv, paraCsv } from '../src/domain/medicao'
 import type { Area } from '../src/domain/tipos'
 
-const MODELOS_PADRAO = ['google:gemini-3.1-pro-preview', 'google:gemini-3.8-flash', 'anthropic:claude-haiku-5-5']
+const MODELOS_PADRAO = ['google:gemini-3.1-pro-preview', 'google:gemini-3.8-flash', 'anthropic:claude-haiku-5-5', 'qwen:qwen3-vl-plus']
 
 /**
  * US$ por milhão de tokens (entrada, entrada do cache, saída e, na Anthropic, a escrita no cache, a
@@ -32,6 +34,7 @@ const PRECOS: Record<string, Preco> = {
   'google:gemini-3.8-flash': { entrada: 0.75, cache: 0.075, saida: 3.75 }, // promocional até 31/12/2026
   'anthropic:claude-haiku-5-5': { entrada: 0.1, cache: 0.01, saida: 0.5, escritaCache: 0.125 },
   'anthropic:claude-sonnet-5-5': { entrada: 2, cache: 0.1, saida: 10, escritaCache: 2.5 },
+  'qwen:qwen3-vl-plus': { entrada: 0.2, cache: 0.04, saida: 1.6 }, // Singapura, até 32 mil tokens de entrada
 }
 
 const AREAS_001: Area[] = [
@@ -83,11 +86,12 @@ const linhas: string[][] = [COLUNAS]
 const resumo: string[] = []
 
 for (const id of modelos) {
-  const [provedor, modelo] = id.split(':') as [Provedor, string]
-  const p = PROVEDORES[provedor]
-  const chave = p && process.env[p.chave]
-  if (!p || !modelo || !chave) {
-    console.warn(`${id}: pulado (${!p || !modelo ? 'use provedor:modelo' : `falta ${p.chave} no .env`}).`)
+  // O nome do modelo pode ter ":" (qwen2.5vl:7b num servidor compatível).
+  const provedor = id.slice(0, id.indexOf(':'))
+  const modelo = id.slice(id.indexOf(':') + 1)
+  const config = configurar((n) => (n === 'IA_PROVEDOR' ? provedor : /^IA_MODELO/.test(n) ? modelo : process.env[n]))
+  if (!provedor || !modelo || 'falta' in config) {
+    console.warn(`${id}: pulado (${'falta' in config && provedor && modelo ? `falta ${config.falta} no .env` : 'use provedor:modelo'}).`)
     continue
   }
   const preco = PRECOS[id]
@@ -101,7 +105,7 @@ for (const id of modelos) {
       continue
     }
     try {
-      const r = await lerDuasVezes({ provedor, chave, modelo, modeloConferencia: modelo }, jpeg.toString('base64'), {
+      const r = await lerDuasVezes(config, jpeg.toString('base64'), {
         cardapio: CARDAPIO,
         exemplos: EXEMPLOS,
         sinal: AbortSignal.timeout(30_000),

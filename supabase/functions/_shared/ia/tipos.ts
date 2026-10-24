@@ -29,6 +29,10 @@ export interface OpcoesAdaptador {
   chave: string
   cardapio: CardapioPrompt
   exemplos: Exemplo[]
+  /** Endereço da API, quando vem dos secrets (provedor compatível). */
+  url?: string
+  /** Parâmetros a mais no corpo, dos secrets (provedor compatível): o limite de raciocínio, por exemplo. */
+  extra?: Record<string, unknown>
   /** Cancela a chamada (tempo limite). */
   sinal?: AbortSignal
   /** Para os testes. */

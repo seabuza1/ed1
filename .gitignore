@@ -23,3 +23,6 @@ acerto-backup-*.json
 .env
 .env.*
 !.env.example
+
+# Cache e saída do graphify (mapa do código), gerados localmente
+graphify-out/

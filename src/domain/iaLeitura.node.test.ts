@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { EXEMPLOS } from '../../supabase/functions/_shared/exemplos/exemplos.ts'
 import { corpoAnthropic, criarAnthropic, URL_ANTHROPIC } from '../../supabase/functions/_shared/ia/anthropic.ts'
+import {
+  corpoCompativel,
+  criarCompativel,
+  statusCompativel400,
+  textoCompativel,
+  tokensCompativel,
+  URL_QWEN,
+} from '../../supabase/functions/_shared/ia/compativel.ts'
 import { corpoGemini, criarGoogle, statusGemini, textoGemini, tokensGemini, URL_GEMINI } from '../../supabase/functions/_shared/ia/google.ts'
-import { configurar, lerDuasVezes } from '../../supabase/functions/_shared/ia/ler.ts'
+import { configurar, lerDuasVezes, PROVEDORES } from '../../supabase/functions/_shared/ia/ler.ts'
 import { ErroIA } from '../../supabase/functions/_shared/ia/tipos.ts'
 import { montarPedido } from '../../supabase/functions/_shared/prompt.ts'
 import { ESQUEMA_COMPLETA, ESQUEMA_CONFERENCIA } from '../../supabase/functions/_shared/schema.ts'
@@ -151,6 +159,84 @@ describe('Anthropic (Messages)', () => {
   })
 })
 
+describe('Qwen e servidor compatível (Chat Completions)', () => {
+  const resposta = (json: unknown, finish_reason = 'stop') => ({
+    choices: [{ finish_reason, message: { role: 'assistant', content: JSON.stringify(json) } }],
+    usage: { prompt_tokens: 3000, completion_tokens: 200, prompt_tokens_details: { cached_tokens: 2500 } },
+  })
+
+  it('corpo: esquema no system, exemplos como conversa, foto da vez no fim, JSON e o extra do provedor', () => {
+    const c = corpoCompativel(pedido('completa'), 'qwen3-vl-plus', { enable_thinking: false })
+    expect(c.model).toBe('qwen3-vl-plus')
+    expect(c.messages.map((m) => m.role)).toEqual(['system', 'user', 'assistant', 'user'])
+    expect(c.messages[0].content).toContain(JSON.stringify(ESQUEMA_COMPLETA))
+    expect(c.messages[0].content).toContain('não repita o esquema')
+    expect(c.messages[1].content).toEqual([
+      { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${ex.imagem}` } },
+      { type: 'text', text: 'Leia esta comanda e devolva a leitura completa.' },
+    ])
+    expect(c.messages[2].content).toBe(JSON.stringify(ex.leitura))
+    expect(c.messages[3].content).toEqual([
+      { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,FOTO' } },
+      { type: 'text', text: 'Leia esta comanda e devolva a leitura completa.' },
+    ])
+    expect(c.response_format).toEqual({ type: 'json_object' })
+    expect(c).toHaveProperty('enable_thinking', false)
+    expect(corpoCompativel(pedido('conferencia'), 'm')).not.toHaveProperty('enable_thinking')
+  })
+
+  it('texto, cerca ```json e tokens (entrada sem o cache)', () => {
+    expect(textoCompativel('{"a":1}')).toBe('{"a":1}')
+    expect(textoCompativel('```json\n{"a":1}\n```')).toBe('{"a":1}')
+    expect(textoCompativel([{ type: 'text', text: '{"a":' }, { type: 'text', text: '1}' }])).toBe('{"a":1}')
+    expect(textoCompativel(null)).toBe('')
+    expect(tokensCompativel(resposta({}).usage)).toEqual({ entrada: 500, cache: 2500, saida: 200 })
+    expect(tokensCompativel(undefined)).toEqual({ entrada: 0, cache: 0, saida: 0 })
+  })
+
+  it('Qwen no endereço fixo; compatível no dos secrets; a chave no Bearer', async () => {
+    const { f, pedidos } = falso(() => ({ json: resposta(ex.leitura) }))
+    const lida = await PROVEDORES.qwen.criar({ chave: 'q', cardapio: CARDAPIO, exemplos: [], fetch: f }).ler('FOTO', 'completa', 'qwen3-vl-plus')
+    expect(lida.json).toEqual(ex.leitura)
+    expect(lida.tokens).toEqual({ entrada: 500, cache: 2500, saida: 200 })
+    expect(pedidos[0].url).toBe(`${URL_QWEN}/chat/completions`)
+    expect(pedidos[0].headers).toMatchObject({ Authorization: 'Bearer q' })
+    expect(pedidos[0].corpo.enable_thinking).toBe(false)
+    await PROVEDORES.compativel
+      .criar({ chave: 'c', url: 'https://ia.exemplo.com/v1/', cardapio: CARDAPIO, exemplos: [], fetch: f })
+      .ler('FOTO', 'completa', 'm')
+    expect(pedidos[1].url).toBe('https://ia.exemplo.com/v1/chat/completions')
+    expect(pedidos[1].corpo).not.toHaveProperty('enable_thinking')
+    // Os parâmetros dos secrets vão no corpo.
+    await PROVEDORES.compativel
+      .criar({ chave: 'c', url: 'https://x/v1', extra: { reasoning: { max_tokens: 1500 } }, cardapio: CARDAPIO, exemplos: [], fetch: f })
+      .ler('FOTO', 'completa', 'm')
+    expect(pedidos[2].corpo.reasoning).toEqual({ max_tokens: 1500 })
+  })
+
+  it('erros: chave, saldo, moderação, foto, parâmetro, cortada, recusa e rede', async () => {
+    const com = (status: number, json: unknown) =>
+      criarCompativel('Qwen', URL_QWEN)({ chave: 'k', cardapio: CARDAPIO, exemplos: [], fetch: falso(() => ({ status, json })).f })
+    const ler = (status: number, json: unknown) => com(status, json).ler('FOTO', 'completa', 'm')
+    await expect(ler(401, { error: { code: 'invalid_api_key' } })).rejects.toMatchObject({ message: 'Qwen 401', status: 401 })
+    await expect(ler(400, { error: { code: 'InvalidApiKey', message: 'Invalid API-key provided.' } })).rejects.toMatchObject({ status: 401 })
+    await expect(ler(400, { error: { code: 'Arrearage', message: 'Access denied, please make sure your account is in good standing.' } })).rejects.toMatchObject({ status: 402 })
+    await expect(ler(400, { error: { code: 'data_inspection_failed', message: 'Input data may contain inappropriate content.' } })).rejects.toMatchObject({ status: 422 })
+    await expect(ler(400, { error: { message: 'The image format is illegal and cannot be opened.' } })).rejects.toMatchObject({ status: 422 })
+    await expect(ler(400, { error: { message: 'response_format is not supported' } })).rejects.toMatchObject({ status: 400 })
+    await expect(ler(429, { error: { code: 'Throttling.RateQuota' } })).rejects.toMatchObject({ status: 429 })
+    await expect(ler(200, resposta({}, 'length'))).rejects.toThrow('resposta cortada')
+    await expect(ler(200, resposta({}, 'content_filter'))).rejects.toThrow('recusa')
+    await expect(ler(200, { choices: [{ finish_reason: 'stop', message: { content: 'não sei' } }] })).rejects.toBeInstanceOf(ErroIA)
+    expect(statusCompativel400('Incorrect API key provided')).toBe(401)
+    const semRede = (async () => {
+      throw new TypeError('fetch failed')
+    }) as unknown as typeof fetch
+    const ia = criarCompativel('Compatível')({ chave: 'k', url: 'https://x/v1', cardapio: CARDAPIO, exemplos: [], fetch: semRede })
+    await expect(ia.ler('FOTO', 'completa', 'm')).rejects.toMatchObject({ message: 'Compatível rede', status: 503 })
+  })
+})
+
 describe('provedor pelos secrets e leitura dupla (R25)', () => {
   const env = (vars: Record<string, string>) => (nome: string) => vars[nome]
 
@@ -173,6 +259,35 @@ describe('provedor pelos secrets e leitura dupla (R25)', () => {
     // Modelo de outro provedor: cada foto daria erro.
     expect(configurar(env({ IA_PROVEDOR: 'anthropic', IA_MODELO: 'gemini-3.8-flash', ANTHROPIC_API_KEY: 'a' }))).toHaveProperty('falta')
     expect(configurar(env({ IA_MODELO_CONFERENCIA: 'claude-haiku-5-5', GEMINI_API_KEY: 'g' }))).toHaveProperty('falta')
+  })
+
+  it('Qwen pela chave da Alibaba; compatível pede endereço https e modelo', () => {
+    expect(configurar(env({ IA_PROVEDOR: 'qwen', DASHSCOPE_API_KEY: 'q' }))).toEqual({
+      provedor: 'qwen',
+      chave: 'q',
+      modelo: 'qwen3-vl-plus',
+      modeloConferencia: 'qwen3-vl-plus',
+    })
+    expect(configurar(env({ IA_PROVEDOR: 'qwen', IA_MODELO: 'gemini-3.8-flash', DASHSCOPE_API_KEY: 'q' }))).toHaveProperty('falta')
+    const compativel = { IA_PROVEDOR: 'compativel', COMPATIVEL_API_KEY: 'c' }
+    expect(configurar(env(compativel))).toEqual({ falta: 'COMPATIVEL_URL (https://...)' })
+    expect(configurar(env({ ...compativel, COMPATIVEL_URL: 'http://ia.exemplo.com/v1' }))).toEqual({ falta: 'COMPATIVEL_URL (https://...)' })
+    expect(configurar(env({ ...compativel, COMPATIVEL_URL: 'https://ia.exemplo.com/v1' }))).toEqual({ falta: 'IA_MODELO' })
+    expect(configurar(env({ ...compativel, COMPATIVEL_URL: 'https://ia.exemplo.com/v1', IA_MODELO: 'qwen2.5vl:7b' }))).toEqual({
+      provedor: 'compativel',
+      chave: 'c',
+      modelo: 'qwen2.5vl:7b',
+      modeloConferencia: 'qwen2.5vl:7b',
+      url: 'https://ia.exemplo.com/v1',
+    })
+    expect(configurar(env({ IA_PROVEDOR: 'compativel' }))).toEqual({ falta: 'COMPATIVEL_API_KEY' })
+    // Parâmetros a mais: só um objeto JSON.
+    const comUrl = { ...compativel, COMPATIVEL_URL: 'https://ia.exemplo.com/v1', IA_MODELO: 'm' }
+    expect(configurar(env({ ...comUrl, COMPATIVEL_EXTRA: '{"reasoning":{"max_tokens":1500}}' }))).toMatchObject({
+      extra: { reasoning: { max_tokens: 1500 } },
+    })
+    for (const ruim of ['{reasoning', '[1]', '"x"', 'null'])
+      expect(configurar(env({ ...comUrl, COMPATIVEL_EXTRA: ruim }))).toEqual({ falta: 'COMPATIVEL_EXTRA (um objeto JSON)' })
   })
 
   it('duas chamadas em paralelo, validadas, com os tokens somados', async () => {

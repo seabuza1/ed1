@@ -111,18 +111,31 @@ Cada provedor é um adaptador em `supabase/functions/_shared/ia/` com a mesma in
 ler(imagemBase64: string, modo: 'completa' | 'conferencia', modelo: string)
   → Promise<{ json: unknown, tokens: { entrada: number, cache: number, saida: number }, ms: number }>
 ```
-- `google.ts` (padrão) e `anthropic.ts`, só com `fetch` (sem SDK), para rodar na função e no script de comparação. `ler.ts` escolhe o adaptador pelos secrets e faz a leitura dupla. Trocar de modelo ou provedor é só mudar os secrets; os dois modelos têm que ser do provedor escolhido (`gemini-...` ou `claude-...`), senão a função responde que a leitura não está configurada.
+- `google.ts` (padrão), `anthropic.ts` e `compativel.ts` (formato Chat Completions do OpenAI: o Qwen da Alibaba e qualquer servidor compatível), só com `fetch` (sem SDK), para rodar na função e no script de comparação. `ler.ts` escolhe o adaptador pelos secrets e faz a leitura dupla. Trocar de modelo ou provedor é só mudar os secrets; os dois modelos têm que ser do provedor escolhido (`gemini-...`, `claude-...` ou `qwen...`), senão a função responde que a leitura não está configurada.
 - O resultado passa pela mesma validação do schema antes de voltar ao front.
 
 Secrets:
 
 | Secret | Padrão | Uso |
 |---|---|---|
-| `IA_PROVEDOR` | `google` | `google` ou `anthropic` |
-| `IA_MODELO` | `gemini-3.1-pro-preview` (`claude-sonnet-5-5` na Anthropic) | modelo da leitura completa |
+| `IA_PROVEDOR` | `google` | `google`, `anthropic`, `qwen` ou `compativel` |
+| `IA_MODELO` | `gemini-3.1-pro-preview` (`claude-sonnet-5-5` na Anthropic, `qwen3-vl-plus` no Qwen; obrigatório no compatível) | modelo da leitura completa |
 | `IA_MODELO_CONFERENCIA` | igual a `IA_MODELO` | modelo da leitura de conferência (R25), do mesmo provedor |
 | `GEMINI_API_KEY` | | chave do Google AI Studio |
 | `ANTHROPIC_API_KEY` | | só se usar a Anthropic |
+| `DASHSCOPE_API_KEY` | | só se usar o Qwen (Alibaba Model Studio, Singapura) |
+| `COMPATIVEL_URL` | | só no compatível: o endereço da API, `https://.../v1` |
+| `COMPATIVEL_API_KEY` | | só no compatível |
+| `COMPATIVEL_EXTRA` | | só no compatível, opcional: parâmetros a mais no corpo, em JSON (ex.: `{"reasoning":{"max_tokens":1500}}`) |
+
+### Qwen e servidor compatível (`compativel.ts`)
+
+- `POST <endereço>/chat/completions`, com `Authorization: Bearer`. O Qwen usa `https://dashscope-intl.aliyuncs.com/compatible-mode/v1`; o compatível, o `COMPATIVEL_URL` (só `https`).
+- Exemplos como conversa (foto e instrução, depois a resposta certa) e a foto da vez por último, em `data:image/jpeg;base64`.
+- JSON por `response_format: { type: "json_object" }`, com o esquema no prompt de sistema: com foto, o Qwen não aceita `json_schema`. No Qwen, `enable_thinking: false` (com raciocínio, não devolve JSON de foto).
+- O `COMPATIVEL_EXTRA` vai no corpo como veio. Serve para o que cada servidor chama de outro jeito; na flatt, o `qwen3.8-27b` raciocina até estourar a saída numa foto difícil (e a flatt responde 400) sem `{"reasoning":{"max_tokens":1500}}`.
+- Tokens: `prompt_tokens` menos `cached_tokens` é a entrada; `completion_tokens` é a saída.
+- Erros: chave inválida 401, sem saldo 402, entrada barrada pela moderação ou foto ruim 422; `finish_reason` `length` é resposta cortada e `content_filter` é recusa.
 
 ### Gemini (`google.ts`)
 
@@ -177,15 +190,15 @@ Rodar nessa ordem, depois do `003_v1_avisos.sql` (o `006_pix_da_equipe.sql` é d
 
 ## Comparar modelos: `scripts/comparar-modelos.ts`
 
-Roda local, com as chaves num `.env` fora do repositório (`GEMINI_API_KEY`, `ANTHROPIC_API_KEY`; o app só leva as variáveis `VITE_`):
+Roda local, com as chaves num `.env` fora do repositório (`GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `DASHSCOPE_API_KEY`, `COMPATIVEL_URL` e `COMPATIVEL_API_KEY`; o app só leva as variáveis `VITE_`):
 
 ```
-npm run comparar -- <pasta> [--modelos google:gemini-3.1-pro-preview,anthropic:claude-haiku-5-5] [--promo 10]
+npm run comparar -- <pasta> [--modelos google:gemini-3.1-pro-preview,qwen:qwen3-vl-plus,compativel:<modelo>] [--promo 10]
 ```
 
 - Entrada: uma pasta com as fotos da noite de teste (as do Storage, já reduzidas pelo app) e um `gabarito.csv` com o certo de cada comanda, tirado do que foi lançado e conferido. Separado por `;`: `foto;codigo;total;area;forma` (forma `dinheiro`, `cartao` ou `pix`; misto como `cartao+dinheiro`). Um `areas.csv` (`nome;taxa`) opcional troca as áreas do `001`.
-- Roda cada foto em cada modelo de uma lista (padrão: `google:gemini-3.1-pro-preview`, `google:gemini-3.8-flash`, `anthropic:claude-haiku-5-5`), usando os mesmos adaptadores, prompt e `leitura.ts`. A foto que é exemplo do prompt fica de fora.
-- Saída `comparacao.csv` e um resumo por modelo: verdes certas, **verdes erradas** (meta: zero), amarelas, vermelhas, tempo médio e custo por foto (tokens × preço da tabela no script).
+- Roda cada foto em cada modelo de uma lista (padrão: `google:gemini-3.1-pro-preview`, `google:gemini-3.8-flash`, `anthropic:claude-haiku-5-5`, `qwen:qwen3-vl-plus`; o modelo sem chave no `.env` é pulado), usando os mesmos adaptadores, prompt e `leitura.ts`. A foto que é exemplo do prompt fica de fora.
+- Saída `comparacao.csv` e um resumo por modelo: verdes certas, **verdes erradas** (meta: zero), amarelas, vermelhas, tempo médio e custo por foto (tokens × preço da tabela no script; modelo fora da tabela sai sem custo).
 - Escolher o mais barato com zero verdes erradas e poucas vermelhas, e gravar nos secrets.
 
 ## Casos de teste do domínio (R$)

@@ -525,7 +525,7 @@ export interface TokensLeitura {
 export interface RespostaLeitura {
   leitura: LeituraCompleta
   conferencia: LeituraConferencia
-  /** google ou anthropic (a função antiga não mandava). */
+  /** google, anthropic, qwen ou compativel (a função antiga não mandava). */
   provedor?: string
   modelo: string
   ms: number

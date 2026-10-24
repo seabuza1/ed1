@@ -7,6 +7,7 @@ Sistema para a pizzaria onde trabalho como motoboy, construído aos poucos. O MV
 - `docs/SPEC-leitura.md`: leitura da comanda por foto (regras R19 a R29, testes L1 a L14). Começa depois da etapa 4 da v1 (Supabase).
 - `docs/SPEC-mvp-acerto.md`: o MVP já feito, base da v1 (regras R1 a R13, testes T1 a T9).
 - `docs/requisitos.md`: levantamento completo da operação. Só contexto: não implementar nada fora da spec.
+- `docs/fluxos.md`: os três caminhos entre o celular e o painel (foto até a folha, Pix "caiu", confirmação do acerto). Atualizar quando um deles mudar.
 - `supabase/001_schema.sql`: tabelas, regras de acesso (RLS) e realtime.
 - `supabase/002_v1_app.sql`: complemento do app (hora da entrega, nome da expedição para o motoboy, área sugerida, ordem de chegada). Rodar depois do 001.
 - `supabase/003_v1_avisos.sql`: correções dos avisos do Supabase (search_path, EXECUTE das funções, políticas mais leves). Rodar depois do 002.
@@ -22,9 +23,10 @@ Sistema para a pizzaria onde trabalho como motoboy, construído aos poucos. O MV
 - `supabase/functions/_shared/cardapio-mel.json`: cardápio, regras e glossário. Fonte única para a Edge Function e para o front.
 - `supabase/functions/_shared/` (`prompt.ts`, `schema.ts`, `ia/`) e `ler-comanda/`: prompt, schema, adaptadores dos provedores e Edge Function da leitura. Depois de mudar um exemplo, `npm run exemplos`.
 - `scripts/comparar-modelos.ts`: compara modelos com as fotos da noite de teste (`npm run comparar -- <pasta>`).
+- `.claude/skills/graphify/`: `/graphify` monta o grafo do código e dos docs (graphify 0.9.85, Apache-2.0, versão fixada). A saída vai para `graphify-out/`, fora do git.
 
 ## Stack
-Vite + React + TypeScript, PWA offline. Supabase (Postgres, Auth, Realtime, Storage, Edge Functions). Local-first: IndexedDB (Dexie) com fila de sincronização, atrás de `src/data/repo.ts`. Testes com Vitest. Deploy na Vercel. No front só a anon key; a service role nunca. A Edge Function `ler-comanda` chama a IA configurada nos secrets (`IA_PROVEDOR`: Gemini por padrão, ou Anthropic); `GEMINI_API_KEY` e `ANTHROPIC_API_KEY` ficam só nos secrets do Supabase, nunca no front.
+Vite + React + TypeScript, PWA offline. Supabase (Postgres, Auth, Realtime, Storage, Edge Functions). Local-first: IndexedDB (Dexie) com fila de sincronização, atrás de `src/data/repo.ts`. Testes com Vitest. Deploy na Vercel. No front só a anon key; a service role nunca. A Edge Function `ler-comanda` chama a IA configurada nos secrets (`IA_PROVEDOR`: Gemini por padrão, Anthropic, Qwen ou um servidor compatível com o OpenAI); `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `DASHSCOPE_API_KEY` e `COMPATIVEL_API_KEY` ficam só nos secrets do Supabase, nunca no front.
 
 ## Convenções
 - Dinheiro sempre em centavos (inteiro). Exibir como `R$ 1.234,56`.
