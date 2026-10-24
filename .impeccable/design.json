@@ -1,0 +1,463 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-24T20:00:56.000Z",
+  "title": "Design System: Meu acerto",
+  "extensions": {
+    "colorMeta": {
+      "amarelo-refletivo": {
+        "role": "primary",
+        "displayName": "Amarelo Refletivo",
+        "canonical": "#ffcc00",
+        "description": "Fundo da ação principal, com texto asfalto. Igual nos dois temas.",
+        "tonalRamp": [
+          "#403300",
+          "#735c00",
+          "#a68500",
+          "#d9ad00",
+          "#ffd633",
+          "#ffe373",
+          "#fff0b2",
+          "#fffae6"
+        ]
+      },
+      "amarelo-faixa": {
+        "role": "primary",
+        "displayName": "Amarelo Faixa",
+        "canonical": "#ffd23f",
+        "description": "O amarelo como texto e marca no escuro: aba atual, seleção, foco, em rota, pendências. No claro vira Ocre Dia.",
+        "tonalRamp": [
+          "#403410",
+          "#735e1c",
+          "#a68829",
+          "#d9b236",
+          "#ffdb65",
+          "#ffe695",
+          "#fff2c5",
+          "#fffaec"
+        ]
+      },
+      "ocre-dia": {
+        "role": "primary",
+        "displayName": "Ocre Dia",
+        "canonical": "#6f5200",
+        "description": "O amarelo como texto no tema claro (4,5:1 ou mais em branco, concreto, campo e tonal).",
+        "tonalRamp": [
+          "#1c1400",
+          "#322500",
+          "#483500",
+          "#5e4600",
+          "#8c7533",
+          "#b0a073",
+          "#d4cbb2",
+          "#f1eee6"
+        ]
+      },
+      "amarelo-faixa-suave": {
+        "role": "primary",
+        "displayName": "Faixa Suave",
+        "canonical": "#2b2407",
+        "description": "Fundo das pendências e do chip escolhido no escuro.",
+        "tonalRamp": [
+          "#0b0902",
+          "#131003",
+          "#1c1705",
+          "#251f06",
+          "#555039",
+          "#8a8777",
+          "#bfbdb5",
+          "#eae9e6"
+        ]
+      },
+      "azul-placa": {
+        "role": "secondary",
+        "displayName": "Azul de Placa",
+        "canonical": "#1f5fae",
+        "description": "Só a área escolhida, com friso e texto brancos.",
+        "tonalRamp": [
+          "#08182c",
+          "#0e2b4e",
+          "#143e71",
+          "#1a5194",
+          "#4c7fbe",
+          "#84a7d2",
+          "#bccfe7",
+          "#e9eff7"
+        ]
+      },
+      "placa-apagada": {
+        "role": "secondary",
+        "displayName": "Placa Apagada",
+        "canonical": "#151c26",
+        "description": "Fundo das placas de área não escolhidas no escuro.",
+        "tonalRamp": [
+          "#05070a",
+          "#090d11",
+          "#0e1219",
+          "#121820",
+          "#444951",
+          "#7e8288",
+          "#b9bbbe",
+          "#e8e8e9"
+        ]
+      },
+      "verde-siga": {
+        "role": "tertiary",
+        "displayName": "Verde Siga",
+        "canonical": "#3fd17a",
+        "description": "Feito: entregue, Pix caiu, papel conferido, confirmado, Devolver.",
+        "tonalRamp": [
+          "#10341e",
+          "#1c5e37",
+          "#29884f",
+          "#36b268",
+          "#65da95",
+          "#95e6b6",
+          "#c5f1d7",
+          "#ecfaf2"
+        ]
+      },
+      "vermelho-pare": {
+        "role": "tertiary",
+        "displayName": "Vermelho Pare",
+        "canonical": "#ff6b6b",
+        "description": "Perigo e diferença: excluir, falta, Lançar assim.",
+        "tonalRamp": [
+          "#401b1b",
+          "#733030",
+          "#a64646",
+          "#d95b5b",
+          "#ff8989",
+          "#ffaeae",
+          "#ffd3d3",
+          "#fff0f0"
+        ]
+      },
+      "azul-info": {
+        "role": "tertiary",
+        "displayName": "Azul Info",
+        "canonical": "#7fb0ff",
+        "description": "Maquininha e troco por Pix.",
+        "tonalRamp": [
+          "#202c40",
+          "#394f73",
+          "#5372a6",
+          "#6c96d9",
+          "#99c0ff",
+          "#b9d4ff",
+          "#d9e7ff",
+          "#f2f7ff"
+        ]
+      },
+      "asfalto": {
+        "role": "neutral",
+        "displayName": "Asfalto",
+        "canonical": "#111316",
+        "description": "Fundo da tela no escuro; texto sobre o amarelo.",
+        "tonalRamp": [
+          "#040506",
+          "#08090a",
+          "#0b0c0e",
+          "#0e1013",
+          "#414245",
+          "#7c7d7f",
+          "#b8b8b9",
+          "#e7e7e8"
+        ]
+      },
+      "asfalto-alto": {
+        "role": "neutral",
+        "displayName": "Asfalto Alto",
+        "canonical": "#1a1d21",
+        "description": "Cartões, formulário e colunas da folha.",
+        "tonalRamp": [
+          "#060708",
+          "#0c0d0f",
+          "#111315",
+          "#16191c",
+          "#484a4d",
+          "#818385",
+          "#babbbc",
+          "#e8e8e9"
+        ]
+      },
+      "asfalto-fundo": {
+        "role": "neutral",
+        "displayName": "Asfalto Fundo",
+        "canonical": "#0c0d10",
+        "description": "Campos de digitar.",
+        "tonalRamp": [
+          "#030304",
+          "#050607",
+          "#08080a",
+          "#0a0b0e",
+          "#3d3d40",
+          "#797a7c",
+          "#b6b6b7",
+          "#e7e7e7"
+        ]
+      },
+      "asfalto-tonal": {
+        "role": "neutral",
+        "displayName": "Asfalto Tonal",
+        "canonical": "#262a2f",
+        "description": "Botões secundários.",
+        "tonalRamp": [
+          "#0a0a0c",
+          "#111315",
+          "#191b1f",
+          "#202428",
+          "#515559",
+          "#888a8d",
+          "#bebfc1",
+          "#e9eaea"
+        ]
+      },
+      "linha-asfalto": {
+        "role": "neutral",
+        "displayName": "Linha",
+        "canonical": "#2c3137",
+        "description": "Divisórias da lista e da conta.",
+        "tonalRamp": [
+          "#0b0c0e",
+          "#141619",
+          "#1d2024",
+          "#252a2f",
+          "#565a5f",
+          "#8b8e91",
+          "#c0c1c3",
+          "#eaeaeb"
+        ]
+      },
+      "branco-placa": {
+        "role": "neutral",
+        "displayName": "Branco de Placa",
+        "canonical": "#f3f5f6",
+        "description": "Texto principal no escuro.",
+        "tonalRamp": [
+          "#3d3d3e",
+          "#6d6e6f",
+          "#9e9fa0",
+          "#cfd0d1",
+          "#f5f7f8",
+          "#f8fafa",
+          "#fbfcfc",
+          "#fefefe"
+        ]
+      },
+      "branco-placa-2": {
+        "role": "neutral",
+        "displayName": "Branco 2",
+        "canonical": "#d3d8dc",
+        "description": "Texto de apoio.",
+        "tonalRamp": [
+          "#353637",
+          "#5f6163",
+          "#898c8f",
+          "#b3b8bb",
+          "#dce0e3",
+          "#e7eaec",
+          "#f2f3f4",
+          "#fbfbfc"
+        ]
+      },
+      "cinza-poste": {
+        "role": "neutral",
+        "displayName": "Cinza de Poste",
+        "canonical": "#9ba4ac",
+        "description": "Texto discreto e rótulos.",
+        "tonalRamp": [
+          "#27292b",
+          "#464a4d",
+          "#656b70",
+          "#848b92",
+          "#afb6bd",
+          "#c8cdd1",
+          "#e1e4e6",
+          "#f5f6f7"
+        ]
+      },
+      "concreto": {
+        "role": "neutral",
+        "displayName": "Concreto",
+        "canonical": "#eef0f2",
+        "description": "Fundo da tela no tema claro.",
+        "tonalRamp": [
+          "#3c3c3c",
+          "#6b6c6d",
+          "#9b9c9d",
+          "#caccce",
+          "#f1f3f5",
+          "#f6f7f8",
+          "#fafafb",
+          "#fdfefe"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Título",
+        "purpose": "Título da tela, em Barlow Condensed 700."
+      },
+      "title": {
+        "displayName": "Bloco",
+        "purpose": "Título de bloco e de formulário."
+      },
+      "body": {
+        "displayName": "Texto",
+        "purpose": "Texto e botões, Barlow 500/600."
+      },
+      "numero-grande": {
+        "displayName": "Código",
+        "purpose": "Código da comanda na lista e no campo."
+      },
+      "numero": {
+        "displayName": "Valor",
+        "purpose": "Dinheiro, totais e contagens, sempre tabular."
+      },
+      "label": {
+        "displayName": "Rótulo",
+        "purpose": "Seções em maiúsculas e cabeçalhos de tabela."
+      }
+    },
+    "shadows": [
+      {
+        "name": "friso-placa",
+        "value": "inset 0 0 0 3px #151c26, inset 0 0 0 4.5px rgba(243,245,246,0.55)",
+        "purpose": "Contorno interno das placas de área não escolhidas (escuro)."
+      },
+      {
+        "name": "friso-placa-acesa",
+        "value": "inset 0 0 0 3px #1f5fae, inset 0 0 0 5px #ffffff",
+        "purpose": "Placa escolhida."
+      },
+      {
+        "name": "marca-chegada",
+        "value": "inset 0 0 0 2px #ffd23f",
+        "purpose": "Coluna onde o atalho do topo levou; some em 1,2s."
+      }
+    ],
+    "motion": [
+      {
+        "name": "aviso-sobe",
+        "value": "150ms ease-out",
+        "purpose": "Aviso com Desfazer entrando (só opacidade com movimento reduzido)."
+      },
+      {
+        "name": "chegada-coluna",
+        "value": "1200ms cubic-bezier(0.23, 1, 0.32, 1)",
+        "purpose": "Marca da coluna de destino do atalho."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "computador",
+        "value": "900px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Ação principal",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "A única ação amarela da tela.",
+      "html": "<button class=\"ds-btn-primario\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z\"/><circle cx=\"12\" cy=\"13\" r=\"3\"/></svg>Foto da comanda</button>",
+      "css": ".ds-btn-primario{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:56px;padding:0 16px;border:0;border-radius:10px;background:#ffcc00;color:#111316;font:700 1.1rem Barlow,system-ui,sans-serif;cursor:pointer}.ds-btn-primario:active{opacity:.75}.ds-btn-primario:focus-visible{outline:2px solid #ffd23f;outline-offset:2px}"
+    },
+    {
+      "name": "Botão secundário",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Ações de apoio e \"Entregue\" na lista, com o visto verde.",
+      "html": "<button class=\"ds-btn-sec\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#3fd17a\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 6 9 17l-5-5\"/></svg>Entregue</button>",
+      "css": ".ds-btn-sec{display:inline-flex;align-items:center;gap:8px;min-height:48px;padding:0 14px;border:0;border-radius:10px;background:#262a2f;color:#f3f5f6;font:600 1rem Barlow,system-ui,sans-serif;cursor:pointer}.ds-btn-sec:active{opacity:.75}.ds-btn-sec:focus-visible{outline:2px solid #ffd23f;outline-offset:2px}"
+    },
+    {
+      "name": "Placa de área",
+      "kind": "chip",
+      "refersTo": "placa-area",
+      "description": "Área de entrega como placa de destino; só a escolhida acende.",
+      "html": "<div class=\"ds-placas\"><button class=\"ds-placa\">Aragarças<small>R$ 5,00</small></button><button class=\"ds-placa\" aria-pressed=\"true\">Barra do Garças<small>R$ 12,00</small></button></div>",
+      "css": ".ds-placas{display:grid;grid-template-columns:1fr 1fr;gap:8px}.ds-placa{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:56px;padding:6px 10px;border:0;border-radius:10px;background:#151c26;color:#f3f5f6;box-shadow:inset 0 0 0 3px #151c26,inset 0 0 0 4.5px rgba(243,245,246,.55);font:600 1rem/1.15 Barlow,system-ui,sans-serif;cursor:pointer}.ds-placa small{font:600 .9rem \"Barlow Condensed\",Barlow,sans-serif;color:#9ba4ac}.ds-placa[aria-pressed=true]{background:#1f5fae;color:#fff;box-shadow:inset 0 0 0 3px #1f5fae,inset 0 0 0 5px #fff}.ds-placa[aria-pressed=true] small{color:#fff}.ds-placa:focus-visible{outline:2px solid #ffd23f;outline-offset:2px}"
+    },
+    {
+      "name": "Campo do código",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Campo de digitar, mais fundo que o cartão; número em Barlow Condensed.",
+      "html": "<input class=\"ds-codigo\" inputmode=\"numeric\" maxlength=\"4\" placeholder=\"0000\" value=\"3557\">",
+      "css": ".ds-codigo{width:100%;min-height:52px;padding:0 14px;border:1.5px solid transparent;border-radius:10px;background:#0c0d10;color:#f3f5f6;caret-color:#ffd23f;font:700 1.75rem \"Barlow Condensed\",Barlow,sans-serif;letter-spacing:.08em;font-variant-numeric:tabular-nums}.ds-codigo:focus{outline:none;border-color:#ffd23f}"
+    },
+    {
+      "name": "Comanda em rota",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Linha da lista com a faixa tracejada amarela da pista.",
+      "html": "<div class=\"ds-rota\"><strong>3595</strong><span>R$ 47,00</span><small>Aragarças · Dinheiro</small></div>",
+      "css": ".ds-rota{display:grid;grid-template-columns:1fr auto;column-gap:10px;padding:8px 0 8px 12px;border-bottom:1px solid #2c3137;background:linear-gradient(#ffd23f 55%,transparent 0) left top/4px 16px repeat-y;color:#f3f5f6;font-family:Barlow,sans-serif}.ds-rota strong{font:700 1.7rem/1.1 \"Barlow Condensed\",sans-serif;font-variant-numeric:tabular-nums}.ds-rota span{font:700 1.25rem \"Barlow Condensed\",sans-serif}.ds-rota small{color:#9ba4ac;font-size:.85rem}"
+    },
+    {
+      "name": "Pendência do painel",
+      "kind": "button",
+      "refersTo": "pendencia",
+      "description": "O que pede ação do Luan; o toque leva à coluna.",
+      "html": "<button class=\"ds-pendencia\"><span><strong>3</strong> Pix a conferir</span><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m9 18 6-6-6-6\"/></svg></button>",
+      "css": ".ds-pendencia{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:48px;padding:0 12px 0 14px;border:0;border-radius:10px;background:#2b2407;color:#ffd23f;font:600 1rem Barlow,sans-serif;cursor:pointer}.ds-pendencia strong{font:700 1.4rem \"Barlow Condensed\",sans-serif;margin-right:2px}.ds-pendencia:focus-visible{outline:2px solid #ffd23f;outline-offset:2px}"
+    },
+    {
+      "name": "Aba",
+      "kind": "nav",
+      "refersTo": null,
+      "description": "Aba de baixo no celular; a atual fica amarela com o traço da faixa em cima.",
+      "html": "<nav class=\"ds-abas\"><button aria-current=\"page\">Noite</button><button>Acerto</button><button>Histórico</button></nav>",
+      "css": ".ds-abas{display:flex;background:#1a1d21;border-top:1px solid #2c3137}.ds-abas button{position:relative;flex:1;min-height:60px;border:0;background:none;color:#9ba4ac;font:600 .78rem Barlow,sans-serif;cursor:pointer}.ds-abas button[aria-current=page]{color:#ffd23f;font-weight:700}.ds-abas button[aria-current=page]::before{content:\"\";position:absolute;top:0;left:50%;width:36px;height:3px;margin-left:-18px;border-radius:0 0 3px 3px;background:#ffd23f}"
+    }
+  ],
+  "narrative": {
+    "northStar": "A rua à noite",
+    "overview": "O app do motoboy e o painel do Luan falam a língua das placas de estrada: destino, taxa e atenção. O chão é asfalto escuro, o texto é o branco das placas e há um único acento, o amarelo refletivo, que se vê de longe na rua, com uma mão e com pressa. As áreas de entrega são placas de destino com a taxa no lugar da distância; só a escolhida acende em azul. O resto é estrutura quieta: degraus de asfalto em vez de bordas, números grandes e estreitos que batem em coluna.",
+    "keyCharacteristics": [
+      "Um só acento: amarelo refletivo para a ação principal, a aba atual, o que está em rota e o que pede atenção.",
+      "Áreas como placas de destino, com friso interno e a taxa.",
+      "Barlow no texto, Barlow Condensed nos números, códigos e títulos, sempre tabular.",
+      "Profundidade por degraus de asfalto; bordas só nos frisos das placas e nas linhas da folha.",
+      "Botões de 48px (56px na ação principal), uso com uma mão."
+    ],
+    "rules": [
+      {
+        "name": "A Regra do Amarelo Único",
+        "body": "O amarelo é a única cor de acento. Aparece na ação principal, na aba atual, no que está em rota e no que pede atenção; links e dicas ficam neutros.",
+        "section": "colors"
+      },
+      {
+        "name": "A Regra da Placa Acesa",
+        "body": "Azul de placa só na área escolhida. Uma tela com duas placas azuis está errada.",
+        "section": "colors"
+      },
+      {
+        "name": "A Regra do Número Estreito",
+        "body": "Todo número de dinheiro, código ou contagem usa Barlow Condensed com tabular-nums; texto corrido nunca.",
+        "section": "typography"
+      },
+      {
+        "name": "A Regra do Degrau",
+        "body": "Cartão não tem borda nem sombra; ele se separa do fundo por um degrau de asfalto.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do usar o amarelo refletivo (#ffcc00) só na ação principal da tela, com texto asfalto.",
+      "Do mostrar área como placa de destino, com a taxa, e acender só a escolhida em azul (#1f5fae).",
+      "Do escrever todo número, código e valor em Barlow Condensed tabular.",
+      "Do separar cartões do fundo por degrau de asfalto, sem borda e sem sombra.",
+      "Do manter botões de 48px (56px na ação principal) e texto pequeno com 4,5:1 nos dois temas."
+    ],
+    "donts": [
+      "Don't pintar links, dicas ou títulos de amarelo: o amarelo é da ação e da atenção (pedido do usuário: \"cor demais\" piora).",
+      "Don't mudar telas, ordem ou navegação para encaixar o visual (pedido do usuário: \"mudar onde as coisas ficam\" piora).",
+      "Don't usar o azul de placa fora da área escolhida, nem duas placas acesas ao mesmo tempo.",
+      "Don't deixar a ação principal amarela pela metade quando parada; use o tonal.",
+      "Don't usar caractere (✓, →) como ícone de interface; use os ícones do app. As anotações da folha de papel (\"→ 3,00\" do troco por Pix, o \"•\" de papel não conferido) continuam, porque são a notação do Luan."
+    ]
+  }
+}

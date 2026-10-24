@@ -404,7 +404,15 @@ function Folha(props: {
               onClick={() => props.marcarPix(p.comanda)}
             >
               <span className="codigo">{p.comanda.codigo}</span>
-              <span className="estado-pix">{p.comanda.pixConfirmado ? 'caiu ✓' : 'conferir'}</span>
+              <span className="estado-pix">
+                {p.comanda.pixConfirmado ? (
+                  <>
+                    caiu <Icone nome="check" tamanho={14} />
+                  </>
+                ) : (
+                  'conferir'
+                )}
+              </span>
               <span className="quem">
                 {p.nome} · <span className="num">{formatarNumero(p.valor)}</span>
               </span>

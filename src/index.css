@@ -1,46 +1,82 @@
-/* Inter (só o trecho latino, que cobre o português), guardada no app para funcionar offline. */
+/* Barlow, desenhada a partir das placas de estrada, guardada no app para funcionar offline (só o
+   trecho latino). Barlow no texto; Barlow Condensed nos números, códigos e títulos. */
 @font-face {
-  font-family: 'Inter';
-  font-style: normal;
+  font-family: 'Barlow';
   font-display: swap;
-  font-weight: 100 900;
-  src: url('../node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2') format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
-    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  font-weight: 500;
+  src: url('../node_modules/@fontsource/barlow/files/barlow-latin-500-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Barlow';
+  font-display: swap;
+  font-weight: 600;
+  src: url('../node_modules/@fontsource/barlow/files/barlow-latin-600-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Barlow';
+  font-display: swap;
+  font-weight: 700 900;
+  src: url('../node_modules/@fontsource/barlow/files/barlow-latin-700-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-display: swap;
+  font-weight: 500 600;
+  src: url('../node_modules/@fontsource/barlow-condensed/files/barlow-condensed-latin-600-normal.woff2')
+    format('woff2');
+}
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-display: swap;
+  font-weight: 700 900;
+  src: url('../node_modules/@fontsource/barlow-condensed/files/barlow-condensed-latin-700-normal.woff2')
+    format('woff2');
 }
 
 /* ---------- Cores e medidas ---------- */
-/* Claro em :root; escuro pelo sistema (sem tema manual) ou por data-tema="escuro". */
+/* A rua à noite: chão de asfalto, texto em branco de placa e um único acento, o amarelo refletivo
+   (ação principal, aba atual e o que pede atenção). O azul de placa só aparece na área escolhida;
+   verde e vermelho só dizem feito e perigo. Claro em :root ("placa de dia"); escuro pelo sistema
+   (sem tema manual) ou por data-tema="escuro". Texto pequeno com 4,5:1 ou mais nos dois. */
 
 :root {
-  /* Escuro o bastante para texto pequeno: 4,5:1 ou mais no branco, no fundo, no campo e no realce. */
-  --marca: #b83d0c;
-  --marca-suave: #ffe8dc;
-  --sobre-marca: #ffffff;
+  --faixa: #ffcc00; /* amarelo refletivo: fundo da ação principal */
+  --sobre-faixa: #111316;
+  --placa: #1f5fae; /* azul de placa urbana: a área escolhida */
+  --sobre-placa: #ffffff;
 
-  --fundo: #f6f6f7;
+  --marca: #6f5200; /* o amarelo como texto e marca de seleção (escurecido para ler no claro) */
+  --marca-suave: #fff1b8;
+  --sobre-marca: #111316;
+
+  --fundo: #eef0f2;
   --superficie: #ffffff;
-  --campo: #eeeef1;
-  --tonal: #e6e6ea;
-  --texto: #0b0b0d;
-  --texto-2: #303036;
-  --discreto: #5f5f68;
-  --linha: #dcdce1;
+  --campo: #e4e7ea;
+  --tonal: #dde1e5;
+  --texto: #111316;
+  --texto-2: #2b3036;
+  --discreto: #555d65;
+  --linha: #cfd4d9;
+  --friso: #1f5fae; /* friso das placas de área */
+  --placa-apagada: #ffffff;
 
-  --ok: #15803d;
+  --ok: #0f6b34;
   --ok-suave: #dcfce7;
   --info: #1d4ed8;
   --info-suave: #dbeafe;
-  --alerta: #a84d08;
-  --alerta-suave: #fef3c7;
-  --perigo: #c81e1e;
+  --alerta: #6f5200;
+  --alerta-suave: #fff1b8;
+  --perigo: #b31b1b;
   --perigo-suave: #fee2e2;
 
-  --raio: 14px;
-  --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+  --raio: 12px;
+  --raio-botao: 10px;
+  --texto-fonte: 'Barlow', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --numeros: 'Barlow Condensed', 'Barlow', system-ui, sans-serif;
 
-  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--texto-fonte);
   font-size: 17px;
+  font-weight: 500;
   line-height: 1.4;
   color: var(--texto);
   background: var(--fundo);
@@ -53,49 +89,53 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-tema='claro']) {
-    --marca: #ff8a5c;
-    --marca-suave: #3b1d10;
-    --sobre-marca: #160903;
-    --fundo: #0b0c0e;
-    --superficie: #16181c;
-    --campo: #1f2227;
-    --tonal: #262a30;
-    --texto: #f6f6f7;
-    --texto-2: #d6d6db;
-    --discreto: #a0a0aa;
-    --linha: #2b2f36;
-    --ok: #4ade80;
-    --ok-suave: #10291a;
-    --info: #93c5fd;
-    --info-suave: #142440;
-    --alerta: #fbbf24;
-    --alerta-suave: #332508;
-    --perigo: #fb7185;
-    --perigo-suave: #3a1219;
+    --marca: #ffd23f;
+    --marca-suave: #2b2407;
+    --sobre-marca: #111316;
+    --fundo: #111316;
+    --superficie: #1a1d21;
+    --campo: #0c0d10;
+    --tonal: #262a2f;
+    --texto: #f3f5f6;
+    --texto-2: #d3d8dc;
+    --discreto: #9ba4ac;
+    --linha: #2c3137;
+    --friso: rgba(243, 245, 246, 0.55);
+    --placa-apagada: #151c26;
+    --ok: #3fd17a;
+    --ok-suave: #0f2a1a;
+    --info: #7fb0ff;
+    --info-suave: #13233d;
+    --alerta: #ffd23f;
+    --alerta-suave: #2b2407;
+    --perigo: #ff6b6b;
+    --perigo-suave: #3a1416;
     color-scheme: dark;
   }
 }
 
 :root[data-tema='escuro'] {
-  --marca: #ff8a5c;
-  --marca-suave: #3b1d10;
-  --sobre-marca: #160903;
-  --fundo: #0b0c0e;
-  --superficie: #16181c;
-  --campo: #1f2227;
-  --tonal: #262a30;
-  --texto: #f6f6f7;
-  --texto-2: #d6d6db;
-  --discreto: #a0a0aa;
-  --linha: #2b2f36;
-  --ok: #4ade80;
-  --ok-suave: #10291a;
-  --info: #93c5fd;
-  --info-suave: #142440;
-  --alerta: #fbbf24;
-  --alerta-suave: #332508;
-  --perigo: #fb7185;
-  --perigo-suave: #3a1219;
+  --marca: #ffd23f;
+  --marca-suave: #2b2407;
+  --sobre-marca: #111316;
+  --fundo: #111316;
+  --superficie: #1a1d21;
+  --campo: #0c0d10;
+  --tonal: #262a2f;
+  --texto: #f3f5f6;
+  --texto-2: #d3d8dc;
+  --discreto: #9ba4ac;
+  --linha: #2c3137;
+  --friso: rgba(243, 245, 246, 0.55);
+  --placa-apagada: #151c26;
+  --ok: #3fd17a;
+  --ok-suave: #0f2a1a;
+  --info: #7fb0ff;
+  --info-suave: #13233d;
+  --alerta: #ffd23f;
+  --alerta-suave: #2b2407;
+  --perigo: #ff6b6b;
+  --perigo-suave: #3a1416;
   color-scheme: dark;
 }
 
@@ -110,15 +150,18 @@ body {
   background: var(--fundo);
 }
 
+/* Títulos em Barlow Condensed, como o nome numa placa. */
 h1 {
-  font-size: 1.45rem;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
+  font-family: var(--numeros);
+  font-size: 1.8rem;
+  font-weight: 700;
+  line-height: 1.1;
   margin: 0;
 }
 
 h2 {
-  font-size: 1.05rem;
+  font-size: 1.1rem;
+  font-weight: 700;
   margin: 0;
 }
 
@@ -152,7 +195,7 @@ ul {
   flex: none;
 }
 
-/* Números: fonte mono tabular, para as colunas baterem. */
+/* Números: Barlow Condensed tabular, para as colunas baterem e caberem grandes. */
 .num,
 .codigo,
 .valor,
@@ -160,9 +203,9 @@ ul {
 .linha-conta-topo strong,
 input.codigo-campo,
 .reais input {
-  font-family: var(--mono);
+  font-family: var(--numeros);
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.01em;
 }
 
 .app {
@@ -283,7 +326,7 @@ button {
   min-height: 48px;
   padding: 0 16px;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--raio-botao);
   background: var(--tonal);
   color: var(--texto);
   font-weight: 600;
@@ -304,13 +347,14 @@ label.botao:focus-within {
   outline-offset: 2px;
 }
 
+/* A ação principal em amarelo refletivo: vista de longe, com uma mão, na rua. */
 button.primario,
 label.botao.botao-foto {
   width: 100%;
   min-height: 56px;
-  background: var(--marca);
-  color: var(--sobre-marca);
-  font-size: 1.05rem;
+  background: var(--faixa);
+  color: var(--sobre-faixa);
+  font-size: 1.1rem;
   font-weight: 700;
 }
 
@@ -337,11 +381,16 @@ button.perigo.armado {
   border-color: var(--perigo);
 }
 
+/* Links sem cor: o amarelo fica para a ação principal, a aba atual e o que pede atenção. */
 button.link {
   min-height: 48px;
   padding: 0 4px;
   background: none;
-  color: var(--marca);
+  color: var(--texto);
+  text-decoration: underline;
+  text-decoration-color: var(--discreto);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 4px;
 }
 
 button.icone-botao {
@@ -356,13 +405,20 @@ button:disabled {
   cursor: default;
 }
 
+/* Amarelo pela metade vira lama: a ação principal parada fica neutra. */
+button.primario:disabled {
+  background: var(--tonal);
+  color: var(--discreto);
+  opacity: 1;
+}
+
 label.botao {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   min-height: 48px;
-  border-radius: 12px;
+  border-radius: var(--raio-botao);
   background: var(--tonal);
   font-weight: 600;
   cursor: pointer;
@@ -386,7 +442,7 @@ textarea {
   min-height: 52px;
   padding: 0 14px;
   border: 1.5px solid transparent;
-  border-radius: 12px;
+  border-radius: var(--raio-botao);
   background: var(--campo);
   font-size: 1.1rem;
   font-weight: 500;
@@ -440,12 +496,14 @@ textarea:disabled {
 
 .reais input {
   padding-left: 44px;
+  font-size: 1.35rem;
+  font-weight: 600;
 }
 
 input.codigo-campo {
-  font-size: 1.4rem;
+  font-size: 1.75rem;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
 }
 
 .rotulo-grupo {
@@ -455,7 +513,7 @@ input.codigo-campo {
 }
 
 .rotulo-grupo .dica {
-  color: var(--marca);
+  color: var(--discreto);
 }
 
 /* ---------- Blocos ---------- */
@@ -657,7 +715,7 @@ details.recolhivel > summary:focus-visible {
 
 .total strong {
   display: block;
-  font-size: 1.02rem;
+  font-size: 1.25rem;
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
@@ -704,19 +762,39 @@ details.recolhivel > summary:focus-visible {
   color: var(--marca);
 }
 
+/* Assinatura: as áreas são placas de destino, com o friso interno das placas de cidade e a taxa
+   no lugar da distância. Só a área escolhida acende, em azul de placa. */
 .chip-area {
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
+  min-height: 56px;
+  border: 0;
+  border-radius: var(--raio-botao);
+  background: var(--placa-apagada);
+  box-shadow:
+    inset 0 0 0 3px var(--placa-apagada),
+    inset 0 0 0 4.5px var(--friso);
+  line-height: 1.15;
 }
 
 .chip-area small {
-  font-size: 0.8rem;
-  font-weight: 500;
+  font-family: var(--numeros);
+  font-size: 0.9rem;
+  font-weight: 600;
   color: var(--discreto);
 }
 
-.chip-area[aria-pressed='true'] small {
-  color: inherit;
+.chip-area[aria-pressed='true'] {
+  background: var(--placa);
+  color: var(--sobre-placa);
+  box-shadow:
+    inset 0 0 0 3px var(--placa),
+    inset 0 0 0 5px var(--sobre-placa);
+}
+
+.chip-area[aria-pressed='true'] small,
+.chip-area[aria-pressed='true'] small.origem {
+  color: var(--sobre-placa);
 }
 
 /* ---------- Pagamento dividido ---------- */
@@ -748,7 +826,7 @@ button.remover {
 }
 
 .contador {
-  font-family: var(--mono);
+  font-family: var(--numeros);
   color: var(--texto-2);
 }
 
@@ -762,6 +840,12 @@ button.remover {
 
 .linha-comanda.aberta {
   padding-bottom: 12px;
+}
+
+/* Em rota: a faixa tracejada da pista na borda da linha. */
+.linha-comanda.status-em_rota {
+  padding-left: 12px;
+  background: linear-gradient(var(--marca) 55%, transparent 0) left top / 4px 16px repeat-y;
 }
 
 .linha-topo {
@@ -812,6 +896,11 @@ button.resumo-botao {
   color: var(--ok);
 }
 
+/* Na lista, a faixa tracejada já diz "em rota": a moto fica neutra. */
+.linha-comanda.status-em_rota .icone-status {
+  color: var(--texto-2);
+}
+
 .resumo-comanda .codigo {
   grid-area: codigo;
 }
@@ -825,9 +914,9 @@ button.resumo-botao {
 }
 
 .codigo {
-  font-size: 1.45rem;
+  font-size: 1.7rem;
   font-weight: 700;
-  line-height: 1.15;
+  line-height: 1.1;
 }
 
 .status-voltou .codigo {
@@ -841,7 +930,7 @@ button.resumo-botao {
 }
 
 .valor {
-  font-size: 1.05rem;
+  font-size: 1.25rem;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -861,11 +950,16 @@ button.resumo-botao {
   font-weight: 700;
 }
 
+/* Botão da linha: neutro, com o visto verde (uma tela cheia deles não pinta a lista). */
 button.entregue-rapido {
   flex: none;
   padding: 0 14px;
-  background: var(--ok);
-  color: var(--fundo);
+  background: var(--tonal);
+  color: var(--texto);
+}
+
+button.entregue-rapido .icone {
+  color: var(--ok);
 }
 
 .menu-comanda {
@@ -897,7 +991,7 @@ button.entregue-rapido {
 
 .busca input {
   padding-left: 42px;
-  font-family: var(--mono);
+  font-family: var(--numeros);
 }
 
 .busca button.limpar {
@@ -939,7 +1033,7 @@ button.entregue-rapido {
 }
 
 .linha-conta-topo strong {
-  font-size: 1.15rem;
+  font-size: 1.4rem;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -976,8 +1070,7 @@ button.item-maquininha {
   width: 100%;
   min-height: 52px;
   padding: 0 12px;
-  border: 1.5px solid var(--linha);
-  background: transparent;
+  background: var(--fundo);
   text-align: left;
 }
 
@@ -987,14 +1080,14 @@ button.item-maquininha .marca {
   justify-content: center;
   width: 24px;
   height: 24px;
-  border: 2px solid var(--linha);
+  border: 2px solid var(--discreto);
   border-radius: 7px;
   color: var(--fundo);
 }
 
 button.item-maquininha[aria-pressed='true'] {
-  border-color: var(--ok);
-  background: var(--ok-suave);
+  background: transparent;
+  color: var(--texto-2);
 }
 
 button.item-maquininha[aria-pressed='true'] .marca {
@@ -1003,15 +1096,15 @@ button.item-maquininha[aria-pressed='true'] .marca {
 }
 
 button.item-maquininha .hora {
-  font-family: var(--mono);
+  font-family: var(--numeros);
   color: var(--discreto);
-  font-size: 0.9rem;
+  font-size: 1rem;
   font-weight: 500;
   white-space: nowrap;
 }
 
 button.item-maquininha .codigo {
-  font-size: 1.05rem;
+  font-size: 1.25rem;
 }
 
 .tabela {
@@ -1040,12 +1133,14 @@ button.item-maquininha .codigo {
   padding: 8px 0 8px 10px;
   border-top: 1px solid var(--linha);
   text-align: right;
-  font-family: var(--mono);
+  font-family: var(--numeros);
+  font-size: 1.1rem;
   font-variant-numeric: tabular-nums;
 }
 
 .tabela td:first-child {
   font-family: inherit;
+  font-size: 0.95rem;
   font-weight: 600;
 }
 
@@ -1081,8 +1176,8 @@ button.item-historico {
 }
 
 .data-bloco strong {
-  font-family: var(--mono);
-  font-size: 1.3rem;
+  font-family: var(--numeros);
+  font-size: 1.55rem;
 }
 
 .data-bloco span {
@@ -1115,9 +1210,9 @@ button.item-historico {
 }
 
 .numeros-historico strong {
-  font-family: var(--mono);
+  font-family: var(--numeros);
   font-variant-numeric: tabular-nums;
-  font-size: 0.95rem;
+  font-size: 1.15rem;
   text-transform: none;
   color: var(--texto);
   white-space: nowrap;
@@ -1229,7 +1324,7 @@ button.foto-cheia img {
 
 .chip-area.chip-sugerida {
   outline: 2px dashed var(--marca);
-  outline-offset: -2px;
+  outline-offset: 2px;
 }
 
 .chip-area small.origem {
@@ -1393,6 +1488,23 @@ dl.campo-problema {
   font-weight: 700;
 }
 
+/* A aba atual ganha um traço da faixa amarela em cima. */
+.abas button {
+  position: relative;
+}
+
+.abas button[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  width: 36px;
+  height: 3px;
+  margin-left: -18px;
+  border-radius: 0 0 3px 3px;
+  background: var(--marca);
+}
+
 .carregando {
   display: flex;
   justify-content: center;
@@ -1411,7 +1523,7 @@ button.item-papel {
   width: 100%;
   min-height: 60px;
   padding: 6px 12px;
-  background: var(--campo);
+  background: var(--fundo);
   text-align: left;
   font-weight: inherit;
 }
@@ -1438,7 +1550,7 @@ button.item-papel[aria-pressed='true'] .marca {
 }
 
 button.item-papel .codigo {
-  font-size: 1.1rem;
+  font-size: 1.35rem;
 }
 
 .papel-meio {
@@ -1469,8 +1581,9 @@ button.item-papel .codigo {
 
 .liquidacao dd {
   margin: 0;
-  font-family: var(--mono);
+  font-family: var(--numeros);
   font-variant-numeric: tabular-nums;
+  font-size: 1.15rem;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -1521,7 +1634,7 @@ button.item-papel .codigo {
 
 .campo-data input {
   min-height: 48px;
-  font-family: var(--mono);
+  font-family: var(--numeros);
   font-size: 1rem;
 }
 
@@ -1554,7 +1667,7 @@ button.pendencia {
 
 button.pendencia strong {
   margin-right: 2px;
-  font-size: 1.15rem;
+  font-size: 1.4rem;
 }
 
 .numeros-noite {
@@ -1580,7 +1693,7 @@ button.pendencia strong {
 .numeros-noite dd {
   margin: 0;
   /* Cabe "1.234,00" num quarto da tela do celular. */
-  font-size: clamp(0.95rem, 4.2vw, 1.2rem);
+  font-size: clamp(1.1rem, 5.2vw, 1.45rem);
   font-weight: 700;
 }
 
@@ -1662,7 +1775,8 @@ button.pendencia strong {
 }
 
 .coluna-titulo {
-  font-size: 1.05rem;
+  font-family: var(--numeros);
+  font-size: 1.3rem;
   font-weight: 700;
   padding-bottom: 6px;
   border-bottom: 2px solid var(--texto);
@@ -1734,7 +1848,7 @@ button.abrir-caixa::after {
 }
 
 .item-folha .codigo {
-  font-size: 1.05rem;
+  font-size: 1.3rem;
 }
 
 .item-folha .forma {
@@ -1766,7 +1880,11 @@ button.abrir-caixa::after {
   gap: 2px;
   padding-top: 8px;
   border-top: 2px solid var(--texto);
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+}
+
+.rodape-folha .num {
+  font-size: 1.1rem;
 }
 
 .linha-valor {
@@ -1815,7 +1933,7 @@ button.item-pix {
   gap: 0 8px;
   min-height: 52px;
   padding: 6px 10px;
-  background: var(--campo);
+  background: var(--fundo);
   text-align: left;
   font-weight: inherit;
 }
@@ -1826,11 +1944,14 @@ button.item-pix[aria-pressed='true'] {
 
 .item-pix .codigo {
   grid-area: codigo;
-  font-size: 1.05rem;
+  font-size: 1.3rem;
 }
 
 .estado-pix {
   grid-area: estado;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   font-size: 0.85rem;
   font-weight: 700;
   color: var(--alerta);
@@ -1890,6 +2011,10 @@ button.item-pix[aria-pressed='true'] {
   .abas.painel-nav > button[aria-current='page'] {
     background: var(--marca-suave);
     color: var(--marca);
+  }
+
+  .abas.painel-nav > button[aria-current='page']::before {
+    display: none;
   }
 
   .abas.painel-nav > button.painel-trocar {

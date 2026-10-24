@@ -25,7 +25,8 @@ Sistema para a pizzaria onde trabalho como motoboy, construído aos poucos. O MV
 - `scripts/comparar-modelos.ts`: compara modelos com as fotos da noite de teste (`npm run comparar -- <pasta>`).
 - `.claude/skills/graphify/`: `/graphify` monta o grafo do código e dos docs (graphify 0.9.85, Apache-2.0, versão fixada). A saída vai para `graphify-out/`, fora do git.
 - `PRODUCT.md`: quem usa, onde e para quê (o Luan usa o painel no celular). Lido pelas skills de interface.
-- `.interface-design/system.md`: as decisões de visual (cores por papel, superfícies, padrões, topo do painel, folha). Seguir ao mexer na interface.
+- `DESIGN.md`: o visual "A rua à noite" (placas de estrada, asfalto, amarelo refletivo): tokens, regras e componentes. Seguir ao mexer na interface; `.impeccable/design.json` é o complemento para as skills.
+- `.interface-design/system.md`: resumo das decisões de visual para a interface-design. `.impeccable/surfaces/src-app-tsx.md`: a direção escolhida e as restrições (cor contida, nada muda de lugar).
 - `.claude/skills/impeccable/` (4.7.1, Apache-2.0) e `.claude/skills/interface-design/` (MIT), com `/design-review` e `/design-deslop` em `.claude/commands/`: crítica, auditoria e polimento da interface. O detector da Impeccable baixa um programa no primeiro uso; sem ele, a skill lê o `PRODUCT.md` e o `system.md` direto.
 
 ## Stack

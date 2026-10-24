@@ -1,71 +1,76 @@
 # Design System
 
-Fonte dos valores: `src/index.css`. Produto e pessoas: `PRODUCT.md`.
+O sistema completo, com tokens, regras e componentes, está em `DESIGN.md` (raiz). Os valores ficam em `src/index.css`, e as pessoas e o produto em `PRODUCT.md`. Este arquivo resume as decisões para a interface-design.
 
 ## Direction
 
-**Personality:** Utility & Function. A folha de papel do Luan, passada a limpo: direta, densa onde é lista, com o número que importa na frente.
+**Personality:** Utility & Function, no mundo da rua à noite: placas de estrada, asfalto e faixa amarela.
 
-**Foundation:** neutro frio (cinza quase preto no escuro), com o laranja-tomate da marca.
+**Foundation:** asfalto quase preto, levemente azulado (claro: concreto). Um único acento, o amarelo refletivo.
 
-**Depth:** mudança de superfície, sem sombras e sem bordas nos cartões. `--fundo` → `--superficie` (cartões e colunas) → `--campo` (o que é tocável dentro de um cartão: campos, papéis e Pix a conferir).
+**Depth:** degraus de superfície, sem sombras e sem bordas de cartão. `--fundo` #111316 → `--superficie` #1a1d21 (cartões, colunas) → item tocável volta ao `--fundo` → `--campo` #0c0d10 (campos de digitar).
 
-**Uso:** celular, à noite, uma mão. Tema escuro por padrão (segue o sistema), claro como opção.
+**Uso:** celular, à noite, uma mão. Tema escuro por padrão; claro como "placa de dia".
+
+**Pedidos do usuário:** não pôr cor demais e não mudar as coisas de lugar. O mundo entra por letra, cor, densidade e a placa, nunca pela organização das telas.
 
 ## Tokens
 
-### Cor (papéis, não matizes)
-- `--marca`: ação principal, seleção, aba atual, foco. Claro `#b83d0c` (4,5:1 ou mais em branco, fundo, campo e realce), escuro `#ff8a5c`.
-- `--alerta` / `--alerta-suave`: só o que pede ação agora (pendências do topo do painel, "conferir" do Pix, "Pendente", aviso de comanda em rota). Nunca contorno de item de lista.
-- `--ok` / `--ok-suave`: feito (entregue, Pix caiu, papel conferido, confirmado).
-- `--info`: troco por Pix e maquininha. `--perigo`: excluir, sair, "Lançar assim".
-- Texto em quatro níveis: `--texto`, `--texto-2`, `--discreto`, e o riscado de "voltou".
+### Cor (papéis)
+- `--faixa` #ffcc00 com `--sobre-faixa` #111316: fundo da ação principal (nos dois temas).
+- `--marca`: o amarelo como texto e marca (aba atual, seleção, foco, em rota, pendências). Escuro #ffd23f; claro #6f5200.
+- `--placa` #1f5fae: só a área escolhida. `--placa-apagada` e `--friso`: as placas não escolhidas.
+- `--ok`, `--perigo`, `--info`: feito, perigo, maquininha. Nada mais tem cor.
+- Texto: `--texto`, `--texto-2`, `--discreto`. Links e dicas ficam neutros (sublinhado).
 
 ### Espaço
-Base 4px. Usados: 8 (dentro de grupos), 10–12 (respiro de cartão e coluna), 16 (entre blocos e margem da tela).
+Base 4px: 8 (dentro de grupos), 10–12 (entre itens), 16 (entre blocos e margem).
 
 ### Raio
-12px em botões e itens tocáveis; 14px (`--raio`) em cartões e colunas; 999px em pílulas de status.
+10px (`--raio-botao`) em botões, campos, placas e itens; 12px (`--raio`) em cartões e colunas; 999px em pílulas.
 
 ### Tipografia
-- Inter (guardada no app, funciona offline), 17px na raiz, 1.4 de entrelinha.
-- Números, códigos e dinheiro em mono tabular (`.num`, `.codigo`, `.valor`): é dado, não enfeite.
-- Hierarquia por peso e cor antes do tamanho: código 600–700 em `--texto`, forma de pagamento em `--discreto`.
-- Títulos com `text-wrap: balance`; parágrafos com `pretty`.
+- Barlow (500/600/700) no texto; Barlow Condensed (600/700) em `--numeros`: títulos h1, códigos, valores, totais, folha. Sempre `tabular-nums` nos números.
+- Fontes guardadas no app (`@fontsource/barlow`, `@fontsource/barlow-condensed`), funcionam offline.
 
 ## Patterns
 
 ### Botão
-- 48px de altura (56px no primário de largura toda), 0 16px, raio 12, peso 600.
-- Primário: fundo `--marca`. Secundário: `--tonal`. Perigo: contorno `--perigo`. Link: texto `--marca`.
-- Toque: opacidade 0,75. Foco: contorno 2px `--marca`.
+- Primário: amarelo refletivo, 56px, largura toda, 1.1rem 700. Parado: tonal com texto cinza.
+- Secundário: tonal, 48px. "Entregue" é secundário com o visto verde.
+- Link: texto sublinhado, sem cor.
+
+### Placa de área (assinatura)
+- Placa apagada com friso interno a 3px; nome em Barlow 600 e taxa em Barlow Condensed.
+- Escolhida: azul de placa com friso branco de 5px. Sugerida pela leitura: tracejado amarelo por fora.
+
+### Em rota
+- Faixa tracejada amarela (4px, traços de 16px) na borda esquerda da linha; a moto fica neutra.
 
 ### Item tocável de lista (papel, Pix, maquininha)
-- Linha com fundo `--campo`, sem borda, mínimo 52–60px, caixinha de 24px à esquerda.
-- Feito: fundo some (transparente) e a caixinha fica `--ok`. A cor de pendente fica na contagem, não no item.
+- Fundo `--fundo` sobre o cartão, sem borda, mínimo 52–60px, caixinha de 24px. Feito: fundo transparente e caixinha verde.
 
 ### Topo do painel
-- Pendências primeiro, uma por linha no celular: "3 Pix a conferir ›", "3 acertos pendentes ›" (`--alerta-suave`). O toque leva à coluna (PIX ou primeiro acerto pendente), marca a coluna por 1,2s e põe o foco nela.
-- Depois quatro números numa faixa só, sem R$, como no rodapé da folha: Em rota, Entregues, Devolvem, Recebem.
+- Pendências primeiro, uma por linha no celular ("3 Pix a conferir ›"), em amarelo-suave; o toque leva à coluna, marca por 1,2s e põe o foco.
+- Depois quatro números numa faixa só, sem R$.
 
 ### Folha
-- Uma coluna por motoboy na ordem de chegada, PIX por último (como no papel).
-- No celular: duas colunas e um pedaço da terceira, rolando para o lado com encaixe. No computador: todas lado a lado.
-- A coluna inteira abre o caixa; o código com foto (32px) abre a foto.
+- Uma coluna por motoboy na ordem de chegada, PIX por último. Título e rodapé com traço de 2px, como no papel.
+- No celular: duas colunas e um pedaço da terceira, rolando para o lado.
+
+### Abas
+- Celular: a atual em amarelo com um traço de 36×3px em cima. Computador (painel): menu lateral, a atual com fundo amarelo-suave.
 
 ### Confirmação e desfazer
-- Nada de `alert`/`confirm`: Desfazer por 5s ou dois toques (`BotaoConfirmar`).
-
-## Motion
-- Só o que diz que algo mudou: aviso subindo (150ms), marca da coluna de destino (1,2s, ease-out).
-- Com movimento reduzido: sem deslocamento, só opacidade.
+- Nada de `alert`/`confirm`: Desfazer por 5s ou dois toques.
 
 ## Decisions
 
 | Decision | Rationale | Date |
 |----------|-----------|------|
-| Profundidade por superfície, sem bordas nos cartões | Tela pequena e escura: borda em tudo vira grade e pesa. | 2026-10-24 |
-| Amarelo só no que pede ação | Seis contornos amarelos no acerto escondiam o que importava. | 2026-10-24 |
-| Atalhos do topo levam à coluna | O Luan usa o painel no celular, onde a PIX fica fora da tela. | 2026-10-24 |
-| Laranja do tema claro `#b83d0c` | O `#d9480f` dava 3,7–4,3:1 em texto pequeno. | 2026-10-24 |
-| Mono só para números e códigos | As colunas de valores precisam bater; texto corrido fica na Inter. | 2026-10-24 |
+| Mundo "A rua à noite" (placas, asfalto, faixa) | Direção A da Impeccable; o usuário não escolheu e ela seguiu como a sorteada. | 2026-10-24 |
+| Um único acento amarelo; links neutros | Pedido do usuário: "cor demais" piora. | 2026-10-24 |
+| Nada muda de lugar | Pedido do usuário: "mudar onde as coisas ficam" piora. | 2026-10-24 |
+| Áreas como placas de destino | A taxa por cidade é o que o motoboy recebe; a placa é o objeto que ele conhece da rua. | 2026-10-24 |
+| Barlow / Barlow Condensed | Desenhada a partir das placas de estrada; números grandes e estreitos que cabem em coluna. | 2026-10-24 |
+| Amarelo do claro em ocre #6f5200 | Amarelo puro não tem contraste como texto no branco. | 2026-10-24 |
