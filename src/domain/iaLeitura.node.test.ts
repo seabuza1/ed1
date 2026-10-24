@@ -170,7 +170,7 @@ describe('Qwen e servidor compatível (Chat Completions)', () => {
     expect(c.model).toBe('qwen3-vl-plus')
     expect(c.messages.map((m) => m.role)).toEqual(['system', 'user', 'assistant', 'user'])
     expect(c.messages[0].content).toContain(JSON.stringify(ESQUEMA_COMPLETA))
-    expect(c.messages[0].content).toContain('JSON')
+    expect(c.messages[0].content).toContain('não repita o esquema')
     expect(c.messages[1].content).toEqual([
       { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${ex.imagem}` } },
       { type: 'text', text: 'Leia esta comanda e devolva a leitura completa.' },

@@ -19,7 +19,11 @@ export function corpoCompativel(p: Pedido, modelo: string, extra: Record<string,
   return {
     model: modelo,
     messages: [
-      { role: 'system', content: `${p.sistema}\n\n## Resposta\nSó o JSON, neste esquema:\n${JSON.stringify(p.esquema)}` },
+      // "Não repita o esquema": sem isso, o qwen3.8-27b com o raciocínio limitado devolvia o esquema.
+      {
+        role: 'system',
+        content: `${p.sistema}\n\n## Resposta\nResponda só com um objeto JSON com a leitura desta comanda. Ele segue o JSON Schema abaixo; não repita o esquema, preencha os campos.\n${JSON.stringify(p.esquema)}`,
+      },
       ...p.exemplos.flatMap((x) => [
         { role: 'user', content: [foto(x.imagem), texto(p.instrucao)] },
         { role: 'assistant', content: x.resposta },
