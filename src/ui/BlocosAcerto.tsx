@@ -82,14 +82,20 @@ export function Conta({ acerto }: { acerto: Acerto }) {
   )
 }
 
-/** R17: entregues, que voltaram e taxas por área. */
+/** R17: entregues, que voltaram e taxas por área. Recolhida: é consulta, não ação. */
 export function EntregasPorCidade({ porArea, areas }: { porArea: Acerto['porArea']; areas: Area[] }) {
   if (Object.keys(porArea).length === 0) return null
+  const { total } = entregasPorCidade(porArea, areas)
   return (
-    <section className="bloco">
-      <h2>Entregas por cidade</h2>
+    <details className="bloco recolhivel">
+      <summary>
+        <h2>Entregas por cidade</h2>
+        <span className="discreto pequeno">
+          {total.entregues} {total.entregues === 1 ? 'entregue' : 'entregues'} · {formatarReais(total.taxas)} de taxas
+        </span>
+      </summary>
       <TabelaCidades porArea={porArea} areas={areas} />
-    </section>
+    </details>
   )
 }
 

@@ -450,6 +450,44 @@ input.codigo-campo {
   background: var(--superficie);
 }
 
+/* Bloco de consulta: fechado mostra só o título e o resumo; tocar abre. */
+details.bloco.recolhivel {
+  display: block;
+}
+details.recolhivel > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  min-height: 28px;
+  cursor: pointer;
+  list-style: none;
+}
+details.recolhivel > summary::-webkit-details-marker {
+  display: none;
+}
+details.recolhivel > summary::after {
+  content: '';
+  width: 8px;
+  height: 8px;
+  margin-left: auto;
+  border-right: 2px solid var(--discreto);
+  border-bottom: 2px solid var(--discreto);
+  transform: rotate(45deg);
+  transition: transform 0.15s;
+}
+details.recolhivel[open] > summary {
+  margin-bottom: 10px;
+}
+details.recolhivel[open] > summary::after {
+  transform: rotate(225deg);
+}
+details.recolhivel > summary:focus-visible {
+  outline: 2px solid var(--marca);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
 .titulo-form {
   display: flex;
   justify-content: space-between;
@@ -1472,18 +1510,16 @@ button.so-icone {
   padding: 0;
 }
 
-/* A noite num relance: no celular rola para o lado. */
+/* A noite num relance: tudo à vista, em três colunas no celular. */
 .numeros-noite {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  margin: 0 -16px;
-  padding: 0 16px 4px;
-  overflow-x: auto;
+  margin: 0;
 }
 
 .numeros-noite > div {
-  flex: 0 0 auto;
-  min-width: 112px;
+  min-width: 0;
   padding: 10px 12px;
   border-radius: var(--raio);
   background: var(--superficie);
@@ -1497,7 +1533,8 @@ button.so-icone {
 
 .numeros-noite dd {
   margin: 0;
-  font-size: 1.25rem;
+  /* Cabe "R$ 392,00" num terço da tela do celular; valor maior quebra no espaço depois do R$. */
+  font-size: clamp(0.95rem, 3.9vw, 1.25rem);
   font-weight: 700;
 }
 
@@ -1899,5 +1936,58 @@ button.item-pix[aria-pressed='true'] {
     grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
     align-items: start;
     max-width: 1200px;
+  }
+}
+
+/* ---------- App do motoboy no computador ---------- */
+
+/* No celular, uma coluna na ordem do código. */
+.duas-colunas,
+.grade-acerto {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (min-width: 900px) {
+  .app.app-larga {
+    max-width: 1120px;
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+
+  /* Noite: lançar à esquerda, a lista ao lado. */
+  .duas-colunas {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    gap: 24px;
+    align-items: start;
+  }
+
+  /* Acerto: a conta e o fechar à esquerda, o que conferir à direita. */
+  .grade-acerto {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      'conta conferir'
+      'fechar conferir';
+    grid-template-rows: auto 1fr;
+    gap: 16px 24px;
+    align-items: start;
+  }
+  .acerto-conta {
+    grid-area: conta;
+  }
+  .acerto-conferir {
+    grid-area: conferir;
+  }
+  .acerto-fechar {
+    grid-area: fechar;
+  }
+
+  /* Os três totais na mesma largura da tela, não nas pontas do monitor. */
+  .totais {
+    padding-left: max(12px, calc((100% - 1120px) / 2));
+    padding-right: max(12px, calc((100% - 1120px) / 2));
   }
 }

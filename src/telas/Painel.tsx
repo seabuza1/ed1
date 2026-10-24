@@ -256,18 +256,17 @@ function EscolherData({ data, hoje, mudar }: { data: string; hoje: string; mudar
   )
 }
 
-/** A noite num relance, em cima da folha. */
+/** A noite num relance, em cima da folha: primeiro o que pede ação do Luan. */
 function NumerosNoite({ n }: { n: NumerosDaNoite }) {
   const itens: { rotulo: string; valor: string; detalhe?: string; alerta?: boolean }[] = [
-    { rotulo: 'Motoboys', valor: String(n.motoboys) },
+    { rotulo: 'Pix a conferir', valor: String(n.pixAConferir), alerta: n.pixAConferir > 0 },
+    { rotulo: 'Acertos pendentes', valor: String(n.acertosPendentes), alerta: n.acertosPendentes > 0 },
     { rotulo: 'Em rota', valor: String(n.emRota) },
     {
       rotulo: 'Entregues',
       valor: String(n.entregues),
       detalhe: n.voltaram ? `${n.voltaram} ${n.voltaram === 1 ? 'voltou' : 'voltaram'}` : undefined,
     },
-    { rotulo: 'Pix a conferir', valor: String(n.pixAConferir), alerta: n.pixAConferir > 0 },
-    { rotulo: 'Acertos pendentes', valor: String(n.acertosPendentes), alerta: n.acertosPendentes > 0 },
     { rotulo: 'Devolvem', valor: formatarReais(n.devolver) },
     { rotulo: 'Recebem', valor: formatarReais(n.receber) },
   ]
@@ -439,6 +438,14 @@ function CaixaNoPainel(props: {
     if (valorContado !== noite.dinheiroContado) agir(() => acoes.registrarContado(noite.id, valorContado))
   }
 
+  /** O dinheiro bateu com o que o motoboy devolve: um toque preenche e grava. */
+  function bateu() {
+    mexeu.current = false
+    setContado(paraCampo(conta.devolver))
+    setErro(null)
+    if (conta.devolver !== noite.dinheiroContado) agir(() => acoes.registrarContado(noite.id, conta.devolver))
+  }
+
   async function confirmar() {
     const r = montarAcerto({ ...noite, dinheiroContado: valorContado }, props.comandas)
     if (!r.ok) return setErro(r.erro)
@@ -498,6 +505,12 @@ function CaixaNoPainel(props: {
                 }}
                 aoSair={gravarContado}
               />
+              {contado.trim() === '' && (
+                <button type="button" className="secundario" onClick={bateu}>
+                  <Icone nome="check" tamanho={18} />
+                  Bateu: {formatarReais(conta.devolver)}
+                </button>
+              )}
               {conf && (
                 <>
                   <div className={`resultado ${conf.situacao}`}>

@@ -167,6 +167,8 @@ export function ConfirmarLeitura(props: {
   const troco = pagamentoEditado?.ok ? pagamentoEditado.valor.troco : 0
   const r = conferirLeitura({ ...entrada, correcoes: corEfetiva })
   const repetida = r.codigo !== null && comandaRepetida(r.codigo, props.comandas) !== undefined
+  /** A área do botão Lançar: a escolhida ou a sugerida. */
+  const alvo = props.areas.find((a) => a.id === (cor.areaId ?? r.areaId))
 
   function corrigir(parcial: Correcoes) {
     setCor((atual) => ({ ...atual, ...parcial }))
@@ -455,8 +457,12 @@ export function ConfirmarLeitura(props: {
           onChange={tocarArea}
         />
       </div>
-      {repetida && repetidaOk && (
-        <p className="aviso">Já tem essa comanda na noite. Toque de novo na área para lançar.</p>
+      {repetida && repetidaOk && <p className="aviso">Já tem essa comanda na noite. Toque de novo para lançar.</p>}
+      {/* O toque na área já lança; o botão deixa isso à vista, com a área sugerida ou a escolhida. */}
+      {r.estado !== 'vermelho' && alvo && (
+        <button type="button" className={`primario ${repetidaOk ? 'armado' : ''}`} onClick={() => tocarArea(alvo.id)}>
+          {repetidaOk ? 'Lançar mesmo assim' : 'Lançar'} · {alvo.nome}
+        </button>
       )}
       {r.estado === 'vermelho' && (
         <BotaoConfirmar
