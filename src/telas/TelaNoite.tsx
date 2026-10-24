@@ -29,19 +29,26 @@ export function TelaNoite(props: {
   return (
     <>
       <BarraTotais acerto={calcularAcerto(aberta, props.comandas)} />
-      <main className="app pilha">
+      <main className="app app-larga pilha">
         <ValoresNoite noite={aberta} travada={travada} />
-        {travada ? (
-          <p className="aviso">O Luan já confirmou o acerto desta noite. Não dá mais para lançar nem editar.</p>
-        ) : (
-          <LancarComanda noite={aberta} areas={props.areas} comandas={props.comandas} />
-        )}
-        <ListasComandas
-          comandas={props.comandas}
-          areas={props.areas}
-          somenteLeitura={travada}
-          promoDesconto={aberta.promoDesconto}
-        />
+        {/* No computador, lançar à esquerda e a lista ao lado. */}
+        <div className="duas-colunas">
+          <div className="pilha">
+            {travada ? (
+              <p className="aviso">O Luan já confirmou o acerto desta noite. Não dá mais para lançar nem editar.</p>
+            ) : (
+              <LancarComanda noite={aberta} areas={props.areas} comandas={props.comandas} />
+            )}
+          </div>
+          <div className="pilha">
+            <ListasComandas
+              comandas={props.comandas}
+              areas={props.areas}
+              somenteLeitura={travada}
+              promoDesconto={aberta.promoDesconto}
+            />
+          </div>
+        </div>
       </main>
     </>
   )

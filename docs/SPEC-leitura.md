@@ -169,7 +169,7 @@ API Interactions:
   - forma de pagamento já marcada;
   - código e total editáveis;
   - quando a área veio "pelo valor", os dígitos do total que se confundem (3/8, 1/7, 5/6, 0/6) aparecem sublinhados.
-  - **Verde ou amarelo:** tocar na área lança, como o toque na forma da v1, com "3557 lançada · Desfazer".
+  - **Verde ou amarelo:** tocar na área lança, como o toque na forma da v1, com "3557 lançada · Desfazer". Embaixo das áreas, o botão "Lançar · Barra do Garças" faz o mesmo com a área sugerida (ou a escolhida): o toque continua um só, mas fica à vista.
   - **Vermelho:** o campo com problema aparece em vermelho e a tela oferece "Lançar assim" com dois toques.
 - **Lista da noite:** ícone de câmera nas comandas com foto e aviso de "leitura não confere" (R28).
 - **Painel do Luan:** tocar no código abre a foto.

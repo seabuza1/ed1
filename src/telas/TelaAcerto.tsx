@@ -83,7 +83,7 @@ function ConteudoAcerto(props: {
   return (
     <>
       <BarraTotais acerto={acerto} />
-      <main className="app pilha">
+      <main className="app app-larga pilha">
         {props.voltar && (
           <button type="button" className="link alinha-inicio" onClick={props.voltar}>
             <Icone nome="voltar" tamanho={18} />
@@ -116,51 +116,59 @@ function ConteudoAcerto(props: {
           </div>
         </div>
 
-        <Conta acerto={acerto} />
-        {aviso && <p className="aviso">{aviso}</p>}
-        <Conferencia noite={noite} acerto={acerto} leitura={leitura} atualizar={atualizar} />
-        <EntregasPorCidade porArea={acerto.porArea} areas={props.areas} />
-        <Papeis
-          comandas={comandas}
-          areas={props.areas}
-          leitura={leitura}
-          dica="Toque quando entregar ao Luan."
-          aoAlternar={(c) => repo.salvarComanda(marcarPapel(c, !c.papelConferido, agora()))}
-        />
-        <Maquininha
-          comandas={comandas}
-          leitura={leitura}
-          aoAlternar={(c, indice, conferido) => repo.salvarComanda(marcarConferido(c, indice, conferido, agora()))}
-        />
-        {confirmado ? (
-          <AcertoDoLuan confirmado={confirmado} />
-        ) : (
-          !repo.nuvem && <ComparacaoLuan noite={noite} acerto={acerto} leitura={leitura} atualizar={atualizar} />
-        )}
-
-        {erro && <p className="erro">{erro}</p>}
-
-        {confirmado ? null : leitura ? (
-          <button
-            type="button"
-            className="secundario"
-            onClick={() => {
-              const r = reabrirNoite(noite, props.noites)
-              atualizar(r.ok ? { ok: true, valor: { fechadaEm: r.valor.fechadaEm } } : r)
-            }}
-          >
-            <Icone nome="cadeado" tamanho={18} />
-            Reabrir
-          </button>
-        ) : (
-          <BotaoConfirmar
-            className="primario"
-            confirmacao="Toque de novo para fechar"
-            onConfirmar={() => atualizar({ ok: true, valor: { fechadaEm: fecharNoite(noite, agora()).fechadaEm } })}
-          >
-            Fechar a noite
-          </BotaoConfirmar>
-        )}
+        {/* No celular, uma coluna nesta ordem; no computador, a conta e o fechar à esquerda e o que
+            conferir à direita. */}
+        <div className="grade-acerto">
+          <div className="pilha acerto-conta">
+            <Conta acerto={acerto} />
+            {aviso && <p className="aviso">{aviso}</p>}
+            <Conferencia noite={noite} acerto={acerto} leitura={leitura} atualizar={atualizar} />
+          </div>
+          <div className="pilha acerto-conferir">
+            <Papeis
+              comandas={comandas}
+              areas={props.areas}
+              leitura={leitura}
+              dica="Toque quando entregar ao Luan."
+              aoAlternar={(c) => repo.salvarComanda(marcarPapel(c, !c.papelConferido, agora()))}
+            />
+            <Maquininha
+              comandas={comandas}
+              leitura={leitura}
+              aoAlternar={(c, indice, conferido) => repo.salvarComanda(marcarConferido(c, indice, conferido, agora()))}
+            />
+            <EntregasPorCidade porArea={acerto.porArea} areas={props.areas} />
+            {confirmado ? (
+              <AcertoDoLuan confirmado={confirmado} />
+            ) : (
+              !repo.nuvem && <ComparacaoLuan noite={noite} acerto={acerto} leitura={leitura} atualizar={atualizar} />
+            )}
+          </div>
+          <div className="pilha acerto-fechar">
+            {erro && <p className="erro">{erro}</p>}
+            {confirmado ? null : leitura ? (
+              <button
+                type="button"
+                className="secundario"
+                onClick={() => {
+                  const r = reabrirNoite(noite, props.noites)
+                  atualizar(r.ok ? { ok: true, valor: { fechadaEm: r.valor.fechadaEm } } : r)
+                }}
+              >
+                <Icone nome="cadeado" tamanho={18} />
+                Reabrir
+              </button>
+            ) : (
+              <BotaoConfirmar
+                className="primario"
+                confirmacao="Toque de novo para fechar"
+                onConfirmar={() => atualizar({ ok: true, valor: { fechadaEm: fecharNoite(noite, agora()).fechadaEm } })}
+              >
+                Fechar a noite
+              </BotaoConfirmar>
+            )}
+          </div>
+        </div>
 
         {props.voltar && (
           <section className="pilha">
@@ -203,6 +211,19 @@ function Conferencia(props: { noite: Noite; acerto: Acerto; leitura: boolean; at
           digitando.current = false
         }}
       />
+      {!props.leitura && contado.trim() === '' && (
+        <button
+          type="button"
+          className="secundario"
+          onClick={() => {
+            setContado(paraCampo(props.acerto.devolver))
+            props.atualizar(registrarContado(props.noite, props.acerto.devolver))
+          }}
+        >
+          <Icone nome="check" tamanho={18} />
+          Bateu: {formatarReais(props.acerto.devolver)}
+        </button>
+      )}
       {conf && (
         <div className={`resultado ${conf.situacao}`}>
           {conf.situacao === 'bateu' && <p>Bateu.</p>}
