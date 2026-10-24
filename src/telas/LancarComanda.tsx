@@ -112,6 +112,12 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
     const url = trocarUrl(pronta.blob)!
     const foto: FotoDaComanda = { id: novoId(), blob: pronta.blob, base64: pronta.base64, url, inicio: Date.now() }
     if (pronta.nitidez < NITIDEZ_MINIMA) return setLeitura({ fase: 'tremida', foto })
+    return ler(foto)
+  }
+
+  async function ler(foto: FotoDaComanda) {
+    if (!fotos) return
+    pedido.current?.abort()
     if (!navigator.onLine) return paraManual({ foto, pendente: true }, SEM_INTERNET)
     setLeitura({ fase: 'lendo', foto })
     const ctrl = new AbortController()
@@ -139,6 +145,38 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
     setTimeout(() => refCodigo.current?.focus())
   }
 
+  /** Desiste da foto sem lançar nada; o Desfazer traz de volta (a leitura que não terminou recomeça). */
+  function cancelarLeitura(l: Leitura) {
+    pedido.current?.abort()
+    trocarUrl(null)
+    setLeitura(null)
+    setErro(null)
+    aviso('Lançamento cancelado', () => {
+      const foto = comUrlNova(l.foto)
+      if (l.fase === 'lendo') return ler(foto)
+      setLeitura({ ...l, foto })
+    })
+  }
+
+  /** Desiste do que foi digitado (e da foto que ia junto) e recolhe o formulário, com Desfazer. */
+  function cancelarManual() {
+    const anterior = f
+    const fm = fotoManual
+    trocarUrl(null)
+    setF(vazio())
+    setSugerida(null)
+    setRepetidaOk(false)
+    setFotoManual(null)
+    setAvisoFoto(null)
+    setErro(null)
+    setAberto(false)
+    aviso('Lançamento cancelado', () => {
+      setF(anterior)
+      setFotoManual(fm && { ...fm, foto: comUrlNova(fm.foto) })
+      setAberto(true)
+    })
+  }
+
   async function lancarLida(
     foto: FotoDaComanda,
     resposta: RespostaLeitura,
@@ -164,6 +202,7 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
 
   const repetida = f.codigo.length === 4 ? comandaRepetida(f.codigo, props.comandas) : undefined
   const ativas = props.areas.filter((a) => a.ativa)
+  const preenchido = f.codigo !== '' || f.total !== '' || f.areaId !== null || fotoManual !== null
 
   function mudar(parcial: Partial<Formulario>) {
     setF((atual) => ({ ...atual, ...parcial }))
@@ -263,6 +302,7 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
         onLancar={(comanda, registro, correcoes, pagamento) =>
           lancarLida(leitura.foto, leitura.resposta, comanda, registro, correcoes, pagamento)
         }
+        onCancelar={(correcoes, pagamento) => cancelarLeitura({ ...leitura, correcoes, pagamento })}
         onPromocao={(centavos) => {
           setErro(null)
           repo.atualizarNoite(props.noite.id, { promoDesconto: centavos }).catch((e) => setErro(mensagemDeErro(e)))
@@ -277,6 +317,7 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
         erro={erro}
         onDigitar={() => paraManual({ foto: leitura.foto, pendente: leitura.fase === 'lendo' }, null)}
         onTirarDeNovo={tirarFoto}
+        onCancelar={() => cancelarLeitura(leitura)}
       />
     )
 
@@ -296,9 +337,15 @@ export function LancarComanda(props: { noite: Noite; areas: Area[]; comandas: Co
       {!fotoManual && botaoFoto}
       <div className="titulo-form">
         <h2>Lançar comanda</h2>
-        <button type="button" className="link" onClick={() => setAberto(false)}>
-          Recolher
-        </button>
+        {preenchido ? (
+          <button type="button" className="link" onClick={cancelarManual}>
+            Cancelar
+          </button>
+        ) : (
+          <button type="button" className="link" onClick={() => setAberto(false)}>
+            Recolher
+          </button>
+        )}
       </div>
       {fotoManual && (
         <div className="foto-no-manual">

@@ -162,6 +162,7 @@ API Interactions:
   - redimensionar para no máximo 1600 px no lado maior, em JPEG com qualidade 0,8;
   - medir a nitidez (variância do Laplaciano num canvas, em tons de cinza). Abaixo do limite, mostrar "Foto tremida, tire de novo". O limite é calibrado com as fotos da noite de teste.
 - **"Lendo…":** mostra a foto, com o link "Digitar" para voltar ao manual a qualquer momento.
+- **Cancelar:** em "Lendo…", na foto tremida e na confirmação, "Cancelar" para a leitura e descarta a foto sem lançar nada, com "Lançamento cancelado · Desfazer" (o Desfazer volta à tela com as correções; a leitura que não tinha terminado recomeça). No manual com algo preenchido, o "Recolher" vira "Cancelar".
 - **Tela de confirmação:**
   - foto no topo, que amplia com um toque;
   - itens com preço, taxa, esperado × lido e o estado;

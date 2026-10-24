@@ -75,6 +75,7 @@ export function LendoComanda(props: {
   erro: string | null
   onDigitar: () => void
   onTirarDeNovo: (arquivo: File) => void
+  onCancelar: () => void
 }) {
   return (
     <section className="pilha form-lancar" aria-label="Lendo a comanda">
@@ -95,6 +96,9 @@ export function LendoComanda(props: {
           Lendo a comanda. Se demorar, toque em Digitar.
         </p>
       )}
+      <button type="button" className="secundario" onClick={props.onCancelar}>
+        Cancelar
+      </button>
       {props.erro && <p className="erro">{props.erro}</p>}
     </section>
   )
@@ -137,6 +141,8 @@ export function ConfirmarLeitura(props: {
   onDigitar: (codigo: string, total: string) => void
   onLancar: (comanda: Comanda, registro: RegistroLeitura, correcoes: Correcoes, pagamento: EstadoPagamento | null) => void
   onPromocao: (centavos: number) => void
+  /** Desiste sem lançar; as correções voltam no Desfazer. */
+  onCancelar: (correcoes: Correcoes, pagamento: EstadoPagamento | null) => void
 }) {
   const { resposta, noite } = props
   const [cor, setCor] = useState<Correcoes>(props.correcoesIniciais)
@@ -473,6 +479,9 @@ export function ConfirmarLeitura(props: {
           Lançar assim
         </BotaoConfirmar>
       )}
+      <button type="button" className="secundario" onClick={() => props.onCancelar(cor, editarPagamento)}>
+        Cancelar
+      </button>
       {(erro ?? props.erro) && <p className="erro">{erro ?? props.erro}</p>}
     </section>
   )
