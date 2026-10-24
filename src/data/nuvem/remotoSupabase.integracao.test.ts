@@ -1,4 +1,4 @@
-// Integração do supabase-js com um banco de verdade (001 a 010) servido pelo PostgREST,
+// Integração do supabase-js com um banco de verdade (001 a 011) servido pelo PostgREST,
 // sem o resto do Supabase (sem login e sem realtime). Só roda com PGRST_URL e PGRST_JWT_SECRET;
 // veja supabase/teste/README.md.
 import 'fake-indexeddb/auto'
@@ -8,6 +8,8 @@ import { createClient } from '@supabase/supabase-js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { criarComanda, marcarEntregue } from '../../domain/comanda'
 import { abrirNoite } from '../../domain/noite'
+import { montarAcerto } from '../../domain/painel'
+import { acoesPainel, carregarPainel } from '../painel'
 import { ErroRemoto, criarRemotoSupabase } from './remoto'
 import { criarRepoNuvem } from './repoNuvem'
 
@@ -82,8 +84,15 @@ describe.skipIf(!URL_PGRST)('supabase-js contra o banco de verdade', () => {
 
     // Luan marca o Pix e confirma o acerto: o caixa trava para o João.
     expect((await luan.from('comandas').update({ pix_confirmado: true }).eq('id', comanda.id)).error).toBeNull()
-    const acerto = { caixa_id: caixa.id, dinheiro_contado: 19300, pago_ao_motoboy: 4200, pago_do_caixa_dele: 4200, retirado_caixa_empresa: 0, vai_para_empresa: 15100 }
-    expect((await luan.from('acertos').insert(acerto)).error).toBeNull()
+    // Pelo caminho do painel (011): com o que ele viu antes de uma mudança, recusa; atualizado, grava.
+    const painel = acoesPainel(luan)
+    const dados = await carregarPainel(luan, '2026-10-16')
+    const noite = dados.caixas.find((c) => c.noite.id === caixa.id)!.noite
+    const comandasDoCaixa = dados.comandas.filter((c) => c.noiteId === caixa.id)
+    const r = montarAcerto({ ...noite, dinheiroContado: 19300 }, comandasDoCaixa)
+    if (!r.ok) throw new Error(r.erro)
+    await expect(painel.confirmarAcerto(r.valor, { noite, comandas: [] })).rejects.toMatchObject({ permanente: true })
+    await painel.confirmarAcerto(r.valor, { noite, comandas: comandasDoCaixa })
     expect(await joao.acertos(JOAO)).toMatchObject([{ caixa_id: caixa.id, confirmado_por: LUAN }])
     expect((await joao.acertos(JOAO))[0]).not.toHaveProperty('caixas')
 

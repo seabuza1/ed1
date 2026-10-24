@@ -180,6 +180,37 @@ export function camposAlterados(antes: Gravavel, depois: Gravavel): Gravavel {
   return campos
 }
 
+const ehInstante = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)
+
+/**
+ * O mesmo valor no aparelho e na nuvem: objetos sem depender da ordem das chaves (o jsonb reordena) e
+ * horários pelo instante ("…00.000Z" e "…00+00:00" são iguais).
+ */
+export function mesmoValor(a: unknown, b: unknown): boolean {
+  if (a === b || (a == null && b == null)) return true
+  if (ehInstante(a) && ehInstante(b)) return Date.parse(a) === Date.parse(b)
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false
+  if (Array.isArray(a) !== Array.isArray(b)) return false
+  const ka = Object.keys(a).filter((k) => (a as Gravavel)[k] !== undefined)
+  const kb = Object.keys(b).filter((k) => (b as Gravavel)[k] !== undefined)
+  return ka.length === kb.length && ka.every((k) => mesmoValor((a as Gravavel)[k], (b as Gravavel)[k]))
+}
+
+/**
+ * Conflito na mesma coluna (SPEC-v1: vale a última alteração). A coluna que a nuvem mudou depois da
+ * base deste aparelho fica com o valor da nuvem quando a nuvem mudou depois (atualizado_em) da
+ * alteração daqui; senão vale a daqui. Devolve as colunas que sobem.
+ */
+export function camposQueValem(campos: Gravavel, base: Gravavel, nuvem: Gravavel, alteradoEm: number): Gravavel {
+  const nuvemDepois = Date.parse(String(nuvem.atualizado_em)) > alteradoEm
+  const valem: Gravavel = {}
+  for (const [k, v] of Object.entries(campos)) {
+    const mexeramLa = k in base && !mesmoValor(nuvem[k], base[k])
+    if (!(mexeramLa && nuvemDepois)) valem[k] = v
+  }
+  return valem
+}
+
 export const linhaParaNoite = (l: CaixaLinha): Noite => ({
   id: l.id,
   data: l.data,

@@ -41,6 +41,8 @@ export interface Remoto {
 
   /** Insere ou, se já existe (reenvio), atualiza. */
   inserir(tabela: Tabela, linha: Gravavel): Promise<void>
+  /** A linha como está na nuvem agora (null se não existe ou não pode ser lida). */
+  linha(tabela: Tabela, id: string): Promise<Gravavel | null>
   /** Atualiza só as colunas informadas; recusa se a linha não puder ser alterada. */
   atualizar(tabela: Tabela, id: string, campos: Gravavel): Promise<void>
   excluir(tabela: Tabela, id: string): Promise<void>
@@ -136,6 +138,7 @@ export function criarRemotoSupabase(sb: SupabaseClient): Remoto {
     },
     areaDoCodigo: async (codigo) => verificar<string | null>(await sb.rpc('area_do_codigo', { c: codigo })),
 
+    linha: async (tabela, id) => verificar<Gravavel | null>(await sb.from(tabela).select('*').eq('id', id).maybeSingle()),
     inserir: async (tabela, linha) => {
       verificar(await sb.from(tabela).upsert(linha, { onConflict: 'id' }))
     },

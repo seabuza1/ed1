@@ -75,6 +75,9 @@ export function Painel({ sb, usuario, abrirApp }: { sb: SupabaseClient; usuario:
   const colunas = useMemo(() => (dados ? montarFolha(dados.caixas, dados.comandas, dados.acertos) : []), [dados])
   const aberta = colunas.find((c) => c.caixa.noite.id === caixaId)
   const aviso = useAviso()
+  // SPEC-leitura: no painel, tocar no código abre a foto.
+  const [fotoFolha, setFotoFolha] = useState<Comanda | null>(null)
+  const carregarFotoFolha = useCallback(() => acoes.urlDaFoto(fotoFolha!.fotoPath!), [acoes, fotoFolha])
 
   // O caixa aberto entra no histórico do navegador: o Voltar do celular volta para a folha.
   useEffect(() => {
@@ -118,6 +121,9 @@ export function Painel({ sb, usuario, abrirApp }: { sb: SupabaseClient; usuario:
 
   return (
     <div className="painel-casca">
+      {fotoFolha?.fotoPath && (
+        <VerFoto titulo={fotoFolha.codigo} carregar={carregarFotoFolha} fechar={() => setFotoFolha(null)} />
+      )}
       <nav className="abas painel-nav" aria-label="Painel">
         <div className="painel-marca">
           <Icone nome="painel" tamanho={22} />
@@ -202,7 +208,7 @@ export function Painel({ sb, usuario, abrirApp }: { sb: SupabaseClient; usuario:
         ) : vista === 'folha' ? (
           <>
             <NumerosNoite n={numerosDaNoite(colunas)} />
-            <Folha colunas={colunas} abrir={abrirCaixa} marcarPix={marcarPix} />
+            <Folha colunas={colunas} abrir={abrirCaixa} marcarPix={marcarPix} verFoto={setFotoFolha} />
           </>
         ) : (
           <Resumo
@@ -281,33 +287,41 @@ function NumerosNoite({ n }: { n: NumerosDaNoite }) {
 const ICONE_STATUS: Record<Comanda['status'], NomeIcone> = { em_rota: 'moto', entregue: 'check', voltou: 'voltou' }
 
 /** Como a folha de papel: uma coluna por motoboy, na ordem de chegada. */
-function Folha(props: { colunas: ColunaFolha[]; abrir: (id: string) => void; marcarPix: (c: Comanda) => void }) {
+function Folha(props: {
+  colunas: ColunaFolha[]
+  abrir: (id: string) => void
+  marcarPix: (c: Comanda) => void
+  verFoto: (c: Comanda) => void
+}) {
   const { colunas, abrir } = props
   const pix = colunaPix(colunas)
   const caiu = pix.filter((p) => p.comanda.pixConfirmado).length
   return (
     <div className="folha">
       {colunas.map((col) => (
-        <button
-          key={col.caixa.noite.id}
-          type="button"
-          className="coluna-folha"
-          onClick={() => abrir(col.caixa.noite.id)}
-        >
-          <span className="coluna-titulo">
+        // A coluna inteira abre o caixa (o botão do título cobre a coluna); o código com foto abre a foto.
+        <div key={col.caixa.noite.id} className="coluna-folha">
+          <button type="button" className="coluna-titulo abrir-caixa" onClick={() => abrir(col.caixa.noite.id)}>
             <span className="num">{col.posicao}</span> {col.caixa.nome}
-          </span>
+          </button>
           <span className="itens-folha">
             {col.itens.map((i) => (
               <span key={i.comanda.id} className={`item-folha status-${i.comanda.status}`}>
                 <span className="icone-status">
                   <Icone nome={ICONE_STATUS[i.comanda.status]} tamanho={14} />
                 </span>
-                <span className="codigo">{i.comanda.codigo}</span>
-                {i.comanda.fotoPath && (
-                  <span className="tem-foto" aria-label="com foto">
+                {i.comanda.fotoPath ? (
+                  <button
+                    type="button"
+                    className="codigo ver-foto"
+                    aria-label={`Ver a foto da ${i.comanda.codigo}`}
+                    onClick={() => props.verFoto(i.comanda)}
+                  >
+                    {i.comanda.codigo}
                     <Icone nome="camera" tamanho={12} />
-                  </span>
+                  </button>
+                ) : (
+                  <span className="codigo">{i.comanda.codigo}</span>
                 )}
                 <span className="forma">{i.comanda.status === 'voltou' ? 'voltou' : i.forma}</span>
                 {i.trocoPix > 0 && <span className="num troco">→{formatarNumero(i.trocoPix)}</span>}
@@ -337,7 +351,7 @@ function Folha(props: { colunas: ColunaFolha[]; abrir: (id: string) => void; mar
               {col.confirmado ? 'Confirmado' : col.caixa.noite.fechadaEm ? 'Pendente · fechou' : 'Pendente'}
             </span>
           </span>
-        </button>
+        </div>
       ))}
       <section className="coluna-folha coluna-pix" aria-label="PIX">
         <span className="coluna-titulo">PIX</span>
@@ -410,10 +424,11 @@ function CaixaNoPainel(props: {
     try {
       await acao()
       setErro(null)
-      props.recarregar()
     } catch (e) {
       setErro(mensagemDeErro(e))
     }
+    // Também na recusa: a tela mostra o que vale agora.
+    props.recarregar()
   }
 
   const gravarContado = () => {
@@ -429,7 +444,7 @@ function CaixaNoPainel(props: {
     if (!r.ok) return setErro(r.erro)
     await agir(async () => {
       if (valorContado !== noite.dinheiroContado) await acoes.registrarContado(noite.id, valorContado)
-      await acoes.confirmarAcerto(r.valor)
+      await acoes.confirmarAcerto(r.valor, { noite, comandas: props.comandas })
     })
   }
 

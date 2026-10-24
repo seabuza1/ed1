@@ -52,11 +52,12 @@ export function criarAnthropic(o: OpcoesAdaptador): Adaptador {
       const u = msg?.usage ?? {}
       return {
         json: comoJson(blocos.flatMap((b) => (b.type === 'text' && b.text ? [b.text] : [])).join('')),
-        // A escrita no cache entra como entrada (custa um pouco mais, na primeira chamada).
+        // A escrita no cache entra como entrada e vem também à parte (custa 1,25 × a entrada).
         tokens: {
           entrada: (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0),
           cache: u.cache_read_input_tokens ?? 0,
           saida: u.output_tokens ?? 0,
+          escritaCache: u.cache_creation_input_tokens ?? 0,
         },
         ms: Date.now() - inicio,
       }

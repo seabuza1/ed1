@@ -1562,7 +1562,10 @@ button.so-icone {
   padding-right: 16px;
 }
 
-button.coluna-folha {
+/* A coluna é um bloco; o botão do título se estende por ela toda (abre o caixa) e o código com
+   foto fica por cima (abre a foto). */
+.coluna-folha {
+  position: relative;
   flex: 1 0 172px;
   max-width: 280px;
   display: flex;
@@ -1583,6 +1586,46 @@ button.coluna-folha {
   font-weight: 700;
   padding-bottom: 6px;
   border-bottom: 2px solid var(--texto);
+}
+
+button.abrir-caixa {
+  display: flex;
+  justify-content: flex-start;
+  gap: 6px;
+  width: 100%;
+  min-height: 0;
+  padding: 0 0 6px;
+  border-radius: 0;
+  background: none;
+  text-align: left;
+}
+
+button.abrir-caixa::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--raio);
+}
+
+.item-folha button.ver-foto {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 0 6px;
+  margin: 0 -6px;
+  border-radius: 8px;
+  background: none;
+  white-space: nowrap;
+  text-decoration: underline dotted var(--discreto);
+  text-underline-offset: 3px;
+}
+
+.item-folha button.ver-foto svg {
+  color: var(--discreto);
 }
 
 .itens-folha {
@@ -1834,13 +1877,13 @@ button.item-pix[aria-pressed='true'] {
     scroll-snap-type: none;
   }
 
-  button.coluna-folha,
+  .coluna-folha,
   .coluna-pix {
     flex: 1 0 200px;
     max-width: 320px;
   }
 
-  button.coluna-folha:hover {
+  .coluna-folha:not(.coluna-pix):hover {
     box-shadow: inset 0 0 0 2px var(--marca);
   }
 

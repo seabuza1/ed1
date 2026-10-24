@@ -180,6 +180,35 @@ describe('nuvem com fila offline', () => {
     expect(repo.sync!.obter().pendentes).toBe(0)
   })
 
+  it('mesma coluna mudada aqui e no painel: vale a última alteração', async () => {
+    const { nuvem, repo, modoAviao } = montar()
+    await repo.sincronizar()
+    const noite = await abrir(repo)
+    await repo.sincronizar()
+    const luanConta = (valor: number, em: string) =>
+      nuvem.caixas.set(noite.id, { ...nuvem.caixas.get(noite.id)!, dinheiro_contado: valor, atualizado_em: em })
+
+    // O motoboy digitou 240 sem internet às 21:10; o Luan registrou 243 às 21:20: vale a do Luan.
+    modoAviao(true)
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-16T21:10:00Z'))
+    await repo.atualizarNoite(noite.id, { dinheiroContado: 24000 })
+    vi.useRealTimers()
+    luanConta(24300, '2026-10-16T21:20:00Z')
+    modoAviao(false)
+    await repo.sincronizar()
+    expect(nuvem.caixas.get(noite.id)?.dinheiro_contado).toBe(24300)
+    expect((await repo.listarNoites()).find((n) => n.id === noite.id)?.dinheiroContado).toBe(24300)
+
+    // Agora o motoboy muda depois do Luan: vale a dele.
+    modoAviao(true)
+    await repo.atualizarNoite(noite.id, { dinheiroContado: 25000 })
+    luanConta(24500, '2026-10-16T21:30:00Z')
+    modoAviao(false)
+    await repo.sincronizar()
+    expect(nuvem.caixas.get(noite.id)?.dinheiro_contado).toBe(25000)
+  })
+
   it('depois do acerto confirmado a nuvem recusa; o app avisa e volta ao que vale', async () => {
     const { nuvem, repo, modoAviao } = montar()
     await repo.sincronizar()
@@ -511,12 +540,13 @@ describe('fotos das comandas (leitura)', () => {
       vi.setSystemTime(Date.now() + 3 * 60_000)
       await repo.lerFotos()
       expect(nuvem.estado.leiturasIA).toBe(1)
+
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('caixa com acerto confirmado: a foto adiada não vai mais para a IA (a nuvem recusaria a leitura)', async () => {
+  it('caixa com acerto confirmado: a foto espera sem ir para a IA; reaberto, é lida', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     try {
       const { nuvem, repo, modoAviao } = montar()
@@ -536,6 +566,16 @@ describe('fotos das comandas (leitura)', () => {
       vi.setSystemTime(Date.now() + 3 * 60_000)
       await repo.lerFotos()
       expect(nuvem.estado.leiturasIA).toBe(1)
+
+      // O admin reabre: a foto sobe e é lida.
+      nuvem.equipe.reabrir(noite.id)
+      await repo.sincronizar()
+      vi.setSystemTime(Date.now() + 10 * 60_000)
+      await repo.lerFotos()
+      expect(nuvem.estado.leiturasIA).toBe(2)
+      await repo.sincronizar()
+      expect(nuvem.fotos.size).toBe(1)
+      expect(nuvem.leituras.size).toBe(1)
     } finally {
       vi.useRealTimers()
     }

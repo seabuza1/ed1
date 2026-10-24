@@ -90,6 +90,12 @@ export function criarRemotoFalso() {
       comandas.set(id, nova)
       avisar({ tabela, tipo: existente ? 'UPDATE' : 'INSERT', nova: copia(nova) as never, antiga: null })
     },
+    async linha(tabela: Tabela, id: string) {
+      rede()
+      const mapa = { caixas, comandas, areas, leituras }[tabela] as unknown as Map<string, Gravavel>
+      const l = mapa.get(id)
+      return l ? copia(l) : null
+    },
     async atualizar(tabela: Tabela, id: string, campos: Gravavel) {
       rede()
       const mapa = (tabela === 'caixas' ? caixas : tabela === 'comandas' ? comandas : areas) as unknown as Map<string, Gravavel>

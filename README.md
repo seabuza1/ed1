@@ -1,6 +1,6 @@
 # Acerto dos motoboys
 
-Nuvem: projeto Supabase `acerto-motoboys` (São Paulo), com 001 a 010 aplicados; as variáveis estão na Vercel. Função `ler-comanda` publicada (falta só o secret `GEMINI_API_KEY`).
+Nuvem: projeto Supabase `acerto-motoboys` (São Paulo), com 001 a 011 aplicados; as variáveis estão na Vercel. Função `ler-comanda` publicada (falta só o secret `GEMINI_API_KEY`).
 
 App de celular (PWA offline) para o motoboy lançar as comandas da noite e ter a conta do acerto pronta, e painel para o Luan acompanhar a folha da noite e confirmar os acertos. Veja `CLAUDE.md`, `docs/SPEC-v1.md` (o que está sendo feito) e `docs/SPEC-mvp-acerto.md` (a base).
 
@@ -39,7 +39,7 @@ Toda alteração grava primeiro no IndexedDB do celular e entra numa fila, que s
 
 `docs/SPEC-leitura.md`. O motoboy toca em **Foto da comanda**; a Edge Function `ler-comanda` lê a foto com a IA e a tela de confirmação mostra a conta pelo cardápio (verde, amarelo ou vermelho). Sem internet, a foto fica no celular e é lida quando a internet volta, só como conferência.
 
-1. SQL: `supabase/004_leitura.sql` a `010_revisao_acesso.sql`, em ordem, depois do 003 (o 006 trava o Pix "caiu" para só a equipe marcar; o 008 limita a 60 leituras por hora por conta; o 010 fecha a escrita da conta desativada e deixa áreas e taxas só com o admin).
+1. SQL: `supabase/004_leitura.sql` a `011_acerto_e_leitura.sql`, em ordem, depois do 003 (o 006 trava o Pix "caiu" para só a equipe marcar; o 008 limita a 60 leituras por hora por conta; o 010 fecha a escrita da conta desativada e deixa áreas e taxas só com o admin; o 011 confirma o acerto de uma vez e devolve a vaga da IA quando o provedor cai).
 2. Chave da IA: no Supabase, **Edge Functions → Secrets**, crie `GEMINI_API_KEY` (Google AI Studio, conta paga). Para trocar de modelo ou de provedor, sem mexer no código: `IA_MODELO` (padrão `gemini-3.1-pro-preview`), `IA_MODELO_CONFERENCIA` e `IA_PROVEDOR=anthropic` com `ANTHROPIC_API_KEY`. Os dois modelos têm que ser do provedor escolhido. As chaves ficam só lá: nunca no app ou no repositório.
 3. Função: o workflow `.github/workflows/funcao-ler-comanda.yml` publica `ler-comanda` com a foto de exemplo. Crie um token em supabase.com → Account → Access Tokens e cadastre no GitHub como secret `SUPABASE_ACCESS_TOKEN`; depois, Actions → Função ler-comanda → Run workflow. (Pela CLI: `npx supabase functions deploy ler-comanda --project-ref ueahsvfmbpthujnvmahl`.)
 4. Medir: no painel, **Resumo da noite → Leituras por foto** exporta o CSV (com provedor, modelo e tokens).

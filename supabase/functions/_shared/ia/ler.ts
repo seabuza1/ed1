@@ -44,7 +44,14 @@ export interface RespostaIA {
   tokens: Tokens
 }
 
-const somar = (a: Tokens, b: Tokens): Tokens => ({ entrada: a.entrada + b.entrada, cache: a.cache + b.cache, saida: a.saida + b.saida })
+const somar = (a: Tokens, b: Tokens): Tokens => ({
+  entrada: a.entrada + b.entrada,
+  cache: a.cache + b.cache,
+  saida: a.saida + b.saida,
+  ...(a.escritaCache !== undefined || b.escritaCache !== undefined
+    ? { escritaCache: (a.escritaCache ?? 0) + (b.escritaCache ?? 0) }
+    : {}),
+})
 
 /**
  * As duas leituras em paralelo, validadas pelo esquema antes de voltar. Se uma falha, a outra é

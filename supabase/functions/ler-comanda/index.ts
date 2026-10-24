@@ -36,26 +36,40 @@ function usuarioLogado(req: Request): boolean {
   }
 }
 
-/**
- * Antes de cada foto (008): perfil ativo (conta desativada pelo admin não gasta a IA) e até 60
- * leituras por hora por conta, que segura o gasto de uma conta que não é da pizzaria. A chave anon
- * nem executa a função (o usuário logado é conferido antes). Sem as variáveis do Supabase, passa.
- * Devolve 'ok', 'inativo', 'limite' ou o motivo da falha na checagem (para o log).
- */
-async function acesso(req: Request, sinal: AbortSignal): Promise<string> {
+/** Função do banco com o login de quem pediu (as regras de acesso valem); null sem as variáveis. */
+function rpc(req: Request, nome: string, corpo: unknown, sinal: AbortSignal): Promise<Response> | null {
   const url = Deno.env.get('SUPABASE_URL')
   const chave = Deno.env.get('SUPABASE_ANON_KEY')
-  if (!url || !chave) return 'ok'
-  const r = await fetch(`${url}/rest/v1/rpc/pode_ler_comanda`, {
+  if (!url || !chave) return null
+  return fetch(`${url}/rest/v1/rpc/${nome}`, {
     method: 'POST',
     headers: { apikey: chave, Authorization: req.headers.get('Authorization')!, 'Content-Type': 'application/json' },
-    body: '{}',
+    body: JSON.stringify(corpo),
     signal: sinal,
   })
-  if (r.status === 401) return 'inativo'
+}
+
+/**
+ * Antes de cada foto (011): perfil ativo (conta desativada pelo admin não gasta a IA) e uma das 60
+ * leituras por hora da conta, que segura o gasto de uma conta que não é da pizzaria. A chave anon
+ * nem executa a função (o usuário logado é conferido antes). Sem as variáveis do Supabase, passa.
+ * Devolve 'ok' (com a vaga reservada), 'inativo', 'limite' ou o motivo da falha (para o log).
+ */
+async function acesso(req: Request, sinal: AbortSignal): Promise<{ estado: string; vaga?: string }> {
+  const r = await rpc(req, 'reservar_leitura', {}, sinal)
+  if (!r) return { estado: 'ok' }
+  if (r.status === 401) return { estado: 'inativo' }
   const v = r.ok ? await r.json() : null
-  // Outra resposta (banco fora, 008 sem rodar): o motivo vai para o log, e não é culpa do motoboy.
-  return v === 'ok' || v === 'limite' || v === 'inativo' ? v : `pode_ler_comanda ${r.status}`
+  // Outra resposta (banco fora, 011 sem rodar): o motivo vai para o log, e não é culpa do motoboy.
+  if (v?.estado === 'ok' || v?.estado === 'limite' || v?.estado === 'inativo') return { estado: v.estado, vaga: v.vaga }
+  return { estado: `reservar_leitura ${r.status}` }
+}
+
+/** O provedor não cobrou (fora do ar, ocupado ou mal configurado): a vaga volta para a conta. */
+async function devolver(req: Request, vaga: string | undefined) {
+  if (!vaga) return
+  const r = await rpc(req, 'devolver_leitura', { p_vaga: vaga }, AbortSignal.timeout(5000))?.catch(() => null)
+  if (r && !r.ok) console.error(`ler-comanda: devolver_leitura ${r.status}`)
 }
 
 async function atender(req: Request, sinal: AbortSignal, inicio: number): Promise<Response> {
@@ -79,11 +93,14 @@ async function atender(req: Request, sinal: AbortSignal, inicio: number): Promis
   if (!imagem) return resposta({ erro: 'Foto não recebida.' }, 400)
   if (tamanhoBase64(imagem) > LIMITE_FOTO) return resposta({ erro: 'Foto acima de 2 MB.' }, 413)
 
-  const pode = await acesso(req, sinal).catch(() => (sinal.aborted ? 'pode_ler_comanda tempo esgotado' : 'pode_ler_comanda rede'))
-  if (pode === 'inativo') return resposta({ erro: 'Entre no app para ler a comanda.' }, 401)
-  if (pode === 'limite') return resposta({ erro: 'Muitas leituras nesta hora.' }, 429)
-  if (pode !== 'ok') {
-    console.error(`ler-comanda: ${pode} (${Date.now() - inicio} ms)`)
+  const pode = await acesso(req, sinal).catch(() => ({
+    estado: sinal.aborted ? 'reservar_leitura tempo esgotado' : 'reservar_leitura rede',
+    vaga: undefined,
+  }))
+  if (pode.estado === 'inativo') return resposta({ erro: 'Entre no app para ler a comanda.' }, 401)
+  if (pode.estado === 'limite') return resposta({ erro: 'Muitas leituras nesta hora.' }, 429)
+  if (pode.estado !== 'ok') {
+    console.error(`ler-comanda: ${pode.estado} (${Date.now() - inicio} ms)`)
     return resposta({ erro: 'A IA não respondeu agora.' }, 503)
   }
 
@@ -94,12 +111,15 @@ async function atender(req: Request, sinal: AbortSignal, inicio: number): Promis
     const motivo = sinal.aborted ? 'tempo esgotado' : e instanceof ErroIA ? e.message : 'erro inesperado'
     console.error(`ler-comanda: ${config.provedor} ${motivo} (${Date.now() - inicio} ms)`)
     const status = e instanceof ErroIA && !sinal.aborted ? (e.status ?? 0) : 0
+    const configuracao = status === 400 || status === 401 || status === 402 || status === 403 || status === 404
+    const foraDoAr = status === 408 || status === 429 || status >= 500
+    // Nos dois casos o provedor não leu nem cobrou: a vaga das 60 por hora volta.
+    if (configuracao || foraDoAr) await devolver(req, pode.vaga)
     // Pedido recusado sem ser pela foto (parâmetro que o modelo não aceita), chave recusada, sem
     // crédito ou modelo que não existe (desligado): 503, a foto espera a correção.
-    if (status === 400 || status === 401 || status === 402 || status === 403 || status === 404)
-      return resposta({ erro: 'Leitura ainda não configurada. Lance à mão.' }, 503)
+    if (configuracao) return resposta({ erro: 'Leitura ainda não configurada. Lance à mão.' }, 503)
     // Provedor ocupado ou fora do ar: 503, o app lê a foto mais tarde.
-    if (status === 408 || status === 429 || status >= 500) return resposta({ erro: 'A IA não respondeu agora.' }, 503)
+    if (foraDoAr) return resposta({ erro: 'A IA não respondeu agora.' }, 503)
     const texto = motivo === 'tempo esgotado' ? 'A leitura demorou demais. Lance à mão.' : 'Não deu para ler a foto. Lance à mão.'
     // 200 com { erro }: a chamada chegou e a IA não leu (o app conta como tentativa, não como falta de internet).
     return resposta({ erro: texto })

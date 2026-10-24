@@ -10,6 +10,8 @@ export interface Tokens {
   cache: number
   /** Saída, com o raciocínio do modelo. */
   saida: number
+  /** Parte da entrada gravada no cache (a Anthropic cobra 1,25 ×); só para o custo do comparador. */
+  escritaCache?: number
 }
 
 /** Uma chamada: o JSON como veio (a validação é depois), os tokens e o tempo. */

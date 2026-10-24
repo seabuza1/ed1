@@ -4,7 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { useCallback, useEffect, useState } from 'react'
 import type { LeituraMedida } from '../domain/medicao'
 import type { AcertoParaGravar, CaixaDoMotoboy } from '../domain/painel'
-import type { AcertoConfirmado, Area, Comanda, Perfil } from '../domain/tipos'
+import type { AcertoConfirmado, Area, Comanda, Noite, Perfil } from '../domain/tipos'
 import {
   areaParaGravar,
   linhaParaAcerto,
@@ -108,22 +108,34 @@ export const acoesPainel = (sb: SupabaseClient) => ({
   /** Só o admin (regra de acesso perfis_admin). */
   mudarPerfil: (p: Perfil) => atualizar(sb, 'perfis', 'id', p.id, { papel: p.papel, ativo: p.ativo }),
 
-  /** R15: grava os valores do momento e trava o caixa; fecha a noite se o motoboy não fechou. */
-  async confirmarAcerto(a: AcertoParaGravar) {
-    verificar(
-      await sb.from('acertos').insert({
-        caixa_id: a.caixaId,
-        dinheiro_contado: a.dinheiroContado,
-        falta: a.falta,
-        sobra: a.sobra,
-        pago_ao_motoboy: a.pagoAoMotoboy,
-        pago_do_caixa_dele: a.pagoDoCaixaDele,
-        retirado_caixa_empresa: a.retiradoCaixaEmpresa,
-        vai_para_empresa: a.vaiParaEmpresa,
-        completado_do_bolso: a.completadoDoBolso,
+  /**
+   * R15: grava os valores do momento, trava o caixa e fecha a noite se o motoboy não fechou, tudo de
+   * uma vez no banco (011). Se o motoboy mudou o caixa ou as comandas depois do que o Luan viu, não
+   * grava e pede para conferir de novo.
+   */
+  async confirmarAcerto(a: AcertoParaGravar, visto: { noite: Noite; comandas: Comanda[] }) {
+    const ultima = visto.comandas.reduce<string | null>((m, c) => (!m || c.atualizadaEm > m ? c.atualizadaEm : m), null)
+    const r = verificar<string>(
+      await sb.rpc('confirmar_acerto', {
+        p_caixa: a.caixaId,
+        p_comandas: visto.comandas.length,
+        p_ultima_alteracao: ultima,
+        p_caixa_inicial: visto.noite.caixaInicial,
+        p_diaria: visto.noite.diaria,
+        p_dinheiro_contado: a.dinheiroContado,
+        p_falta: a.falta,
+        p_sobra: a.sobra,
+        p_pago_ao_motoboy: a.pagoAoMotoboy,
+        p_pago_do_caixa_dele: a.pagoDoCaixaDele,
+        p_retirado_caixa_empresa: a.retiradoCaixaEmpresa,
+        p_vai_para_empresa: a.vaiParaEmpresa,
+        p_completado_do_bolso: a.completadoDoBolso,
       }),
     )
-    verificar(await sb.from('caixas').update({ fechado_em: new Date().toISOString() }).eq('id', a.caixaId).is('fechado_em', null))
+    if (r === 'mudou')
+      throw new ErroRemoto('o motoboy mudou o caixa enquanto você conferia. Confira de novo e confirme.', true)
+    if (r === 'já confirmado') throw new ErroRemoto('este acerto já foi confirmado.', true)
+    if (r !== 'ok') throw new ErroRemoto('caixa não encontrado.', true)
   },
 
   /** Só o admin: apaga o acerto e o motoboy volta a editar. */

@@ -3,9 +3,10 @@
 // marcando Pix, papel, confirmando o acerto) desce pelo realtime e a cada sincronização.
 //
 // Conflitos: cada alteração sobe só com as colunas que mudaram, então o motoboy marcando
-// "entregue" não desfaz o "Pix caiu" do Luan na mesma comanda. Na mesma coluna vale a
-// última alteração enviada; a coluna que volta ao valor de antes (marcou e desmarcou) não sobe.
-// O que ainda está na fila tem prioridade sobre o que desce. A exclusão espera o Desfazer.
+// "entregue" não desfaz o "Pix caiu" do Luan na mesma comanda. Na mesma coluna vale a última
+// alteração feita: antes de subir, a fila confere a nuvem, e a coluna que o Luan mudou depois fica
+// com o valor dele. A coluna que volta ao valor de antes (marcou e desmarcou) não sobe. O que ainda
+// está na fila tem prioridade sobre o que desce. A exclusão espera o Desfazer.
 //
 // Fotos das comandas (leitura): ficam no aparelho e sobem ao Storage numa fila própria, depois
 // que a comanda subiu, para não travar a fila das alterações. Sem internet na hora da foto, a
@@ -23,6 +24,7 @@ import type { EstadoSync, Repo } from '../repo'
 import { paraBase64 } from './base64'
 import {
   camposAlterados,
+  camposQueValem,
   comPendentes,
   linhaParaAcerto,
   linhaParaArea,
@@ -50,7 +52,10 @@ interface ItemFila {
   base?: Gravavel
   /** Muda quando o item é mesclado; quem enviou a versão antiga não apaga o item. */
   versao: number
-  /** Excluir: quando entrou na fila. Sobe só depois do tempo do Desfazer. */
+  /**
+   * Quando a última alteração entrou na fila (ms). Excluir sobe só depois do tempo do Desfazer;
+   * atualizar compara com a hora da nuvem no conflito da mesma coluna.
+   */
   em?: number
 }
 
@@ -196,14 +201,14 @@ export function criarRepoNuvem(opcoes: {
     // atualizar: com inserir pendente, ele já manda a linha atual (só avisa que mudou).
     if (inserir) return void (await db.fila.update(inserir.seq!, { versao: inserir.versao + 1 }))
     const atualizar = pendentes.find((p) => p.op === 'atualizar')
-    if (!atualizar) return void (await db.fila.add({ tabela, id, op, campos, base, versao: 1 }))
+    if (!atualizar) return void (await db.fila.add({ tabela, id, op, campos, base, versao: 1, em: Date.now() }))
     // Marcou e desmarcou sem internet: a coluna voltou ao que era e não sobe por cima da nuvem.
     // O item que está subindo agora vai inteiro de novo (a nuvem já pode ter o valor do meio).
     const juntos = { ...atualizar.campos, ...campos }
     const bases = { ...base, ...atualizar.base }
     const restantes = atualizar.base && atualizar.seq !== emEnvio ? camposAlterados(bases, juntos) : juntos
     if (Object.keys(restantes).length === 0) return void (await db.fila.delete(atualizar.seq!))
-    await db.fila.update(atualizar.seq!, { campos: restantes, base: bases, versao: atualizar.versao + 1 })
+    await db.fila.update(atualizar.seq!, { campos: restantes, base: bases, versao: atualizar.versao + 1, em: Date.now() })
   }
 
   async function gravar(tabela: Tabela, novo: Registro) {
@@ -237,6 +242,7 @@ export function criarRepoNuvem(opcoes: {
         return recusou
       }
       let enviado = false
+      let perdeu = false // a nuvem ficou com alguma coluna (alterada lá depois)
       emEnvio = item.seq
       try {
         if (item.op === 'inserir') {
@@ -245,8 +251,14 @@ export function criarRepoNuvem(opcoes: {
           const orfa =
             item.tabela === 'leituras' && !!registro && !(await db.comandas.get((registro as RegistroLeitura).comandaId ?? ''))
           if (registro && !orfa) await remoto.inserir(item.tabela, paraGravar(item.tabela, registro, uid))
-        } else if (item.op === 'atualizar') await remoto.atualizar(item.tabela, item.id, item.campos ?? {})
-        else await remoto.excluir(item.tabela, item.id)
+        } else if (item.op === 'atualizar') {
+          // Mesma coluna mudada lá e aqui: confere a nuvem antes de subir por cima (vale a última).
+          let campos = item.campos ?? {}
+          const nuvem = item.base && item.em ? await remoto.linha(item.tabela, item.id) : null
+          if (nuvem) campos = camposQueValem(campos, item.base!, nuvem, item.em!)
+          perdeu = Object.keys(campos).length < Object.keys(item.campos ?? {}).length
+          if (Object.keys(campos).length) await remoto.atualizar(item.tabela, item.id, campos)
+        } else await remoto.excluir(item.tabela, item.id)
         enviado = true
       } catch (e) {
         if (!(e instanceof ErroRemoto && e.permanente)) throw e
@@ -270,6 +282,12 @@ export function criarRepoNuvem(opcoes: {
         else if (atual?.base && enviado && item.op === 'atualizar')
           await db.fila.update(item.seq!, { base: { ...atual.base, ...item.campos } })
       })
+      // Valeu a da nuvem: o aparelho passa a mostrar a linha de lá (a descida pelo cursor não a traz).
+      if (perdeu && item.tabela !== 'leituras') {
+        const linha = await remoto.linha(item.tabela, item.id)
+        if (linha) await db.transaction('rw', todasAsTabelas(), () => aplicar(item.tabela, linha as unknown as ComandaLinha))
+        ouvintes.forEach((o) => o())
+      }
       await contarPendentes()
     }
   }
@@ -331,6 +349,8 @@ export function criarRepoNuvem(opcoes: {
       // A comanda e o caixa precisam estar na nuvem (a regra do Storage confere o dono pelo caixa).
       const naFila = [...(await pendentesDe('comandas', f.id)), ...(await pendentesDe('caixas', c.noiteId))]
       if (naFila.some((p) => p.op === 'inserir')) continue
+      // Acerto confirmado: a nuvem recusaria. A foto espera; se o admin reabrir, sobe.
+      if (await db.acertos.get(c.noiteId)) continue
       try {
         await remoto.enviarFoto(f.caminho, f.jpeg)
         await db.fotos.update(f.id, { envio: 'enviada' })
@@ -347,11 +367,9 @@ export function criarRepoNuvem(opcoes: {
       if (f.proximaEm && Date.parse(f.proximaEm) > Date.now()) continue
       const c = await db.comandas.get(f.id)
       if (!c) continue
-      // Acerto confirmado: a nuvem recusa a leitura, então nem chama a IA.
-      if (await db.acertos.get(c.noiteId)) {
-        await db.fotos.update(f.id, { leitura: 'falhou' })
-        continue
-      }
+      // Acerto confirmado: a nuvem recusaria a leitura, então nem chama a IA. A foto espera; se o
+      // admin reabrir o acerto, é lida.
+      if (await db.acertos.get(c.noiteId)) continue
       let resposta
       try {
         resposta = await remoto.lerComanda(await paraBase64(f.jpeg))
@@ -416,13 +434,18 @@ export function criarRepoNuvem(opcoes: {
     return lendo
   }
 
-  /** Apaga do aparelho as fotos já resolvidas há 2 dias e as de comanda excluída há 1 dia. */
+  /**
+   * Apaga do aparelho as fotos já resolvidas há 2 dias, as de comanda excluída há 1 dia e as que
+   * esperam um acerto confirmado há 7 dias (o admin não reabriu).
+   */
   async function limparFotos() {
     const agora = Date.now()
     for (const f of await db.fotos.toArray()) {
       const idade = agora - Date.parse(f.tiradaEm)
       const resolvida = f.envio !== 'pendente' && f.leitura !== 'pendente'
-      if ((resolvida && idade > 2 * DIA) || (idade > DIA && !(await db.comandas.get(f.id)))) await db.fotos.delete(f.id)
+      const c = await db.comandas.get(f.id)
+      const travada = !!c && !!(await db.acertos.get(c.noiteId))
+      if ((resolvida && idade > 2 * DIA) || (idade > DIA && !c) || (travada && idade > 7 * DIA)) await db.fotos.delete(f.id)
     }
   }
 
