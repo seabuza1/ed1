@@ -41,8 +41,8 @@ Base 4px: 8 (dentro de grupos), 10–12 (entre itens), 16 (entre blocos e margem
 - Link: texto sublinhado, sem cor.
 
 ### Placa de área (assinatura)
-- Placa apagada com friso interno a 3px; nome em Barlow 600 e taxa em Barlow Condensed.
-- Escolhida: azul de placa com friso branco de 5px. Sugerida pela leitura: tracejado amarelo por fora.
+- Placa apagada com moldura de 2px encostada na borda (sem faixa vazia por dentro); nome em Barlow 600 e taxa em Barlow Condensed.
+- Escolhida: azul de placa com moldura branca de 2.5px. Sugerida pela leitura: tracejado amarelo por fora.
 
 ### Em rota
 - Faixa tracejada amarela (4px, traços de 16px) na borda esquerda da linha; a moto fica neutra.
@@ -61,6 +61,9 @@ Base 4px: 8 (dentro de grupos), 10–12 (entre itens), 16 (entre blocos e margem
 ### Abas
 - Celular: a atual em amarelo com um traço de 36×3px em cima. Computador (painel): menu lateral, a atual com fundo amarelo-suave.
 
+### Linha cheia
+- Tudo centralizado ou justificado: o que fica sozinho numa linha (link, "Voltar", seletor de data, campo) ocupa a largura toda, com o conteúdo no centro; selos dividem a linha; no computador, colunas, blocos e abas dividem a largura (app até 1400px, centralizado).
+
 ### Confirmação e desfazer
 - Nada de `alert`/`confirm`: Desfazer por 5s ou dois toques.
 
@@ -74,3 +77,4 @@ Base 4px: 8 (dentro de grupos), 10–12 (entre itens), 16 (entre blocos e margem
 | Áreas como placas de destino | A taxa por cidade é o que o motoboy recebe; a placa é o objeto que ele conhece da rua. | 2026-10-24 |
 | Barlow / Barlow Condensed | Desenhada a partir das placas de estrada; números grandes e estreitos que cabem em coluna. | 2026-10-24 |
 | Amarelo do claro em ocre #6f5200 | Amarelo puro não tem contraste como texto no branco. | 2026-10-24 |
+| Linha cheia; moldura da placa na borda | Pedido do usuário: ícones e molduras deixavam vazio; quer tudo centralizado ou justificado. | 2026-10-25 |

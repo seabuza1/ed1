@@ -506,7 +506,7 @@ function CaixaNoPainel(props: {
   return (
     <>
       {foto?.fotoPath && <VerFoto titulo={foto.codigo} carregar={carregarFoto} fechar={() => setFoto(null)} />}
-      <button type="button" className="link alinha-inicio" onClick={props.voltar}>
+      <button type="button" className="link largura-toda" onClick={props.voltar}>
         <Icone nome="voltar" tamanho={18} />
         Folha
       </button>

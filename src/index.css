@@ -248,8 +248,12 @@ input.codigo-campo,
   text-align: right;
 }
 
-.alinha-inicio {
-  align-self: flex-start;
+/* Nada encostado num canto com sobra do outro lado: o que fica sozinho numa linha ocupa a largura
+   toda, com o conteúdo no centro. */
+.largura-toda {
+  align-self: stretch;
+  justify-content: center;
+  text-align: center;
 }
 
 .so-leitor {
@@ -273,6 +277,11 @@ input.codigo-campo,
   margin-top: 2px;
 }
 
+.topo > div:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
 .pilulas {
   display: flex;
   flex-wrap: wrap;
@@ -280,8 +289,11 @@ input.codigo-campo,
   margin-top: 6px;
 }
 
+/* Os selos dividem a linha entre si, sem sobra no fim. */
 .pilula {
   display: inline-flex;
+  flex: 1 1 auto;
+  justify-content: center;
   align-items: center;
   gap: 6px;
   padding: 3px 10px;
@@ -762,8 +774,9 @@ details.recolhivel > summary:focus-visible {
   color: var(--marca);
 }
 
-/* Assinatura: as áreas são placas de destino, com o friso interno das placas de cidade e a taxa
-   no lugar da distância. Só a área escolhida acende, em azul de placa. */
+/* Assinatura: as áreas são placas de destino, com a moldura das placas de cidade e a taxa no lugar
+   da distância. Só a área escolhida acende, em azul de placa. A moldura encosta na borda: nada de
+   faixa vazia por dentro. */
 .chip-area {
   flex-direction: column;
   gap: 0;
@@ -771,9 +784,7 @@ details.recolhivel > summary:focus-visible {
   border: 0;
   border-radius: var(--raio-botao);
   background: var(--placa-apagada);
-  box-shadow:
-    inset 0 0 0 3px var(--placa-apagada),
-    inset 0 0 0 4.5px var(--friso);
+  box-shadow: inset 0 0 0 2px var(--friso);
   line-height: 1.15;
 }
 
@@ -787,9 +798,7 @@ details.recolhivel > summary:focus-visible {
 .chip-area[aria-pressed='true'] {
   background: var(--placa);
   color: var(--sobre-placa);
-  box-shadow:
-    inset 0 0 0 3px var(--placa),
-    inset 0 0 0 5px var(--sobre-placa);
+  box-shadow: inset 0 0 0 2.5px var(--sobre-placa);
 }
 
 .chip-area[aria-pressed='true'] small,
@@ -1225,6 +1234,8 @@ button.item-historico {
 }
 
 .selo {
+  flex: 1 1 auto;
+  text-align: center;
   font-size: 0.78rem;
   font-weight: 700;
   padding: 2px 10px;
@@ -1627,9 +1638,14 @@ button.item-papel .codigo {
 }
 
 .escolher-data {
+  flex: 1 1 100%;
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.escolher-data .campo-data {
+  flex: 1;
 }
 
 .campo-data input {
@@ -1682,6 +1698,7 @@ button.pendencia strong {
 
 .numeros-noite > div {
   min-width: 0;
+  text-align: center;
 }
 
 .numeros-noite dt {
@@ -1709,7 +1726,6 @@ button.pendencia strong {
   flex-direction: column;
   gap: 16px;
   width: 100%;
-  max-width: 640px;
 }
 
 .linha-equipe {
@@ -1735,7 +1751,7 @@ button.pendencia strong {
 }
 
 .linha-equipe .pilula {
-  align-self: flex-start;
+  align-self: stretch;
 }
 
 /* Colunas: no celular rolam para o lado; em tela maior ficam lado a lado. */
@@ -1894,7 +1910,8 @@ button.abrir-caixa::after {
 }
 
 .estado-acerto {
-  align-self: flex-start;
+  align-self: stretch;
+  text-align: center;
   margin-top: 4px;
   padding: 1px 8px;
   border-radius: 999px;
@@ -2075,10 +2092,6 @@ button.item-pix[aria-pressed='true'] {
     font-size: 1.7rem;
   }
 
-  .noite-relance {
-    max-width: 760px;
-  }
-
   .pendencias {
     flex-direction: row;
   }
@@ -2093,10 +2106,16 @@ button.item-pix[aria-pressed='true'] {
     scroll-snap-type: none;
   }
 
+  /* As colunas dividem a largura entre si, sem sobra à direita. */
   .coluna-folha,
   .coluna-pix {
-    flex: 1 0 200px;
-    max-width: 320px;
+    flex: 1 1 0;
+    min-width: 180px;
+    max-width: none;
+  }
+
+  .escolher-data {
+    flex: 0 0 auto;
   }
 
   .coluna-folha:not(.coluna-pix):hover {
@@ -2107,14 +2126,12 @@ button.item-pix[aria-pressed='true'] {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: start;
-    max-width: 1200px;
   }
 
   .grade-blocos {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
     align-items: start;
-    max-width: 1200px;
   }
 }
 
@@ -2130,9 +2147,14 @@ button.item-pix[aria-pressed='true'] {
 
 @media (min-width: 900px) {
   .app.app-larga {
-    max-width: 1120px;
+    max-width: 1400px;
     padding-left: 32px;
     padding-right: 32px;
+  }
+
+  /* As abas de baixo se espalham pela largura, uma em cada terço. */
+  .abas:not(.painel-nav) button {
+    max-width: none;
   }
 
   /* Noite: lançar à esquerda, a lista ao lado. */
@@ -2164,10 +2186,10 @@ button.item-pix[aria-pressed='true'] {
     grid-area: fechar;
   }
 
-  /* Os três totais na mesma largura da tela, não nas pontas do monitor. */
+  /* Os três totais na mesma largura da tela. */
   .totais {
-    padding-left: max(12px, calc((100% - 1120px) / 2));
-    padding-right: max(12px, calc((100% - 1120px) / 2));
+    padding-left: max(12px, calc((100% - 1400px) / 2));
+    padding-right: max(12px, calc((100% - 1400px) / 2));
   }
 }
 

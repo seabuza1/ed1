@@ -32,7 +32,7 @@ export function IndicadorNuvem() {
       {e.recusa && (
         <div className="aviso">
           <p>{e.recusa}</p>
-          <button type="button" className="link alinha-inicio" onClick={fonte.limparRecusa}>
+          <button type="button" className="link largura-toda" onClick={fonte.limparRecusa}>
             Entendi
           </button>
         </div>

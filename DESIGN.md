@@ -106,16 +106,17 @@ Fonte dos valores: `src/index.css`. Produto e pessoas: `PRODUCT.md`. Direção: 
 
 **Creative North Star: "A rua à noite"**
 
-O app do motoboy e o painel do Luan falam a língua das placas de estrada: destino, taxa e atenção. O chão é asfalto escuro, o texto é o branco das placas e há um único acento, o amarelo refletivo, que se vê de longe na rua, com uma mão e com pressa. As áreas de entrega são placas de destino com a taxa no lugar da distância; só a escolhida acende em azul. O resto é estrutura quieta: degraus de asfalto em vez de bordas, números grandes e estreitos que batem em coluna.
+O app do motoboy e o painel do Luan falam a língua das placas de estrada: destino, taxa e atenção. O chão é asfalto escuro, o texto é o branco das placas e há um único acento, o amarelo refletivo, que se vê de longe na rua, com uma mão e com pressa. As áreas de entrega são placas de destino com a taxa no lugar da distância; só a escolhida acende em azul. O resto é estrutura quieta: degraus de asfalto em vez de bordas, números grandes e estreitos que batem em coluna, e nada encostado num canto com sobra do outro lado.
 
 O escuro vem da cena, não da moda: o motoboy usa o app na rua sob luz de poste e o Luan no balcão, entre o WhatsApp e o forno. O tema claro ("placa de dia") existe para o sol e segue as mesmas regras, com o amarelo escurecido para ocre quando vira texto. Os usuários pediram para não ter cor demais e não mudar as coisas de lugar: o mundo entra por letra, cor, densidade e a placa, nunca pela organização das telas.
 
 **Key Characteristics:**
 - Um só acento: amarelo refletivo para a ação principal, a aba atual, o que está em rota e o que pede atenção.
-- Áreas como placas de destino, com friso interno e a taxa.
+- Áreas como placas de destino, com moldura e a taxa.
 - Barlow no texto, Barlow Condensed nos números, códigos e títulos, sempre tabular.
 - Profundidade por degraus de asfalto; bordas só nos frisos das placas e nas linhas da folha.
 - Botões de 48px (56px na ação principal), uso com uma mão.
+- Linha cheia: o que fica sozinho numa linha ocupa a largura toda, com o conteúdo no centro.
 
 ## Colors
 
@@ -167,14 +168,17 @@ Asfalto e branco de placa com um amarelo só; azul, verde e vermelho só quando 
 
 ## Layout
 
-Uma coluna no celular (até 560px de largura, 16px de margem), mobile-first. A partir de 900px: o app do motoboy vira duas colunas (lançar | lista; conta e fechar | o que conferir, até 1120px) e o painel ganha menu lateral de 248px com a folha em colunas lado a lado. No celular a folha rola para o lado, com duas colunas e um pedaço da terceira à vista. Ritmo de 8px dentro de grupos, 10–12px entre itens e 16px entre blocos. A barra de totais fica presa no topo; as abas, embaixo.
+Uma coluna no celular (até 560px de largura, 16px de margem), mobile-first. A partir de 900px: o app do motoboy vira duas colunas (lançar | lista; conta e fechar | o que conferir, até 1400px, centralizado) e o painel ganha menu lateral de 248px com a folha em colunas que dividem a largura entre si; as abas de baixo se espalham uma em cada terço. No celular a folha rola para o lado, com duas colunas e um pedaço da terceira à vista. Ritmo de 8px dentro de grupos, 10–12px entre itens e 16px entre blocos. A barra de totais fica presa no topo; as abas, embaixo.
+
+### Named Rules
+**A Regra da Linha Cheia.** Nada fica encostado num canto com sobra do outro lado: o que fica sozinho numa linha (link, "Voltar", seletor de data, campo) ocupa a largura toda, com o conteúdo no centro; selos de status dividem a linha entre si; números de faixa ficam centralizados na sua parte; no computador, colunas, blocos e abas dividem a largura.
 
 ## Elevation & Depth
 
-Sem sombras. A profundidade vem de degraus de asfalto: fundo → cartão (#1a1d21) → item tocável sobre o cartão volta ao fundo (#111316) → campo de digitar ainda mais fundo (#0c0d10). As únicas linhas são as divisórias da lista e da conta (1px), os traços de 2px da folha (título e rodapé de cada coluna, como na folha de papel) e o friso das placas.
+Sem sombras. A profundidade vem de degraus de asfalto: fundo → cartão (#1a1d21) → item tocável sobre o cartão volta ao fundo (#111316) → campo de digitar ainda mais fundo (#0c0d10). As únicas linhas são as divisórias da lista e da conta (1px), os traços de 2px da folha (título e rodapé de cada coluna, como na folha de papel) e a moldura das placas.
 
 ### Shadow Vocabulary
-- **Friso da placa** (`box-shadow: inset 0 0 0 3px <fundo da placa>, inset 0 0 0 4.5px <friso>`): o contorno interno das placas de área; acesa, o friso fica branco e com 5px.
+- **Moldura da placa** (`box-shadow: inset 0 0 0 2px <friso>`): a moldura das placas de área, encostada na borda (sem faixa vazia por dentro); acesa, fica branca com 2.5px.
 - **Marca de chegada** (`box-shadow: inset 0 0 0 2px <amarelo>`, sumindo em 1,2s): a coluna onde o atalho do topo levou.
 
 ### Named Rules
@@ -182,7 +186,7 @@ Sem sombras. A profundidade vem de degraus de asfalto: fundo → cartão (#1a1d2
 
 ## Shapes
 
-Cantos de 10px em botões, campos, placas e itens; 12px em cartões e colunas; pílulas inteiras para status ("Pendente", "Confirmado", "Noite aberta"). A placa tem o friso branco a 3px da borda, como as placas de cidade.
+Cantos de 10px em botões, campos, placas e itens; 12px em cartões e colunas; pílulas inteiras para status ("Pendente", "Confirmado", "Noite aberta"), que se esticam para dividir a linha. A placa tem a moldura clara encostada na borda.
 
 ## Components
 
@@ -190,7 +194,7 @@ Cantos de 10px em botões, campos, placas e itens; 12px em cartões e colunas; p
 - **Shape:** 10px.
 - **Primary:** amarelo refletivo com texto asfalto, 56px de altura e largura toda, 1.1rem 700. Parada (sem poder agir) fica em asfalto tonal com texto cinza, nunca amarelo apagado.
 - **Secondary:** asfalto tonal, texto branco de placa, 48px. "Entregue" na lista é secundário com o visto em verde.
-- **Link:** texto branco de placa sublinhado (1.5px, cinza, 4px abaixo); sem cor.
+- **Link:** texto branco de placa sublinhado (1.5px, cinza, 4px abaixo); sem cor. Sozinho na linha ("Mais opções", "Voltar"), ocupa a largura toda com o texto no centro.
 - **Perigo:** contorno vermelho de 1.5px; armado (segundo toque) fica vermelho cheio.
 - **Toque:** opacidade 0,75. **Foco:** contorno 2px amarelo, 2px de folga.
 
@@ -214,7 +218,7 @@ Cantos de 10px em botões, campos, placas e itens; 12px em cartões e colunas; p
 - **Painel no computador:** menu lateral; a atual com fundo amarelo-suave e texto amarelo.
 
 ### Placa de área (assinatura)
-Cada área de entrega é uma placa de destino: fundo de placa apagada, friso interno, nome em Barlow 600 e a taxa embaixo em Barlow Condensed. A escolhida acende em azul de placa com friso branco. A sugerida pela leitura da comanda ganha uma linha tracejada amarela por fora e a origem ("escrito na comanda") embaixo.
+Cada área de entrega é uma placa de destino: fundo de placa apagada, moldura de 2px encostada na borda, nome em Barlow 600 e a taxa embaixo em Barlow Condensed. A escolhida acende em azul de placa com moldura branca. A sugerida pela leitura da comanda ganha uma linha tracejada amarela por fora e a origem ("escrito na comanda") embaixo.
 
 ### Em rota
 A comanda em rota ganha a faixa tracejada amarela da pista na borda esquerda (4px, traços de 16px); a moto ao lado fica neutra.
@@ -227,10 +231,12 @@ A comanda em rota ganha a faixa tracejada amarela da pista na borda esquerda (4p
 - **Do** escrever todo número, código e valor em Barlow Condensed tabular.
 - **Do** separar cartões do fundo por degrau de asfalto, sem borda e sem sombra.
 - **Do** manter botões de 48px (56px na ação principal) e texto pequeno com 4,5:1 nos dois temas.
+- **Do** deixar tudo centralizado ou justificado: o que fica sozinho numa linha ocupa a largura toda (pedido do usuário).
 
 ### Don't:
 - **Don't** pintar links, dicas ou títulos de amarelo: o amarelo é da ação e da atenção (pedido do usuário: "cor demais" piora).
 - **Don't** mudar telas, ordem ou navegação para encaixar o visual (pedido do usuário: "mudar onde as coisas ficam" piora).
 - **Don't** usar o azul de placa fora da área escolhida, nem duas placas acesas ao mesmo tempo.
 - **Don't** deixar a ação principal amarela pela metade quando parada; use o tonal.
+- **Don't** deixar moldura com faixa vazia por dentro nem bloco encostado num canto com sobra do outro lado.
 - **Don't** usar caractere (✓, →) como ícone de interface; use os ícones do app. As anotações da folha de papel ("→ 3,00" do troco por Pix, o "•" de papel não conferido) continuam, porque são a notação do Luan.

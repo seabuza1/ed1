@@ -321,13 +321,13 @@
     },
     "shadows": [
       {
-        "name": "friso-placa",
-        "value": "inset 0 0 0 3px #151c26, inset 0 0 0 4.5px rgba(243,245,246,0.55)",
-        "purpose": "Contorno interno das placas de área não escolhidas (escuro)."
+        "name": "moldura-placa",
+        "value": "inset 0 0 0 2px rgba(243,245,246,0.55)",
+        "purpose": "Moldura das placas de área não escolhidas (escuro), encostada na borda."
       },
       {
-        "name": "friso-placa-acesa",
-        "value": "inset 0 0 0 3px #1f5fae, inset 0 0 0 5px #ffffff",
+        "name": "moldura-placa-acesa",
+        "value": "inset 0 0 0 2.5px #ffffff",
         "purpose": "Placa escolhida."
       },
       {
@@ -378,7 +378,7 @@
       "refersTo": "placa-area",
       "description": "Área de entrega como placa de destino; só a escolhida acende.",
       "html": "<div class=\"ds-placas\"><button class=\"ds-placa\">Aragarças<small>R$ 5,00</small></button><button class=\"ds-placa\" aria-pressed=\"true\">Barra do Garças<small>R$ 12,00</small></button></div>",
-      "css": ".ds-placas{display:grid;grid-template-columns:1fr 1fr;gap:8px}.ds-placa{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:56px;padding:6px 10px;border:0;border-radius:10px;background:#151c26;color:#f3f5f6;box-shadow:inset 0 0 0 3px #151c26,inset 0 0 0 4.5px rgba(243,245,246,.55);font:600 1rem/1.15 Barlow,system-ui,sans-serif;cursor:pointer}.ds-placa small{font:600 .9rem \"Barlow Condensed\",Barlow,sans-serif;color:#9ba4ac}.ds-placa[aria-pressed=true]{background:#1f5fae;color:#fff;box-shadow:inset 0 0 0 3px #1f5fae,inset 0 0 0 5px #fff}.ds-placa[aria-pressed=true] small{color:#fff}.ds-placa:focus-visible{outline:2px solid #ffd23f;outline-offset:2px}"
+      "css": ".ds-placas{display:grid;grid-template-columns:1fr 1fr;gap:8px}.ds-placa{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:56px;padding:6px 10px;border:0;border-radius:10px;background:#151c26;color:#f3f5f6;box-shadow:inset 0 0 0 2px rgba(243,245,246,.55);font:600 1rem/1.15 Barlow,system-ui,sans-serif;cursor:pointer}.ds-placa small{font:600 .9rem \"Barlow Condensed\",Barlow,sans-serif;color:#9ba4ac}.ds-placa[aria-pressed=true]{background:#1f5fae;color:#fff;box-shadow:inset 0 0 0 2.5px #fff}.ds-placa[aria-pressed=true] small{color:#fff}.ds-placa:focus-visible{outline:2px solid #ffd23f;outline-offset:2px}"
     },
     {
       "name": "Campo do código",
@@ -415,13 +415,14 @@
   ],
   "narrative": {
     "northStar": "A rua à noite",
-    "overview": "O app do motoboy e o painel do Luan falam a língua das placas de estrada: destino, taxa e atenção. O chão é asfalto escuro, o texto é o branco das placas e há um único acento, o amarelo refletivo, que se vê de longe na rua, com uma mão e com pressa. As áreas de entrega são placas de destino com a taxa no lugar da distância; só a escolhida acende em azul. O resto é estrutura quieta: degraus de asfalto em vez de bordas, números grandes e estreitos que batem em coluna.",
+    "overview": "O app do motoboy e o painel do Luan falam a língua das placas de estrada: destino, taxa e atenção. O chão é asfalto escuro, o texto é o branco das placas e há um único acento, o amarelo refletivo, que se vê de longe na rua, com uma mão e com pressa. As áreas de entrega são placas de destino com a taxa no lugar da distância; só a escolhida acende em azul. O resto é estrutura quieta: degraus de asfalto em vez de bordas, números grandes e estreitos que batem em coluna, e nada encostado num canto com sobra do outro lado.",
     "keyCharacteristics": [
       "Um só acento: amarelo refletivo para a ação principal, a aba atual, o que está em rota e o que pede atenção.",
-      "Áreas como placas de destino, com friso interno e a taxa.",
+      "Áreas como placas de destino, com moldura e a taxa.",
       "Barlow no texto, Barlow Condensed nos números, códigos e títulos, sempre tabular.",
       "Profundidade por degraus de asfalto; bordas só nos frisos das placas e nas linhas da folha.",
-      "Botões de 48px (56px na ação principal), uso com uma mão."
+      "Botões de 48px (56px na ação principal), uso com uma mão.",
+      "Linha cheia: o que fica sozinho numa linha ocupa a largura toda, com o conteúdo no centro."
     ],
     "rules": [
       {
@@ -443,6 +444,11 @@
         "name": "A Regra do Degrau",
         "body": "Cartão não tem borda nem sombra; ele se separa do fundo por um degrau de asfalto.",
         "section": "elevation"
+      },
+      {
+        "name": "A Regra da Linha Cheia",
+        "body": "Nada fica encostado num canto com sobra do outro lado: o que fica sozinho numa linha (link, \"Voltar\", seletor de data, campo) ocupa a largura toda, com o conteúdo no centro; selos de status dividem a linha entre si; números de faixa ficam centralizados na sua parte; no computador, colunas, blocos e abas dividem a largura.",
+        "section": "layout"
       }
     ],
     "dos": [
@@ -450,13 +456,15 @@
       "Do mostrar área como placa de destino, com a taxa, e acender só a escolhida em azul (#1f5fae).",
       "Do escrever todo número, código e valor em Barlow Condensed tabular.",
       "Do separar cartões do fundo por degrau de asfalto, sem borda e sem sombra.",
-      "Do manter botões de 48px (56px na ação principal) e texto pequeno com 4,5:1 nos dois temas."
+      "Do manter botões de 48px (56px na ação principal) e texto pequeno com 4,5:1 nos dois temas.",
+      "Do deixar tudo centralizado ou justificado: o que fica sozinho numa linha ocupa a largura toda (pedido do usuário)."
     ],
     "donts": [
       "Don't pintar links, dicas ou títulos de amarelo: o amarelo é da ação e da atenção (pedido do usuário: \"cor demais\" piora).",
       "Don't mudar telas, ordem ou navegação para encaixar o visual (pedido do usuário: \"mudar onde as coisas ficam\" piora).",
       "Don't usar o azul de placa fora da área escolhida, nem duas placas acesas ao mesmo tempo.",
       "Don't deixar a ação principal amarela pela metade quando parada; use o tonal.",
+      "Don't deixar moldura com faixa vazia por dentro nem bloco encostado num canto com sobra do outro lado.",
       "Don't usar caractere (✓, →) como ícone de interface; use os ícones do app. As anotações da folha de papel (\"→ 3,00\" do troco por Pix, o \"•\" de papel não conferido) continuam, porque são a notação do Luan."
     ]
   }
