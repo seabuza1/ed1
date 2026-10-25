@@ -85,7 +85,7 @@ function ConteudoAcerto(props: {
       <BarraTotais acerto={acerto} />
       <main className="app app-larga pilha">
         {props.voltar && (
-          <button type="button" className="link alinha-inicio" onClick={props.voltar}>
+          <button type="button" className="link largura-toda" onClick={props.voltar}>
             <Icone nome="voltar" tamanho={18} />
             Voltar ao histórico
           </button>
@@ -330,18 +330,16 @@ function ComparacaoLuan(props: { noite: Noite; acerto: Acerto; leitura: boolean;
           onChange={(t) => mudar({ valor: t })}
         />
       )}
-      <div className="lado-a-lado">
-        <label className="campo">
-          <span>Tempo do acerto (min)</span>
-          <input
-            inputMode="numeric"
-            autoComplete="off"
-            disabled={props.leitura}
-            value={f.minutos}
-            onChange={(e) => mudar({ minutos: e.target.value.replace(/\D/g, '') })}
-          />
-        </label>
-      </div>
+      <label className="campo">
+        <span>Tempo do acerto (min)</span>
+        <input
+          inputMode="numeric"
+          autoComplete="off"
+          disabled={props.leitura}
+          value={f.minutos}
+          onChange={(e) => mudar({ minutos: e.target.value.replace(/\D/g, '') })}
+        />
+      </label>
       <label className="campo">
         <span>Observação</span>
         <textarea rows={3} disabled={props.leitura} value={f.obs} onChange={(e) => mudar({ obs: e.target.value })} />

@@ -82,7 +82,7 @@ export function EnviarHistorico() {
         Enviar meu histórico para a nuvem
       </button>
       {/* "Agora não" vale até abrir o app de novo. */}
-      <button type="button" className="link alinha-inicio" onClick={() => setLegado(null)}>
+      <button type="button" className="link largura-toda" onClick={() => setLegado(null)}>
         Agora não
       </button>
       {erro && <p className="erro">{erro}</p>}

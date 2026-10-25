@@ -18,7 +18,7 @@ export function aplicarTema(tema: Tema = lerTema()): void {
   if (tema === 'sistema') delete raiz.dataset.tema
   else raiz.dataset.tema = tema
   const escuro = tema === 'escuro' || (tema === 'sistema' && matchMedia('(prefers-color-scheme: dark)').matches)
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', escuro ? '#0b0c0e' : '#f6f6f7')
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', escuro ? '#111316' : '#eef0f2')
 }
 
 export function salvarTema(tema: Tema): void {

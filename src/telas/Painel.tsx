@@ -207,7 +207,7 @@ export function Painel({ sb, usuario, abrirApp }: { sb: SupabaseClient; usuario:
           </div>
         ) : vista === 'folha' ? (
           <>
-            <NumerosNoite n={numerosDaNoite(colunas)} />
+            <NumerosNoite n={numerosDaNoite(colunas)} irPara={irParaColuna} />
             <Folha colunas={colunas} abrir={abrirCaixa} marcarPix={marcarPix} verFoto={setFotoFolha} />
           </>
         ) : (
@@ -256,31 +256,71 @@ function EscolherData({ data, hoje, mudar }: { data: string; hoje: string; mudar
   )
 }
 
-/** A noite num relance, em cima da folha: primeiro o que pede ação do Luan. */
-function NumerosNoite({ n }: { n: NumerosDaNoite }) {
-  const itens: { rotulo: string; valor: string; detalhe?: string; alerta?: boolean }[] = [
-    { rotulo: 'Pix a conferir', valor: String(n.pixAConferir), alerta: n.pixAConferir > 0 },
-    { rotulo: 'Acertos pendentes', valor: String(n.acertosPendentes), alerta: n.acertosPendentes > 0 },
+/**
+ * A noite num relance, em cima da folha. Primeiro o que pede ação do Luan, e o toque leva à coluna
+ * (no celular a folha rola para o lado e a PIX é a última); depois os números, como no rodapé.
+ */
+function NumerosNoite({ n, irPara }: { n: NumerosDaNoite; irPara: (alvo: 'pix' | 'acerto') => void }) {
+  const itens: { rotulo: string; valor: string; detalhe?: string }[] = [
     { rotulo: 'Em rota', valor: String(n.emRota) },
     {
       rotulo: 'Entregues',
       valor: String(n.entregues),
       detalhe: n.voltaram ? `${n.voltaram} ${n.voltaram === 1 ? 'voltou' : 'voltaram'}` : undefined,
     },
-    { rotulo: 'Devolvem', valor: formatarReais(n.devolver) },
-    { rotulo: 'Recebem', valor: formatarReais(n.receber) },
+    { rotulo: 'Devolvem', valor: formatarNumero(n.devolver) },
+    { rotulo: 'Recebem', valor: formatarNumero(n.receber) },
   ]
   return (
-    <dl className="numeros-noite">
-      {itens.map((i) => (
-        <div key={i.rotulo} className={i.alerta ? 'alerta' : undefined}>
-          <dt>{i.rotulo}</dt>
-          <dd className="num">{i.valor}</dd>
-          {i.detalhe && <dd className="pequeno discreto">{i.detalhe}</dd>}
+    <section className="noite-relance" aria-label="A noite num relance">
+      {(n.pixAConferir > 0 || n.acertosPendentes > 0) && (
+        <div className="pendencias">
+          {n.pixAConferir > 0 && (
+            <button type="button" className="pendencia" onClick={() => irPara('pix')}>
+              <span>
+                <strong className="num">{n.pixAConferir}</strong> Pix a conferir
+              </span>
+              <Icone nome="avancar" tamanho={18} />
+            </button>
+          )}
+          {n.acertosPendentes > 0 && (
+            <button type="button" className="pendencia" onClick={() => irPara('acerto')}>
+              <span>
+                <strong className="num">{n.acertosPendentes}</strong>{' '}
+                {n.acertosPendentes === 1 ? 'acerto pendente' : 'acertos pendentes'}
+              </span>
+              <Icone nome="avancar" tamanho={18} />
+            </button>
+          )}
         </div>
-      ))}
-    </dl>
+      )}
+      <dl className="numeros-noite">
+        {itens.map((i) => (
+          <div key={i.rotulo}>
+            <dt>{i.rotulo}</dt>
+            <dd className="num">{i.valor}</dd>
+            {i.detalhe && <dd className="pequeno discreto">{i.detalhe}</dd>}
+          </div>
+        ))}
+      </dl>
+    </section>
   )
+}
+
+/** Leva a folha até a coluna PIX ou à primeira com acerto pendente, marca a coluna e põe o foco nela. */
+function irParaColuna(alvo: 'pix' | 'acerto') {
+  const coluna = document.querySelector<HTMLElement>(alvo === 'pix' ? '.coluna-pix' : '.coluna-folha[data-pendente]')
+  if (!coluna) return
+  const calmo = matchMedia('(prefers-reduced-motion: reduce)').matches
+  coluna.scrollIntoView({ behavior: calmo ? 'auto' : 'smooth', block: 'nearest', inline: 'start' })
+  coluna.classList.remove('coluna-alvo')
+  void coluna.offsetWidth // recomeça a animação quando o atalho é tocado de novo
+  coluna.classList.add('coluna-alvo')
+  const foco =
+    alvo === 'pix'
+      ? (coluna.querySelector<HTMLElement>('.item-pix[aria-pressed="false"]') ?? coluna.querySelector<HTMLElement>('.item-pix'))
+      : coluna.querySelector<HTMLElement>('.abrir-caixa')
+  foco?.focus({ preventScroll: true })
 }
 
 const ICONE_STATUS: Record<Comanda['status'], NomeIcone> = { em_rota: 'moto', entregue: 'check', voltou: 'voltou' }
@@ -299,7 +339,7 @@ function Folha(props: {
     <div className="folha">
       {colunas.map((col) => (
         // A coluna inteira abre o caixa (o botão do título cobre a coluna); o código com foto abre a foto.
-        <div key={col.caixa.noite.id} className="coluna-folha">
+        <div key={col.caixa.noite.id} className="coluna-folha" data-pendente={col.confirmado ? undefined : ''}>
           <button type="button" className="coluna-titulo abrir-caixa" onClick={() => abrir(col.caixa.noite.id)}>
             <span className="num">{col.posicao}</span> {col.caixa.nome}
           </button>
@@ -364,7 +404,15 @@ function Folha(props: {
               onClick={() => props.marcarPix(p.comanda)}
             >
               <span className="codigo">{p.comanda.codigo}</span>
-              <span className="estado-pix">{p.comanda.pixConfirmado ? 'caiu ✓' : 'conferir'}</span>
+              <span className="estado-pix">
+                {p.comanda.pixConfirmado ? (
+                  <>
+                    caiu <Icone nome="check" tamanho={14} />
+                  </>
+                ) : (
+                  'conferir'
+                )}
+              </span>
               <span className="quem">
                 {p.nome} · <span className="num">{formatarNumero(p.valor)}</span>
               </span>
@@ -458,7 +506,7 @@ function CaixaNoPainel(props: {
   return (
     <>
       {foto?.fotoPath && <VerFoto titulo={foto.codigo} carregar={carregarFoto} fechar={() => setFoto(null)} />}
-      <button type="button" className="link alinha-inicio" onClick={props.voltar}>
+      <button type="button" className="link largura-toda" onClick={props.voltar}>
         <Icone nome="voltar" tamanho={18} />
         Folha
       </button>

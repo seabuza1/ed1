@@ -26,3 +26,6 @@ acerto-backup-*.json
 
 # Cache e saída do graphify (mapa do código), gerados localmente
 graphify-out/
+
+# Capturas da revisão da Impeccable
+.impeccable/review/

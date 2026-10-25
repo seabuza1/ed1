@@ -19,7 +19,7 @@ export function TelaAjustes(props: { areas: Area[]; ajustes: Ajustes; voltar: ()
   const editaAreas = !repo.nuvem || usuario?.papel === 'admin'
   return (
     <main className="app pilha">
-      <button type="button" className="link alinha-inicio" onClick={props.voltar}>
+      <button type="button" className="link largura-toda" onClick={props.voltar}>
         <Icone nome="voltar" tamanho={18} />
         Histórico
       </button>

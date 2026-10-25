@@ -32,7 +32,7 @@ export function EditorPagamento(props: {
   const dividir = (
     <button
       type="button"
-      className="link alinha-inicio"
+      className="link largura-toda"
       onClick={() =>
         set({
           dividido: true,
@@ -76,7 +76,7 @@ export function EditorPagamento(props: {
               {dividir}
             </div>
           ) : (
-            <button type="button" className="link alinha-inicio" onClick={() => setMais(true)}>
+            <button type="button" className="link largura-toda" onClick={() => setMais(true)}>
               Mais opções
             </button>
           )

@@ -270,7 +270,7 @@ export function ConfirmarLeitura(props: {
         ))}
         {r.promocaoSugerida !== null && (
           <BotaoConfirmar
-            className="secundario alinha-inicio"
+            className="secundario largura-toda"
             confirmacao={`Vale para a noite toda: toque de novo`}
             onConfirmar={() => props.onPromocao(r.promocaoSugerida!)}
           >
@@ -447,7 +447,7 @@ export function ConfirmarLeitura(props: {
           </>
         )}
         {!editarPagamento && (
-          <button type="button" className="link alinha-inicio" onClick={abrirEditor}>
+          <button type="button" className="link largura-toda" onClick={abrirEditor}>
             Corrigir o pagamento ou o troco
           </button>
         )}
