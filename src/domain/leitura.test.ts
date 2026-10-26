@@ -162,17 +162,23 @@ describe('leitura da comanda: L1 a L14', () => {
     )
     expect(r.estado).toBe('vermelho')
     expect([r.itens[0].preco, r.somaItens, r.esperado]).toEqual([null, null, null])
-    expect(r.itens[0].opcoes).toEqual([
-      { sabor: 'Frango c/ Catupiry', preco: R(73) },
-      { sabor: 'Franguinho', preco: R(73) },
-      { sabor: 'Estrogonofe de Frango', preco: R(86) },
-      { sabor: 'Frango com Pequi', preco: R(93) },
+    expect(r.itens[0].sabores).toEqual([
+      {
+        escrito: 'frango',
+        sabor: null,
+        opcoes: [
+          { sabor: 'Frango c/ Catupiry', preco: R(73) },
+          { sabor: 'Franguinho', preco: R(73) },
+          { sabor: 'Estrogonofe de Frango', preco: R(86) },
+          { sabor: 'Frango com Pequi', preco: R(93) },
+        ],
+      },
     ])
     // Escolhendo Franguinho: 73 + 5 = 78 fecha.
     const escolhido = conferir(
       comanda({ itens: [pizza('G', [], 'G frango', frango.opcoes)], local_escrito: 'Arag.', total_escrito: '78' }),
       null,
-      { escolhas: { 0: 'Franguinho' } },
+      { escolhas: { '0.0': 'Franguinho' } },
     )
     expect([escolhido.esperado, escolhido.estado]).toEqual([R(78), 'verde'])
   })
@@ -421,6 +427,83 @@ describe('leitura: área, promoção e itens', () => {
     const suco = { ...avulso('bebida', 'suco'), item: null, opcoes: ['Suco de Laranja 400ml', 'Suco de Maracujá 400ml'] }
     const s = conferir(comanda({ itens: [pizza('G', ['Filé Mignon']), suco] }))
     expect([s.itens[1].preco, s.estado]).toEqual([R(15), 'verde'])
+  })
+})
+
+describe('leitura: meio a meio', () => {
+  const lida = (item: ItemLido, total: string) => comanda({ itens: [item], local_escrito: 'Arag.', total_escrito: total })
+  const nomes = (r: ReturnType<typeof conferir>) => r.itens[0].sabores.map((s) => s.sabor ?? s.escrito)
+
+  it('um sabor certo e outro com dúvida: mostra os dois e pede só o da dúvida', () => {
+    const item = pizza('G', ['calabresa', 'frango'], 'G calabresa/frango')
+    const r = conferir(lida(item, '78'))
+    expect(nomes(r)).toEqual(['Calabresa', 'frango'])
+    expect(r.itens[0].sabores.map((s) => s.opcoes.length)).toEqual([0, 4])
+    expect([r.itens[0].preco, r.estado]).toEqual([null, 'vermelho'])
+    expect(r.motivos).toContain('"frango" pode ser mais de um sabor. Escolha qual.')
+    // Escolhendo o frango: Franguinho e Calabresa dão 73, + 5 = 78.
+    const e = conferir(lida(item, '78'), null, { escolhas: { '0.1': 'Franguinho' } })
+    expect(nomes(e)).toEqual(['Calabresa', 'Franguinho'])
+    expect([e.itens[0].preco, e.esperado, e.estado]).toEqual([R(73), R(78), 'verde'])
+    // A escolha continua à vista, para trocar.
+    expect(e.itens[0].sabores[1].opcoes).toHaveLength(4)
+  })
+
+  it('dúvida que não muda a conta: os dois sabores aparecem e a pizza tem preço', () => {
+    // "brócolis" são três sabores do mesmo preço: não pede escolha, mas o sabor aparece.
+    const r = conferir(lida(pizza('G', ['brócolis', 'Filé Mignon'], 'G brócolis/filé'), '98'))
+    expect(nomes(r)).toEqual(['brócolis', 'Filé Mignon'])
+    expect(r.itens[0].sabores[0].opcoes).toEqual([])
+    expect([r.itens[0].preco, r.itens[0].faixa, r.estado]).toEqual([R(93), 'premium', 'verde'])
+  })
+
+  it('os dois sabores com dúvida: pede cada um', () => {
+    const item = pizza('G', ['frango', 'lombo'], 'G frango/lombo')
+    const r = conferir(lida(item, '78'))
+    expect(r.itens[0].sabores.map((s) => [s.escrito, s.opcoes.length])).toEqual([
+      ['frango', 4],
+      ['lombo', 3],
+    ])
+    expect(r.motivos).toContain('"frango" e "lombo" podem ser mais de um sabor. Escolha cada um.')
+    const e = conferir(lida(item, '78'), null, { escolhas: { '0.0': 'Franguinho', '0.1': 'Lombinho' } })
+    expect([nomes(e), e.esperado, e.estado]).toEqual([['Franguinho', 'Lombinho'], R(78), 'verde'])
+    expect(houveCorrecao({ escolhas: { '0.0': 'Franguinho' } }, e)).toBe(true)
+  })
+
+  it('como a IA respondia antes (opções à parte): o palpite não duplica e o meio a meio aparece', () => {
+    const calabresa = conferir(lida(pizza('G', ['Calabresa'], 'G Calabresa', ['Calabresa', 'Calabresa Picante']), '78'))
+    expect([nomes(calabresa), calabresa.estado]).toEqual([['calabresa'], 'verde'])
+    const frango = CARDAPIO.ambiguidades.find((a) => a.escrito === 'frango')!
+    const meio = conferir(lida(pizza('G', ['Filé Mignon'], 'G filé/frango', frango.opcoes), '98'))
+    expect([nomes(meio), meio.itens[0].preco, meio.estado]).toEqual([['Filé Mignon', 'frango'], R(93), 'verde'])
+  })
+
+  it('a 7326 real: "Calabresa / Moda" com S/ catupiry e S/ cebola, na Barra, 85', () => {
+    const c7326 = (sabores: string[]) =>
+      comanda({
+        telefone_final: '7326',
+        itens: [pizza('G', sabores, 'G Calabresa / moda')],
+        local_escrito: 'Barra',
+        total_escrito: '85,00',
+        transcricao: ['7326', '*', '1 G', 'Calabresa / moda', 'S/ catupiry', 'S/ cebola', 'Barra', '85,00'],
+      })
+    // "moda" é apelido de A Moda do Chefe: os dois sabores aparecem; 73 + 12 da Barra = 85.
+    const r = conferir(c7326(['Calabresa', 'moda']))
+    expect(nomes(r)).toEqual(['Calabresa', 'A Moda do Chefe'])
+    expect([r.itens[0].preco, r.esperado, r.estado]).toEqual([R(73), R(85), 'verde'])
+    // Como foi lida antes, só com a Calabresa: a conta fecha, mas agora fica amarelo para conferir.
+    const antes = conferir(c7326(['Calabresa']))
+    expect([antes.esperado, antes.estado]).toEqual([R(85), 'amarelo'])
+  })
+
+  it('parece meio a meio mas veio um sabor só: amarelo para conferir', () => {
+    const r = conferir(lida(pizza('G', ['Calabresa'], 'G calabresa/frango'), '78'))
+    expect(r.estado).toBe('amarelo')
+    expect(r.motivos).toContain('"G calabresa/frango" parece meio a meio, mas veio um sabor só: confira.')
+    expect(conferir(lida(pizza('G', ['Portuguesa'], 'G 1/2 portuguesa 1/2 calabresa'), '78')).estado).toBe('amarelo')
+    // "c/" faz parte do nome do sabor; sabor único escrito por inteiro não avisa.
+    expect(conferir(lida(pizza('G', ['Frango c/ Catupiry'], 'G Frango c/ Catupiry'), '78')).estado).toBe('verde')
+    expect(conferir(lida(pizza('G', ['Romeu e Julieta'], 'G Romeu e Julieta'), '78')).itens[0].aviso).toBeNull()
   })
 })
 

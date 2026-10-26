@@ -26,7 +26,7 @@ Fica de fora: QR code (fase 2), câmera própria com moldura, recorte por campo,
 ## Regras
 
 - **R19 Transcrição.** A IA só transcreve. Não corrige, não deduz e não calcula. Trecho ilegível vira `[?]` e entra em `ilegiveis`. Valores vêm como texto, do jeito que estão escritos, e o domínio converte.
-- **R20 Cardápio como dicionário.** O item que a IA casa com o cardápio vem com `casou_pelo_cardapio: true`. Se a palavra lida cabe em sabores de faixas com preços diferentes (lista `ambiguidades` do JSON, como "frango" e "lombo"), a IA devolve as opções e o item fica sem preço até o motoboy escolher.
+- **R20 Cardápio como dicionário.** O item que a IA casa com o cardápio vem com `casou_pelo_cardapio: true`. Se a palavra lida cabe em mais de um sabor (lista `ambiguidades` do JSON, como "frango" e "lombo"), a IA põe a própria palavra em `sabores`, no lugar daquele sabor, e o app procura as opções no cardápio. Meio a meio é um item só, com todos os sabores na ordem escrita, e **cada sabor tem a sua dúvida**: em "Calabresa / frango" o app mostra os dois e pede só o frango; se as opções não mudam a conta (como "brócolis"), não pede nada, mas o sabor continua à vista. Fora da pizza, as opções vêm em `opcoes`. Pizza que parece meio a meio ("/", "1/2", "½", "meia", "filé-calabresa") com um sabor só fica amarela para conferir. Apelidos dos sabores (como "moda" para A Moda do Chefe) e abreviações ("S/" = sem, que tira ingrediente e não é item) ficam no JSON.
 - **R21 Preço dos itens.** Pizza: preço da faixa no tamanho. Meio a meio: o maior preço entre os sabores (requisitos R37). Bebida, borda e adicional saem do cardápio. Combo: preço do combo.
 - **R22 Área sugerida, nesta ordem:**
   1. Local escrito na comanda, pelo glossário ("Arag." = Aragarças) → origem `escrito`.
@@ -64,10 +64,10 @@ itens: [{
   tipo: "pizza" | "bebida" | "borda" | "adicional" | "combo" | "outro"
   quantidade: number
   tamanho: "B" | "P" | "M" | "G" | null
-  sabores: string[]                  // nomes exatos do cardápio
+  sabores: string[]                  // um por sabor, na ordem escrita; nome do cardápio ou a palavra ambígua
   item: string | null                // nome exato do cardápio (bebida, borda, adicional, combo "01".."04")
   casou_pelo_cardapio: boolean
-  opcoes: string[]                   // quando ambíguo: os sabores possíveis
+  opcoes: string[]                   // fora da pizza, quando ambíguo: os itens possíveis
 }]
 pagamento: [{ forma_escrita: string, forma: "dinheiro" | "cartao" | "pix" | null, valor_escrito: string | null }]
 total_escrito:   string | null       // ex.: "113,00"

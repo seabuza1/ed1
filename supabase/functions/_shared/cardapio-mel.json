@@ -25,7 +25,9 @@
     "&": "e",
     "2lts": "2 litros",
     "G": "pizza grande (12 fatias)",
-    "*": "promoção da noite (desconto nas tradicionais)"
+    "*": "promoção da noite (desconto nas tradicionais)",
+    "S/": "sem: tira um ingrediente da pizza (\"S/ cebola\"); não é item",
+    "C/": "com"
   },
   "pendente_confirmar": [
     "Promoção: o desconto vale por pizza tradicional? Vale em meio a meio de duas tradicionais?",
@@ -56,7 +58,7 @@
     },
     "sabores": [
       { "nome": "Alho", "faixa": "tradicional", "ingredientes": "Molho, mussarela, catupiry, alho frito e orégano" },
-      { "nome": "A Moda do Chefe", "faixa": "tradicional", "ingredientes": "Molho, mussarela, catupiry, frango, presunto, calabresa, ovos, milho e orégano" },
+      { "nome": "A Moda do Chefe", "faixa": "tradicional", "apelidos": ["moda", "moda do chefe"], "ingredientes": "Molho, mussarela, catupiry, frango, presunto, calabresa, ovos, milho e orégano" },
       { "nome": "Bacon", "faixa": "tradicional", "ingredientes": "Molho, mussarela, catupiry, bacon, presunto, milho e orégano" },
       { "nome": "Calabresa", "faixa": "tradicional", "ingredientes": "Molho, mussarela, catupiry, calabresa, tomate, cebola e orégano" },
       { "nome": "Calabresa Picante", "faixa": "tradicional", "ingredientes": "Molho, mussarela, catupiry, calabresa, pimenta calabresa, tomate, cebola e orégano" },
