@@ -16,8 +16,10 @@ export interface CardapioPrompt {
   adicionais: { itens: string[]; outros: { nome: string }[] }
   combos: { id: string; itens: string[] }[]
   bebidas: { grupo: string; nome: string; apelidos?: string[] }[]
+  refrigerante: { marcas: string[]; tamanhos: Record<string, string[]> }
+  bairros: Record<string, string[]>
   outros: { nome: string }[]
-  ambiguidades: { escrito: string; opcoes: string[] }[]
+  ambiguidades: { escrito: string; apelidos?: string[]; opcoes: string[] }[]
 }
 
 /** Foto de exemplo (JPEG em base64) com as duas leituras esperadas. */
@@ -80,10 +82,19 @@ export function montarSistema(c: CardapioPrompt): string {
     ...c.combos.map((k) => `- ${k.id}: ${k.itens.join(' + ')}`),
     'Bebidas:',
     ...grupos,
+    `Refrigerante: a marca não muda o preço. Marca (${c.refrigerante.marcas.join(', ')}) com o tamanho é o item do ` +
+      `tamanho: ${Object.entries(c.refrigerante.tamanhos)
+        .map(([nome, grafias]) => `${grafias.join(', ')} = ${nome}`)
+        .join('; ')}.`,
     `Outros: ${c.outros.map((o) => o.nome).join('; ')}.`,
     'Palavras que cabem em mais de um sabor ou item (na pizza, a palavra vai em "sabores"; nos outros itens, as ' +
-      'opções em "opcoes"):',
-    ...c.ambiguidades.map((a) => `- "${a.escrito}": ${a.opcoes.join('; ')}`),
+      'opções em "opcoes"; outras grafias entre parênteses):',
+    ...c.ambiguidades.map((a) => `- ${comApelidos(`"${a.escrito}"`, a.apelidos)}: ${a.opcoes.join('; ')}`),
+    '',
+    '## Bairros',
+    'Muitas comandas trazem o bairro no lugar da cidade, às vezes abreviado ("N. Horizonte", "Jd. Araguaia"). Em ' +
+      'local_escrito, transcreva como está escrito; a lista só ajuda a ler a letra.',
+    ...Object.entries(c.bairros).map(([cidade, nomes]) => `- ${cidade}: ${nomes.join('; ')}.`),
   ].join('\n')
 }
 

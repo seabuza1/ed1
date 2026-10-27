@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import exemplo3557 from '../../supabase/functions/_shared/exemplos/3557.json'
-import { CARDAPIO, normalizar, precoAvulso } from './cardapio'
+import { acharAmbiguidade, acharBebida, acharSabor, CARDAPIO, chaveNome, precoAvulso } from './cardapio'
 import {
   avisoLeitura,
   comandaDaLeitura,
@@ -385,8 +385,44 @@ describe('leitura: área, promoção e itens', () => {
   })
 
   it('"Parque" sozinho não é o Parque de Exposições', () => {
-    const r = conferir(comanda({ local_escrito: 'Parque das Águas Quentes', total_escrito: '120,00' }))
+    const r = conferir(comanda({ local_escrito: 'Parque das Nações', total_escrito: '120,00' }))
     expect([r.sugestao, r.estado]).toEqual([{ areaId: 'barra', origem: 'valor' }, 'verde'])
+  })
+
+  it('R22 bairro da Barra no lugar da cidade, também abreviado', () => {
+    const r = (local: string) => conferir(comanda({ local_escrito: local })).sugestao
+    const barra = { areaId: 'barra', origem: 'escrito' }
+    expect(r('N. Horizonte')).toEqual(barra)
+    expect(r('Rua 5, Jd. Araguaia')).toEqual(barra)
+    expect(r('Parque das Águas Quentes')).toEqual(barra)
+    // Nome de três palavras aceita uma faltando ("Residencial Wilmar Peres de Farias").
+    expect(r('Wilmar Peres')).toEqual(barra)
+    // A cidade escrita vale sobre o bairro.
+    expect(r('Jd. Araguaia, Pontal')).toEqual({ areaId: 'pontal', origem: 'escrito' })
+    // Bairro de uma palavra só pede o tipo; "Belo Horizonte" não é "N. Horizonte": fica a conta pelo valor.
+    expect(r('Av. Araguaia')).toEqual({ areaId: 'aragarcas', origem: 'valor' })
+    expect(r('Rua Belo Horizonte')).toEqual({ areaId: 'aragarcas', origem: 'valor' })
+    // Endereço não é bairro, mesmo com o nome de um: o bairro vem depois da vírgula ou do número.
+    expect(r('Rua São João, 45')).toEqual({ areaId: 'aragarcas', origem: 'valor' })
+    expect(r('Rua São João 45 Jd. Araguaia')).toEqual(barra)
+  })
+
+  it('R22 bairro errado não passa: a conta acusa a diferença da taxa', () => {
+    const r = conferir(comanda({ local_escrito: 'N. Horizonte' }))
+    expect(r.estado).toBe('vermelho')
+    expect(r.motivos).toContain(r$('A conta dá R$ 120,00, mas o total lido é R$ 113,00.'))
+  })
+
+  it('bebida pelo dicionário, mesmo sem a IA casar, e a ambígua com as opções do cardápio', () => {
+    const filéCalabresa = pizza('G', ['Filé Mignon', 'Calabresa'])
+    const coca = { ...avulso('bebida', 'coca zero 2lts'), casou_pelo_cardapio: false }
+    expect(conferir(comanda({ itens: [filéCalabresa, coca] })).estado).toBe('verde')
+    const r = conferir(comanda({ itens: [filéCalabresa, avulso('bebida', 'heineken')] }))
+    expect(r.itens[1].opcoes).toEqual([
+      { sabor: 'Long Neck (Heineken)', preco: R(12) },
+      { sabor: 'Heineken 600ml', preco: R(20) },
+    ])
+    expect(r.motivos).toContain('"heineken" pode ser mais de um item. Escolha qual.')
   })
 
   it('local ilegível pede o toque na área', () => {
@@ -610,17 +646,55 @@ describe('cardápio', () => {
   it('todo sabor tem uma faixa com preço nos 4 tamanhos', () => {
     for (const s of sabores) expect(Object.keys(CARDAPIO.pizzas.faixas[s.faixa]).sort()).toEqual(['B', 'G', 'M', 'P'])
   })
-  it('nomes e apelidos não se repetem', () => {
-    const nomes = sabores.flatMap((s) => [s.nome, ...(s.apelidos ?? [])]).map(normalizar)
-    expect(new Set(nomes).size).toBe(nomes.length)
-  })
-  it('as opções das ambiguidades existem e o "muda_preco" bate com as faixas', () => {
-    for (const a of CARDAPIO.ambiguidades) {
-      const faixas = a.opcoes.map((o) => sabores.find((s) => s.nome === o)?.faixa)
-      expect(faixas.every(Boolean)).toBe(true)
-      const precos = new Set(faixas.map((f) => CARDAPIO.pizzas.faixas[f!].G))
-      expect(precos.size > 1).toBe(a.muda_preco)
+  it('nomes e apelidos não se repetem (como o app compara)', () => {
+    for (const lista of [sabores, CARDAPIO.bebidas]) {
+      const nomes = lista.flatMap((s) => [s.nome, ...(s.apelidos ?? [])]).map(chaveNome)
+      expect(nomes.filter((n, i) => nomes.indexOf(n) !== i)).toEqual([])
     }
+  })
+  it('as opções das ambiguidades existem e o "muda_preco" bate com os preços', () => {
+    for (const a of CARDAPIO.ambiguidades) {
+      const precos = a.opcoes.map((o) => {
+        const sabor = sabores.find((s) => s.nome === o)
+        return sabor ? CARDAPIO.pizzas.faixas[sabor.faixa].G : CARDAPIO.bebidas.find((b) => b.nome === o)?.preco
+      })
+      expect(precos.every((p) => p !== undefined), a.escrito).toBe(true)
+      expect(new Set(precos).size > 1, a.escrito).toBe(a.muda_preco)
+    }
+  })
+  it('palavra ambígua não é apelido de outro item (senão a dúvida nunca aparece)', () => {
+    for (const a of CARDAPIO.ambiguidades)
+      for (const escrito of [a.escrito, ...(a.apelidos ?? [])])
+        for (const achado of [acharSabor(CARDAPIO, escrito)?.nome, acharBebida(CARDAPIO, escrito)?.nome])
+          // Só o nome exato de uma das opções: "calabresa" escrita é a Calabresa.
+          if (achado) expect(a.opcoes, escrito).toContain(achado)
+  })
+  it('apelidos: abreviação, outra grafia e palavras de ligação', () => {
+    const sabor = (x: string) => acharSabor(CARDAPIO, x)?.nome
+    expect(sabor('Port.')).toBe('Portuguesa')
+    expect(sabor('4 Queijos')).toBe('Quatro Queijos')
+    expect(sabor('brocolis c/ bacon')).toBe('Brócolis com Bacon')
+    expect(sabor('Brócolis Bacon')).toBe('Brócolis com Bacon')
+    expect(sabor('Strogonoff de frango')).toBe('Estrogonofe de Frango')
+    expect(sabor('hotdog')).toBe('Hot Dog')
+    expect(sabor('Romeu & Julieta')).toBe('Romeu e Julieta')
+    expect(acharAmbiguidade(CARDAPIO, 'Strogonoff')?.escrito).toBe('estrogonofe')
+  })
+  it('refrigerante pela marca e o tamanho, em qualquer grafia', () => {
+    const bebida = (x: string) => acharBebida(CARDAPIO, x)?.nome
+    expect(bebida('coca 2lts')).toBe('Refrigerante 2L')
+    expect(bebida('Coca-Cola Zero 2 litros')).toBe('Refrigerante 2L')
+    expect(bebida('2L coca')).toBe('Refrigerante 2L')
+    expect(bebida('guaraná lata')).toBe('Refrigerante lata')
+    expect(bebida('Fanta Uva 1,5L')).toBe('Refrigerante 1,5L')
+    expect(bebida('refri 500 ml')).toBe('Refrigerante 500ml')
+    // Sem tamanho ou num tamanho que o cardápio não tem: não chuta.
+    expect(bebida('coca')).toBeUndefined()
+    expect(bebida('sprite 600ml')).toBeUndefined()
+    expect(bebida('brahma')).toBe('Brahma 600ml')
+    expect(bebida('Suco laranja 400')).toBe('Suco de Laranja 400ml')
+    expect(bebida('água com gás')).toBe('Água c/ gás')
+    expect(precoAvulso(CARDAPIO, 'borda', 'borda de cheddar')).toBe(1600)
   })
   it('os itens dos combos existem no cardápio', () => {
     for (const combo of CARDAPIO.combos)

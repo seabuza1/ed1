@@ -1,7 +1,17 @@
 // Leitura da comanda por foto (docs/SPEC-leitura.md). A IA só transcreve (R19); aqui é feita a
 // conta pelo cardápio, a área sugerida e o estado verde, amarelo ou vermelho. Correções do
 // motoboy entram em `correcoes` e a conta é refeita do zero.
-import { acharSabor, CARDAPIO, normalizar, precoAvulso, precoPizza, type Cardapio, type Faixa, type Tamanho } from './cardapio'
+import {
+  acharAmbiguidade,
+  acharSabor,
+  CARDAPIO,
+  normalizar,
+  precoAvulso,
+  precoPizza,
+  type Cardapio,
+  type Faixa,
+  type Tamanho,
+} from './cardapio'
 import { comandaRepetida, criarComanda, NOMES_FORMA, NOMES_STATUS, type Resultado } from './comanda'
 import { formatarReais, lerReais } from './dinheiro'
 import { PROMO_MAX, PROMO_MIN } from './noite'
@@ -132,8 +142,7 @@ function saboresLidos(c: Cardapio, lido: ItemLido): { escrito: string; nomes: st
   const nomeDe = (escrito: string) => acharSabor(c, escrito)?.nome ?? null
   const lista = lido.sabores.map((escrito) => {
     const nome = nomeDe(escrito)
-    const ambigua = c.ambiguidades.find((a) => normalizar(a.escrito) === normalizar(escrito))
-    return { escrito, nomes: nome ? [nome] : (ambigua?.opcoes ?? []) }
+    return { escrito, nomes: nome ? [nome] : (acharAmbiguidade(c, escrito)?.opcoes ?? []) }
   })
   // Como a IA respondia antes: as opções de uma palavra vêm à parte, em `opcoes`. Um palpite que
   // esteja entre elas sai de `sabores` e vira a dúvida no lugar dele.
@@ -211,11 +220,14 @@ function conferirItem(c: Cardapio, lido: ItemLido, escolhas: Record<string, stri
   const qtd = Number.isInteger(lido.quantidade) && lido.quantidade > 0 ? lido.quantidade : 1
   if (lido.tipo === 'pizza') return conferirPizza(c, lido, qtd, escolhas, indice)
 
+  const tipo = lido.tipo as Exclude<TipoItem, 'pizza'>
   // O motoboy escolheu entre as opções: vira um item casado.
   const escolha = escolhas[chaveEscolha(indice)]
-  const item: ItemLido = escolha === undefined ? lido : { ...lido, item: escolha, opcoes: [], casou_pelo_cardapio: true }
+  let item: ItemLido = escolha === undefined ? lido : { ...lido, item: escolha, opcoes: [], casou_pelo_cardapio: true }
+  // A IA casou a palavra ambígua ("heineken") sem as opções: elas vêm do cardápio.
+  const ambigua = !item.opcoes.length && item.item && precoAvulso(c, tipo, item.item) === null ? acharAmbiguidade(c, item.item) : undefined
+  if (ambigua?.opcoes.every((o) => precoAvulso(c, tipo, o) !== null)) item = { ...item, opcoes: ambigua.opcoes }
   if (item.opcoes.length) {
-    const tipo = item.tipo as Exclude<TipoItem, 'pizza'>
     const opcoes = item.opcoes.map((o) => ({ sabor: o, preco: precoAvulso(c, tipo, o) }))
     const precos = new Set(opcoes.map((o) => o.preco))
     // Mesmo com um palpite em `item`, opções de preços diferentes ficam para o motoboy escolher.
@@ -223,8 +235,8 @@ function conferirItem(c: Cardapio, lido: ItemLido, escolhas: Record<string, stri
       return { item, preco: opcoes[0].preco * qtd, faixa: null, sabores: [], opcoes: [], problema: null, aviso: null }
     return semPreco(item, `"${item.lido}" pode ser mais de um item. Escolha qual.`, { opcoes })
   }
-  const unitario =
-    item.casou_pelo_cardapio && item.item ? precoAvulso(c, item.tipo as Exclude<TipoItem, 'pizza'>, item.item) : null
+  // Pelo dicionário do cardápio, mesmo quando a IA não casou ("coca 2lts" é o Refrigerante 2L).
+  const unitario = item.item ? precoAvulso(c, tipo, item.item) : null
   if (unitario === null) return semPreco(item, `"${item.lido}" não está no cardápio.`)
   return { item, preco: unitario * qtd, faixa: null, sabores: [], opcoes: [], problema: null, aviso: null }
 }
@@ -238,12 +250,59 @@ const PALAVRAS_VAZIAS = new Set(['de', 'do', 'da', 'dos', 'das', 'e'])
 const GENERICAS = new Set(['parque', 'jardim', 'vila', 'setor', 'bairro', 'residencial', 'conjunto', 'centro'])
 const palavras = (nome: string) => normalizar(nome).split(' ').filter((p) => p && !PALAVRAS_VAZIAS.has(p))
 
+// Tipo do bairro e como vem abreviado. Bairro de uma palavra só pede o tipo junto: "Jd. Araguaia"
+// é o bairro, "Av. Araguaia" não.
+const TIPOS_BAIRRO: Record<string, string[]> = {
+  jardim: ['jd', 'jdm', 'jard'],
+  loteamento: ['lot'],
+  residencial: ['res', 'resid'],
+  conjunto: ['conj', 'cj'],
+  habitacional: ['hab'],
+  condominio: ['cond'],
+  setor: ['st', 'set'],
+  vila: ['vl'],
+  parque: ['pq'],
+  sitios: [],
+  recreio: [],
+}
+const ROMANOS = new Set(['i', 'ii', 'iii', 'iv'])
+// Trecho que começa assim é endereço, não bairro: "Rua São João, 45" não é o Jd. São João.
+const LOGRADOUROS = new Set(['rua', 'r', 'av', 'avenida', 'travessa', 'tv', 'alameda', 'praca', 'rodovia', 'rod', 'estrada'])
+
+/** As palavras do local fora dos trechos de endereço (separados por vírgula, parêntese, " - " ou número). */
+const palavrasDeBairro = (local: string) =>
+  local
+    .split(/[,;()]|\s-\s|\s\d+\s/)
+    .map((trecho) => normalizar(trecho).split(' '))
+    .filter((p) => !LOGRADOUROS.has(p[0]))
+    .flat()
+
 /**
- * Área citada no local escrito, pelo nome ("Pontal", "Barra") ou pelo glossário ("Arag.").
- * Com mais de uma citada, vale a que casa a maior parte do próprio nome ("Parque de Exposições
- * (Barra)" é o Parque; "Arag., perto da Barra" é Aragarças), depois mais palavras, depois a taxa maior.
+ * O bairro está no texto: cada palavra do nome por inteiro ou abreviada ("N. Horizonte", "Horiz."),
+ * com ao menos uma de 4 letras ou mais. Nome de 3 palavras ou mais aceita uma faltando.
  */
-export function areaDoLocal(local: string | null, areas: Area[], glossario: Record<string, string>): Area | null {
+function citaBairro(lidas: string[], nome: string): boolean {
+  const p = palavras(nome).filter((x) => !ROMANOS.has(x))
+  const tipos = p.filter((x) => x in TIPOS_BAIRRO)
+  const nucleo = p.filter((x) => !(x in TIPOS_BAIRRO))
+  const abrevia = (t: string, w: string) => w.startsWith(t) && (t === w || t.length === 1 || t.length >= 3)
+  const achadas = nucleo.filter((w) => lidas.some((t) => abrevia(t, w)))
+  if (!nucleo.length || achadas.length < (nucleo.length >= 3 ? nucleo.length - 1 : nucleo.length)) return false
+  if (!achadas.some((w) => lidas.some((t) => abrevia(t, w) && t.length >= Math.min(4, w.length)))) return false
+  return nucleo.length > 1 || !tipos.length || tipos.some((tp) => lidas.some((t) => t === tp || TIPOS_BAIRRO[tp].includes(t)))
+}
+
+/**
+ * Área citada no local escrito, pelo nome ("Pontal", "Barra"), pelo glossário ("Arag.") ou, sem
+ * cidade escrita, pelo bairro ("N. Horizonte" é a Barra). Com mais de uma citada, vale a que casa a
+ * maior parte do próprio nome ("Parque de Exposições (Barra)" é o Parque; "Arag., perto da Barra" é
+ * Aragarças), depois mais palavras, depois a taxa maior.
+ */
+export function areaDoLocal(
+  local: string | null,
+  areas: Area[],
+  { glossario, bairros }: Pick<Cardapio, 'glossario' | 'bairros'>,
+): Area | null {
   if (!local) return null
   let texto = ` ${normalizar(local)} `
   for (const [abrev, nome] of Object.entries(glossario)) {
@@ -265,7 +324,13 @@ export function areaDoLocal(local: string | null, areas: Area[], glossario: Reco
         (acertos > melhor.acertos || (acertos === melhor.acertos && area.taxa > melhor.area.taxa)))
     if (ganha) melhor = { area, fracao, acertos }
   }
-  return melhor?.area ?? null
+  if (melhor) return melhor.area
+  const lidas = palavrasDeBairro(local)
+  for (const [cidade, nomes] of Object.entries(bairros)) {
+    const area = areas.find((a) => normalizar(a.nome) === normalizar(cidade)) ?? areas.find((a) => palavras(a.nome)[0] === palavras(cidade)[0])
+    if (area && nomes.some((n) => citaBairro(lidas, n))) return area
+  }
+  return null
 }
 
 /** R22: escrito → pelo valor (a diferença é a taxa de exatamente uma área) → Aragarças. */
@@ -274,10 +339,10 @@ export function sugerirArea(
   total: number | null,
   itensMenosDesconto: number | null,
   areas: Area[],
-  glossario: Record<string, string>,
+  c: Pick<Cardapio, 'glossario' | 'bairros'>,
 ): { area: Area; origem: OrigemSugestao } | null {
   const ativas = areas.filter((a) => a.ativa)
-  const escrita = areaDoLocal(local, ativas, glossario)
+  const escrita = areaDoLocal(local, ativas, c)
   if (escrita) return { area: escrita, origem: 'escrito' }
   if (total !== null && itensMenosDesconto !== null) {
     const pelaTaxa = ativas.filter((a) => a.taxa === total - itensMenosDesconto)
@@ -422,8 +487,8 @@ export function conferirLeitura(e: EntradaConferencia): ResultadoLeitura {
         conferencia: cf.forma_escrita ?? '',
       })
     const ativas = e.areas.filter((a) => a.ativa)
-    const localL = areaDoLocal(l.local_escrito, ativas, c.glossario)
-    const localC = areaDoLocal(cf.local_escrito, ativas, c.glossario)
+    const localL = areaDoLocal(l.local_escrito, ativas, c)
+    const localC = areaDoLocal(cf.local_escrito, ativas, c)
     if (cor.areaId === undefined && localL?.id !== localC?.id)
       divergencias.push({ campo: 'local', completa: l.local_escrito ?? '', conferencia: cf.local_escrito ?? '' })
     if (cor.promocao === undefined && l.promocao !== cf.promocao)
@@ -455,7 +520,7 @@ export function conferirLeitura(e: EntradaConferencia): ResultadoLeitura {
   // R22: área sugerida; a tocada vale para a conta. Com asterisco e a promoção da noite ainda sem
   // valor, a diferença pode ser promoção ou taxa: sem local escrito, só o toque na área resolve.
   const duasIncognitas = promocao && e.promoDesconto === null && pizzasTradicionais > 0 && cor.areaId === undefined
-  const sugestao = sugerirArea(l.local_escrito, total, duasIncognitas ? null : itensMenosDesconto, e.areas, c.glossario)
+  const sugestao = sugerirArea(l.local_escrito, total, duasIncognitas ? null : itensMenosDesconto, e.areas, c)
   const tocada = cor.areaId === undefined ? null : (e.areas.find((a) => a.id === cor.areaId) ?? null)
   const area = tocada ?? sugestao?.area ?? null
   const areaOrigem = !area ? null : tocada && tocada.id !== sugestao?.area.id ? 'manual' : (sugestao?.origem ?? 'manual')

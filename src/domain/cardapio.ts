@@ -17,8 +17,12 @@ export interface Cardapio {
   adicionais: { preco_cada: number; itens: string[]; outros: { nome: string; preco: number }[] }
   combos: { id: string; itens: string[]; preco: number }[]
   bebidas: { grupo: string; nome: string; apelidos?: string[]; preco: number }[]
+  /** Refrigerante não tem preço por marca: marca + tamanho ("coca 2lts") cai no item do tamanho. */
+  refrigerante: { marcas: string[]; tamanhos: Record<string, string[]> }
+  /** Bairros escritos no lugar da cidade, pelo nome da área ("N. Horizonte" é a Barra). */
+  bairros: Record<string, string[]>
   outros: { nome: string; preco: number }[]
-  ambiguidades: { escrito: string; opcoes: string[]; muda_preco: boolean }[]
+  ambiguidades: { escrito: string; apelidos?: string[]; opcoes: string[]; muda_preco: boolean }[]
 }
 
 export const CARDAPIO = cardapioJson as Cardapio
@@ -34,10 +38,44 @@ export const normalizar = (s: string) =>
 
 const reais = (valor: number) => Math.round(valor * 100)
 
-const mesmoNome = (escrito: string, nome: string, apelidos: string[] = []) =>
-  [nome, ...apelidos].some((n) => normalizar(n) === normalizar(escrito))
+const LIGACOES = new Set(['de', 'da', 'do', 'das', 'dos', 'com', 'c', 'e', 'ao'])
+
+/**
+ * Para achar um nome do cardápio: além do `normalizar`, sem espaços, sem as palavras de ligação
+ * ("brócolis c/ bacon" = "brocolis bacon") e com o tamanho numa grafia só ("2 lts" = "2L", "350 ml" = "350").
+ */
+export const chaveNome = (s: string) =>
+  normalizar(s)
+    .replace(/(\d) ?(?:litros?|lts?|ls|l)\b/g, '$1l')
+    .replace(/(\d) ?ml\b/g, '$1')
+    .split(' ')
+    .filter((p) => !LIGACOES.has(p))
+    .join('')
+
+const mesmoNome = (escrito: string, nome: string, apelidos: string[] = []) => {
+  const k = chaveNome(escrito)
+  return [nome, ...apelidos].some((n) => chaveNome(n) === k)
+}
 
 export const acharSabor = (c: Cardapio, nome: string) => c.pizzas.sabores.find((s) => mesmoNome(nome, s.nome, s.apelidos))
+
+/** Palavra que cabe em mais de um sabor ou item ("frango", "strogonoff", "heineken"). */
+export const acharAmbiguidade = (c: Cardapio, escrito: string) =>
+  c.ambiguidades.find((a) => mesmoNome(escrito, a.escrito, a.apelidos))
+
+/** Bebida pelo nome ou apelido; refrigerante pela marca e o tamanho ("coca 2lts", "guaraná lata"). */
+export function acharBebida(c: Cardapio, escrito: string) {
+  const pelaLista = c.bebidas.find((b) => mesmoNome(escrito, b.nome, b.apelidos))
+  if (pelaLista) return pelaLista
+  const k = chaveNome(escrito)
+  const marca = c.refrigerante.marcas
+    .map(chaveNome)
+    .sort((a, b) => b.length - a.length)
+    .find((m) => k.startsWith(m) || k.endsWith(m))
+  const tamanho = !marca ? k : k.startsWith(marca) ? k.slice(marca.length) : k.slice(0, -marca.length)
+  const nome = Object.entries(c.refrigerante.tamanhos).find(([, grafias]) => grafias.some((g) => chaveNome(g) === tamanho))?.[0]
+  return nome ? c.bebidas.find((b) => b.nome === nome) : undefined
+}
 
 /** R21: preço da pizza no tamanho e a faixa cobrada (a do sabor mais caro). */
 export function precoPizza(
@@ -66,11 +104,12 @@ export function precoAvulso(
   item: string,
 ): number | null {
   if (tipo === 'bebida') {
-    const b = c.bebidas.find((x) => mesmoNome(item, x.nome, x.apelidos))
+    const b = acharBebida(c, item)
     return b ? reais(b.preco) : null
   }
   if (tipo === 'borda') {
-    const b = c.bordas.find((x) => mesmoNome(item, x.nome))
+    // "Borda de cheddar" ou só "cheddar".
+    const b = c.bordas.find((x) => mesmoNome(item, x.nome) || mesmoNome(item, `borda ${x.nome}`))
     return b ? reais(b.preco) : null
   }
   if (tipo === 'adicional') {
