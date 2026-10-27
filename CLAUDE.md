@@ -20,7 +20,7 @@ Sistema para a pizzaria onde trabalho como motoboy, construído aos poucos. O MV
 - `supabase/010_revisao_acesso.sql`: conta desativada sem escrita, acerto que não se edita, áreas só do admin, "caiu" que sai quando o Pix muda, foto só de comanda na nuvem. Rodar depois do 009.
 - `supabase/011_acerto_e_leitura.sql`: confirmação do acerto de uma vez (`confirmar_acerto`, com trava contra a escrita do motoboy) e vaga da IA reservada e devolvida (`reservar_leitura`, `devolver_leitura`). Rodar depois do 010, antes de publicar o app e a função.
 - `supabase/teste/`: teste das regras de acesso num Postgres local.
-- `supabase/functions/_shared/cardapio-mel.json`: cardápio, regras e glossário. Fonte única para a Edge Function e para o front.
+- `supabase/functions/_shared/cardapio-mel.json`: cardápio, regras, glossário e o dicionário (apelidos, refrigerante por marca e tamanho, bairros da Barra). Fonte única para a Edge Function e para o front.
 - `supabase/functions/_shared/` (`prompt.ts`, `schema.ts`, `ia/`) e `ler-comanda/`: prompt, schema, adaptadores dos provedores e Edge Function da leitura. Depois de mudar um exemplo, `npm run exemplos`.
 - `scripts/comparar-modelos.ts`: compara modelos com as fotos da noite de teste (`npm run comparar -- <pasta>`).
 - `.claude/skills/graphify/`: `/graphify` monta o grafo do código e dos docs (graphify 0.9.85, Apache-2.0, versão fixada). A saída vai para `graphify-out/`, fora do git.

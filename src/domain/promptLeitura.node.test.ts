@@ -19,6 +19,23 @@ describe('prompt da leitura', () => {
     expect(sistema).not.toMatch(/R\$|\d+,\d\d/)
   })
 
+  it('meio a meio: um item com todos os sabores, e a palavra ambígua vai em sabores', () => {
+    expect(sistema).toContain('Pizza meio a meio')
+    expect(sistema).toContain('com todos os sabores em sabores, na ordem escrita')
+    expect(sistema).toContain('ponha em sabores a própria palavra (ex.: "frango")')
+    // "S/ cebola" é tirar ingrediente, não um adicional cobrado.
+    expect(sistema).toContain('"S/" = sem')
+    expect(sistema).toContain('A Moda do Chefe (moda, moda do chefe, chefe)')
+  })
+
+  it('dicionário: refrigerante por marca e tamanho, grafias das palavras ambíguas e bairros', () => {
+    expect(sistema).toContain('2L = Refrigerante 2L')
+    expect(sistema).toContain('coca, coca-cola')
+    expect(sistema).toContain('"estrogonofe" (strogonoff')
+    expect(sistema).toContain('Novo Horizonte')
+    expect(sistema).toContain('"N." = Novo ou Nova')
+  })
+
   it('os exemplos seguem o formato pedido à IA e o do domínio', () => {
     for (const x of EXEMPLOS) {
       expect(valida(ESQUEMA_COMPLETA, x.leitura)).toBe(true)

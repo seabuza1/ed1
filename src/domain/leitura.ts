@@ -1,7 +1,17 @@
 // Leitura da comanda por foto (docs/SPEC-leitura.md). A IA só transcreve (R19); aqui é feita a
 // conta pelo cardápio, a área sugerida e o estado verde, amarelo ou vermelho. Correções do
 // motoboy entram em `correcoes` e a conta é refeita do zero.
-import { CARDAPIO, normalizar, precoAvulso, precoPizza, type Cardapio, type Faixa, type Tamanho } from './cardapio'
+import {
+  acharAmbiguidade,
+  acharSabor,
+  CARDAPIO,
+  normalizar,
+  precoAvulso,
+  precoPizza,
+  type Cardapio,
+  type Faixa,
+  type Tamanho,
+} from './cardapio'
 import { comandaRepetida, criarComanda, NOMES_FORMA, NOMES_STATUS, type Resultado } from './comanda'
 import { formatarReais, lerReais } from './dinheiro'
 import { PROMO_MAX, PROMO_MIN } from './noite'
@@ -83,68 +93,152 @@ const conjunto = (fs: FormaEscrita[]) => [...new Set(fs)].sort().join('+')
 
 // ---------- Itens (R20, R21) ----------
 
+/**
+ * Um sabor da pizza (R20): certo, ou a palavra escrita que cabe em mais de um sabor. No meio a meio
+ * cada sabor tem a sua dúvida: "calabresa / frango" pode pedir a escolha só do frango.
+ */
+export interface SaborPizza {
+  /** Como veio: o nome do cardápio ou a palavra escrita ("frango"). */
+  escrito: string
+  /** O sabor do cardápio; null enquanto a palavra não foi escolhida. */
+  sabor: string | null
+  /** Os sabores possíveis, com o preço que a pizza daria; vazia quando a escolha não muda a conta. */
+  opcoes: { sabor: string; preco: number | null }[]
+}
+
 export interface ItemConferido {
   item: ItemLido
   /** Preço do item (já vezes a quantidade), em centavos; null = sem preço. */
   preco: number | null
   /** Pizza: faixa cobrada, a do sabor mais caro. */
   faixa: Faixa | null
-  /** Palavra ambígua (R20): cada opção com o preço que daria. */
+  /** Pizza: cada sabor, na ordem escrita. */
+  sabores: SaborPizza[]
+  /** Bebida, borda, adicional, combo ou outro com palavra ambígua (R20): cada opção com o preço. */
   opcoes: { sabor: string; preco: number | null }[]
   problema: string | null
+  /** Para conferir sem travar (amarelo). */
+  aviso: string | null
 }
 
-const semPreco = (item: ItemLido, problema: string, opcoes: ItemConferido['opcoes'] = []): ItemConferido => ({
-  item,
-  preco: null,
-  faixa: null,
-  opcoes,
-  problema,
-})
+/** Chave de uma escolha em `Correcoes.escolhas`: o item e, na pizza, o sabor ("2" ou "2.1"). */
+export const chaveEscolha = (item: number, sabor?: number) => (sabor === undefined ? `${item}` : `${item}.${sabor}`)
 
-function conferirItem(c: Cardapio, lido: ItemLido, escolha: string | undefined): ItemConferido {
-  const qtd = Number.isInteger(lido.quantidade) && lido.quantidade > 0 ? lido.quantidade : 1
-  // O motoboy escolheu entre as opções: vira um item casado.
-  const item: ItemLido =
-    escolha === undefined
-      ? lido
-      : lido.tipo === 'pizza'
-        ? { ...lido, sabores: [...lido.sabores, escolha], opcoes: [], casou_pelo_cardapio: true }
-        : { ...lido, item: escolha, opcoes: [], casou_pelo_cardapio: true }
+const semPreco = (
+  item: ItemLido,
+  problema: string,
+  resto: Partial<Pick<ItemConferido, 'opcoes' | 'sabores' | 'aviso'>> = {},
+): ItemConferido => ({ item, preco: null, faixa: null, sabores: [], opcoes: [], aviso: null, ...resto, problema })
 
-  if (item.tipo === 'pizza') {
-    if (!item.tamanho) return semPreco(item, 'Tamanho da pizza não lido.')
-    const tamanho = item.tamanho
-    if (item.opcoes.length) {
-      const opcoes = item.opcoes.map((sabor) => ({ sabor, r: precoPizza(c, [...item.sabores, sabor], tamanho) }))
-      // Opções com o mesmo preço (ex.: Calabresa e Calabresa Picante) não mudam a conta, desde que
-      // também não mudem a promoção (tradicional ou não).
-      const contas = new Set(opcoes.map((o) => (o.r ? `${o.r.preco}|${o.r.faixa === 'tradicional'}` : null)))
-      if (contas.size === 1 && opcoes[0].r)
-        return { item, preco: opcoes[0].r.preco * qtd, faixa: opcoes[0].r.faixa, opcoes: [], problema: null }
-      return semPreco(
-        item,
-        `"${item.lido}" pode ser mais de um sabor. Escolha qual.`,
-        opcoes.map((o) => ({ sabor: o.sabor, preco: o.r ? o.r.preco * qtd : null })),
-      )
-    }
-    const r = item.casou_pelo_cardapio && item.sabores.length ? precoPizza(c, item.sabores, tamanho) : null
-    if (!r) return semPreco(item, `"${item.lido}" não está no cardápio.`)
-    return { item, preco: r.preco * qtd, faixa: r.faixa, opcoes: [], problema: null }
+/** O lido parece ter mais de um sabor: "1/2", "½", "meia", "calabresa/frango", "filé-calabresa" ("c/" não conta). */
+const PARECE_MEIO_A_MEIO = /½|\bmei[oa]\b|(?<!\bc)\/|\p{L}-\p{L}/iu
+
+/** Todas as combinações, uma opção de cada lista. */
+const combinacoes = (listas: string[][]): string[][] =>
+  listas.reduce<string[][]>((acc, l) => acc.flatMap((parcial) => l.map((x) => [...parcial, x])), [[]])
+
+/** Os sabores da pizza como vieram, cada um com os nomes possíveis no cardápio (vazio: não está nele). */
+function saboresLidos(c: Cardapio, lido: ItemLido): { escrito: string; nomes: string[] }[] {
+  const nomeDe = (escrito: string) => acharSabor(c, escrito)?.nome ?? null
+  const lista = lido.sabores.map((escrito) => {
+    const nome = nomeDe(escrito)
+    return { escrito, nomes: nome ? [nome] : (acharAmbiguidade(c, escrito)?.opcoes ?? []) }
+  })
+  // Como a IA respondia antes: as opções de uma palavra vêm à parte, em `opcoes`. Um palpite que
+  // esteja entre elas sai de `sabores` e vira a dúvida no lugar dele.
+  if (lido.opcoes.length) {
+    const nomes = lido.opcoes.map((o) => nomeDe(o) ?? o)
+    const chaves = new Set(nomes.map(normalizar))
+    const ambigua = c.ambiguidades.find((a) => a.opcoes.length === nomes.length && a.opcoes.every((o) => chaves.has(normalizar(o))))
+    const palpite = lista.findIndex((s) => s.nomes.length === 1 && chaves.has(normalizar(s.nomes[0])))
+    const duvida = { escrito: ambigua?.escrito ?? (palpite >= 0 ? lista[palpite].escrito : '?'), nomes }
+    if (palpite >= 0) lista[palpite] = duvida
+    else lista.push(duvida)
   }
+  return lista
+}
 
+/** Pizza (R20, R21): cada sabor com a sua dúvida; o preço é o do sabor mais caro. */
+function conferirPizza(c: Cardapio, item: ItemLido, qtd: number, escolhas: Record<string, string>, indice: number): ItemConferido {
+  const lidos = saboresLidos(c, item)
+  const sabores: SaborPizza[] = lidos.map((s, k) => {
+    const escolhida = escolhas[chaveEscolha(indice, k)]
+    const sabor = s.nomes.length === 1 ? s.nomes[0] : escolhida && s.nomes.includes(escolhida) ? escolhida : null
+    return { escrito: s.escrito, sabor, opcoes: [] }
+  })
+  const aviso =
+    sabores.length === 1 && PARECE_MEIO_A_MEIO.test(item.lido)
+      ? `"${item.lido}" parece meio a meio, mas veio um sabor só: confira.`
+      : null
+  if (!item.tamanho) return semPreco(item, 'Tamanho da pizza não lido.', { sabores, aviso })
+  const tamanho = item.tamanho
+  const fora = lidos.find((s) => s.nomes.length === 0)
+  if (!lidos.length || fora) return semPreco(item, `"${fora?.escrito ?? item.lido}" não está no cardápio.`, { sabores, aviso })
+
+  const conta = (nomes: string[]) => {
+    const r = precoPizza(c, nomes, tamanho)
+    // Mesmo preço muda a conta se muda a promoção (tradicional ou não).
+    return { r, chave: r ? `${r.preco}|${r.faixa === 'tradicional'}` : '-' }
+  }
+  const certosMenos = (k: number) => sabores.flatMap((s, j) => (j !== k && s.sabor ? [s.sabor] : []))
+  // A palavra pede escolha se as opções dão contas diferentes com os outros sabores já certos.
+  const importa = (k: number) => new Set(lidos[k].nomes.map((n) => conta([...certosMenos(k), n]).chave)).size > 1
+  const comOpcoes = (k: number) =>
+    lidos[k].nomes.map((sabor) => {
+      const { r } = conta([...certosMenos(k), sabor])
+      return { sabor, preco: r ? r.preco * qtd : null }
+    })
+  // Escolhidas que mudam a conta continuam à vista, para trocar.
+  sabores.forEach((s, k) => {
+    if (s.sabor && lidos[k].nomes.length > 1 && importa(k)) s.opcoes = comOpcoes(k)
+  })
+
+  // Todas as combinações das palavras em aberto: se dão a mesma conta, a escolha não muda nada.
+  const abertas = sabores.flatMap((s, k) => (s.sabor ? [] : [k]))
+  const certos = sabores.flatMap((s) => (s.sabor ? [s.sabor] : []))
+  const contas = new Map(combinacoes(abertas.map((k) => lidos[k].nomes)).map((combo) => {
+    const x = conta([...certos, ...combo])
+    return [x.chave, x.r] as const
+  }))
+  if (contas.size === 1) {
+    const r = [...contas.values()][0]
+    if (!r) return semPreco(item, `"${item.lido}" não está no cardápio.`, { sabores, aviso })
+    return { item, preco: r.preco * qtd, faixa: r.faixa, sabores, opcoes: [], problema: null, aviso }
+  }
+  // Pede só as palavras que mudam a conta; se nenhuma muda sozinha, pede todas as em aberto.
+  const pedir = abertas.some(importa) ? abertas.filter(importa) : abertas
+  for (const k of pedir) sabores[k].opcoes = comOpcoes(k)
+  const palavras = pedir.map((k) => `"${sabores[k].escrito}"`)
+  const problema =
+    palavras.length === 1
+      ? `${palavras[0]} pode ser mais de um sabor. Escolha qual.`
+      : `${palavras.slice(0, -1).join(', ')} e ${palavras.at(-1)} podem ser mais de um sabor. Escolha cada um.`
+  return semPreco(item, problema, { sabores, aviso })
+}
+
+function conferirItem(c: Cardapio, lido: ItemLido, escolhas: Record<string, string>, indice: number): ItemConferido {
+  const qtd = Number.isInteger(lido.quantidade) && lido.quantidade > 0 ? lido.quantidade : 1
+  if (lido.tipo === 'pizza') return conferirPizza(c, lido, qtd, escolhas, indice)
+
+  const tipo = lido.tipo as Exclude<TipoItem, 'pizza'>
+  // O motoboy escolheu entre as opções: vira um item casado.
+  const escolha = escolhas[chaveEscolha(indice)]
+  let item: ItemLido = escolha === undefined ? lido : { ...lido, item: escolha, opcoes: [], casou_pelo_cardapio: true }
+  // A IA casou a palavra ambígua ("heineken") sem as opções: elas vêm do cardápio.
+  const ambigua = !item.opcoes.length && item.item && precoAvulso(c, tipo, item.item) === null ? acharAmbiguidade(c, item.item) : undefined
+  if (ambigua?.opcoes.every((o) => precoAvulso(c, tipo, o) !== null)) item = { ...item, opcoes: ambigua.opcoes }
   if (item.opcoes.length) {
-    const tipo = item.tipo
     const opcoes = item.opcoes.map((o) => ({ sabor: o, preco: precoAvulso(c, tipo, o) }))
     const precos = new Set(opcoes.map((o) => o.preco))
     // Mesmo com um palpite em `item`, opções de preços diferentes ficam para o motoboy escolher.
     if (precos.size === 1 && opcoes[0].preco !== null)
-      return { item, preco: opcoes[0].preco * qtd, faixa: null, opcoes: [], problema: null }
-    return semPreco(item, `"${item.lido}" pode ser mais de um item. Escolha qual.`, opcoes)
+      return { item, preco: opcoes[0].preco * qtd, faixa: null, sabores: [], opcoes: [], problema: null, aviso: null }
+    return semPreco(item, `"${item.lido}" pode ser mais de um item. Escolha qual.`, { opcoes })
   }
-  const unitario = item.casou_pelo_cardapio && item.item ? precoAvulso(c, item.tipo, item.item) : null
+  // Pelo dicionário do cardápio, mesmo quando a IA não casou ("coca 2lts" é o Refrigerante 2L).
+  const unitario = item.item ? precoAvulso(c, tipo, item.item) : null
   if (unitario === null) return semPreco(item, `"${item.lido}" não está no cardápio.`)
-  return { item, preco: unitario * qtd, faixa: null, opcoes: [], problema: null }
+  return { item, preco: unitario * qtd, faixa: null, sabores: [], opcoes: [], problema: null, aviso: null }
 }
 
 // ---------- Área (R22) ----------
@@ -156,12 +250,59 @@ const PALAVRAS_VAZIAS = new Set(['de', 'do', 'da', 'dos', 'das', 'e'])
 const GENERICAS = new Set(['parque', 'jardim', 'vila', 'setor', 'bairro', 'residencial', 'conjunto', 'centro'])
 const palavras = (nome: string) => normalizar(nome).split(' ').filter((p) => p && !PALAVRAS_VAZIAS.has(p))
 
+// Tipo do bairro e como vem abreviado. Bairro de uma palavra só pede o tipo junto: "Jd. Araguaia"
+// é o bairro, "Av. Araguaia" não.
+const TIPOS_BAIRRO: Record<string, string[]> = {
+  jardim: ['jd', 'jdm', 'jard'],
+  loteamento: ['lot'],
+  residencial: ['res', 'resid'],
+  conjunto: ['conj', 'cj'],
+  habitacional: ['hab'],
+  condominio: ['cond'],
+  setor: ['st', 'set'],
+  vila: ['vl'],
+  parque: ['pq'],
+  sitios: [],
+  recreio: [],
+}
+const ROMANOS = new Set(['i', 'ii', 'iii', 'iv'])
+// Trecho que começa assim é endereço, não bairro: "Rua São João, 45" não é o Jd. São João.
+const LOGRADOUROS = new Set(['rua', 'r', 'av', 'avenida', 'travessa', 'tv', 'alameda', 'praca', 'rodovia', 'rod', 'estrada'])
+
+/** As palavras do local fora dos trechos de endereço (separados por vírgula, parêntese, " - " ou número). */
+const palavrasDeBairro = (local: string) =>
+  local
+    .split(/[,;()]|\s-\s|\s\d+\s/)
+    .map((trecho) => normalizar(trecho).split(' '))
+    .filter((p) => !LOGRADOUROS.has(p[0]))
+    .flat()
+
 /**
- * Área citada no local escrito, pelo nome ("Pontal", "Barra") ou pelo glossário ("Arag.").
- * Com mais de uma citada, vale a que casa a maior parte do próprio nome ("Parque de Exposições
- * (Barra)" é o Parque; "Arag., perto da Barra" é Aragarças), depois mais palavras, depois a taxa maior.
+ * O bairro está no texto: cada palavra do nome por inteiro ou abreviada ("N. Horizonte", "Horiz."),
+ * com ao menos uma de 4 letras ou mais. Nome de 3 palavras ou mais aceita uma faltando.
  */
-export function areaDoLocal(local: string | null, areas: Area[], glossario: Record<string, string>): Area | null {
+function citaBairro(lidas: string[], nome: string): boolean {
+  const p = palavras(nome).filter((x) => !ROMANOS.has(x))
+  const tipos = p.filter((x) => x in TIPOS_BAIRRO)
+  const nucleo = p.filter((x) => !(x in TIPOS_BAIRRO))
+  const abrevia = (t: string, w: string) => w.startsWith(t) && (t === w || t.length === 1 || t.length >= 3)
+  const achadas = nucleo.filter((w) => lidas.some((t) => abrevia(t, w)))
+  if (!nucleo.length || achadas.length < (nucleo.length >= 3 ? nucleo.length - 1 : nucleo.length)) return false
+  if (!achadas.some((w) => lidas.some((t) => abrevia(t, w) && t.length >= Math.min(4, w.length)))) return false
+  return nucleo.length > 1 || !tipos.length || tipos.some((tp) => lidas.some((t) => t === tp || TIPOS_BAIRRO[tp].includes(t)))
+}
+
+/**
+ * Área citada no local escrito, pelo nome ("Pontal", "Barra"), pelo glossário ("Arag.") ou, sem
+ * cidade escrita, pelo bairro ("N. Horizonte" é a Barra). Com mais de uma citada, vale a que casa a
+ * maior parte do próprio nome ("Parque de Exposições (Barra)" é o Parque; "Arag., perto da Barra" é
+ * Aragarças), depois mais palavras, depois a taxa maior.
+ */
+export function areaDoLocal(
+  local: string | null,
+  areas: Area[],
+  { glossario, bairros }: Pick<Cardapio, 'glossario' | 'bairros'>,
+): Area | null {
   if (!local) return null
   let texto = ` ${normalizar(local)} `
   for (const [abrev, nome] of Object.entries(glossario)) {
@@ -183,7 +324,13 @@ export function areaDoLocal(local: string | null, areas: Area[], glossario: Reco
         (acertos > melhor.acertos || (acertos === melhor.acertos && area.taxa > melhor.area.taxa)))
     if (ganha) melhor = { area, fracao, acertos }
   }
-  return melhor?.area ?? null
+  if (melhor) return melhor.area
+  const lidas = palavrasDeBairro(local)
+  for (const [cidade, nomes] of Object.entries(bairros)) {
+    const area = areas.find((a) => normalizar(a.nome) === normalizar(cidade)) ?? areas.find((a) => palavras(a.nome)[0] === palavras(cidade)[0])
+    if (area && nomes.some((n) => citaBairro(lidas, n))) return area
+  }
+  return null
 }
 
 /** R22: escrito → pelo valor (a diferença é a taxa de exatamente uma área) → Aragarças. */
@@ -192,10 +339,10 @@ export function sugerirArea(
   total: number | null,
   itensMenosDesconto: number | null,
   areas: Area[],
-  glossario: Record<string, string>,
+  c: Pick<Cardapio, 'glossario' | 'bairros'>,
 ): { area: Area; origem: OrigemSugestao } | null {
   const ativas = areas.filter((a) => a.ativa)
-  const escrita = areaDoLocal(local, ativas, glossario)
+  const escrita = areaDoLocal(local, ativas, c)
   if (escrita) return { area: escrita, origem: 'escrito' }
   if (total !== null && itensMenosDesconto !== null) {
     const pelaTaxa = ativas.filter((a) => a.taxa === total - itensMenosDesconto)
@@ -240,8 +387,8 @@ export interface Correcoes {
   formas?: (Forma | null)[]
   /** Pagamento refeito pelo motoboy: a versão da conferência ou as partes com o valor digitado. */
   pagamento?: { forma: Forma; valor: string | null }[]
-  /** Índice do item → sabor (ou item) escolhido entre as opções. */
-  escolhas?: Record<number, string>
+  /** Escolhas entre as opções, por `chaveEscolha`: o item ("2") ou o sabor da pizza ("2.1"). */
+  escolhas?: Record<string, string>
 }
 
 export interface EntradaConferencia {
@@ -340,8 +487,8 @@ export function conferirLeitura(e: EntradaConferencia): ResultadoLeitura {
         conferencia: cf.forma_escrita ?? '',
       })
     const ativas = e.areas.filter((a) => a.ativa)
-    const localL = areaDoLocal(l.local_escrito, ativas, c.glossario)
-    const localC = areaDoLocal(cf.local_escrito, ativas, c.glossario)
+    const localL = areaDoLocal(l.local_escrito, ativas, c)
+    const localC = areaDoLocal(cf.local_escrito, ativas, c)
     if (cor.areaId === undefined && localL?.id !== localC?.id)
       divergencias.push({ campo: 'local', completa: l.local_escrito ?? '', conferencia: cf.local_escrito ?? '' })
     if (cor.promocao === undefined && l.promocao !== cf.promocao)
@@ -357,8 +504,9 @@ export function conferirLeitura(e: EntradaConferencia): ResultadoLeitura {
   if (total === null) erro('total', 'Total ilegível: digite o total.')
 
   // R20, R21: itens pelo cardápio.
-  const itens = l.itens.map((item, i) => conferirItem(c, item, cor.escolhas?.[i]))
+  const itens = l.itens.map((item, i) => conferirItem(c, item, cor.escolhas ?? {}, i))
   for (const it of itens) if (it.problema) erro('itens', it.problema)
+  for (const it of itens) if (it.aviso) amarelo.push(it.aviso)
   if (itens.length === 0) erro('itens', 'Nenhum item lido.')
   const somaItens = itens.length && itens.every((it) => it.preco !== null) ? itens.reduce((s, it) => s + it.preco!, 0) : null
 
@@ -372,7 +520,7 @@ export function conferirLeitura(e: EntradaConferencia): ResultadoLeitura {
   // R22: área sugerida; a tocada vale para a conta. Com asterisco e a promoção da noite ainda sem
   // valor, a diferença pode ser promoção ou taxa: sem local escrito, só o toque na área resolve.
   const duasIncognitas = promocao && e.promoDesconto === null && pizzasTradicionais > 0 && cor.areaId === undefined
-  const sugestao = sugerirArea(l.local_escrito, total, duasIncognitas ? null : itensMenosDesconto, e.areas, c.glossario)
+  const sugestao = sugerirArea(l.local_escrito, total, duasIncognitas ? null : itensMenosDesconto, e.areas, c)
   const tocada = cor.areaId === undefined ? null : (e.areas.find((a) => a.id === cor.areaId) ?? null)
   const area = tocada ?? sugestao?.area ?? null
   const areaOrigem = !area ? null : tocada && tocada.id !== sugestao?.area.id ? 'manual' : (sugestao?.origem ?? 'manual')

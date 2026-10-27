@@ -26,10 +26,10 @@ Fica de fora: QR code (fase 2), câmera própria com moldura, recorte por campo,
 ## Regras
 
 - **R19 Transcrição.** A IA só transcreve. Não corrige, não deduz e não calcula. Trecho ilegível vira `[?]` e entra em `ilegiveis`. Valores vêm como texto, do jeito que estão escritos, e o domínio converte.
-- **R20 Cardápio como dicionário.** O item que a IA casa com o cardápio vem com `casou_pelo_cardapio: true`. Se a palavra lida cabe em sabores de faixas com preços diferentes (lista `ambiguidades` do JSON, como "frango" e "lombo"), a IA devolve as opções e o item fica sem preço até o motoboy escolher.
+- **R20 Cardápio como dicionário.** O item que a IA casa com o cardápio vem com `casou_pelo_cardapio: true`. Se a palavra lida cabe em mais de um sabor (lista `ambiguidades` do JSON, como "frango" e "lombo"), a IA põe a própria palavra em `sabores`, no lugar daquele sabor, e o app procura as opções no cardápio. Meio a meio é um item só, com todos os sabores na ordem escrita, e **cada sabor tem a sua dúvida**: em "Calabresa / frango" o app mostra os dois e pede só o frango; se as opções não mudam a conta (como "brócolis"), não pede nada, mas o sabor continua à vista. Fora da pizza, as opções vêm em `opcoes`. Pizza que parece meio a meio ("/", "1/2", "½", "meia", "filé-calabresa") com um sabor só fica amarela para conferir. Apelidos dos sabores (como "moda" para A Moda do Chefe), das bebidas e das palavras ambíguas ("strogonoff" = estrogonofe) e abreviações ("S/" = sem, que tira ingrediente e não é item) ficam no JSON. A comparação ignora acento, maiúscula, pontuação, espaços e as palavras de ligação (de, da, do, com, c/, e, ao): "brocolis c/ bacon" já é o Brócolis com Bacon, sem apelido. Refrigerante não tem preço por marca: marca + tamanho, em qualquer ordem e grafia ("coca 2lts", "2 litros coca"), é o Refrigerante do tamanho (`refrigerante` no JSON). O app usa o dicionário também quando a IA não casou o item, e uma palavra ambígua casada sem opções ("heineken") ganha as opções do cardápio.
 - **R21 Preço dos itens.** Pizza: preço da faixa no tamanho. Meio a meio: o maior preço entre os sabores (requisitos R37). Bebida, borda e adicional saem do cardápio. Combo: preço do combo.
 - **R22 Área sugerida, nesta ordem:**
-  1. Local escrito na comanda, pelo glossário ("Arag." = Aragarças) → origem `escrito`.
+  1. Local escrito na comanda, pelo nome da área ou pelo glossário ("Arag." = Aragarças) → origem `escrito`. Sem cidade escrita, vale o bairro (`bairros` no JSON, pelo nome da área): "N. Horizonte" ou "Jd. Araguaia" é a Barra → também `escrito`. A cidade escrita vale sobre o bairro. Cada palavra do bairro pode vir abreviada ("N.", "Horiz."), com ao menos uma de 4 letras; bairro de uma palavra só pede o tipo junto ("Jd.", "Lot.", "Res."); trecho que começa por rua ou avenida é endereço e não conta ("Rua São João, 45"). Bairro errado não passa verde: a diferença da taxa aparece na conta.
   2. Sem local: total lido − itens = taxa de exatamente uma área ativa da tabela `areas` → origem `valor`.
   3. Senão, Aragarças → origem `padrao`.
 
@@ -64,10 +64,10 @@ itens: [{
   tipo: "pizza" | "bebida" | "borda" | "adicional" | "combo" | "outro"
   quantidade: number
   tamanho: "B" | "P" | "M" | "G" | null
-  sabores: string[]                  // nomes exatos do cardápio
+  sabores: string[]                  // um por sabor, na ordem escrita; nome do cardápio ou a palavra ambígua
   item: string | null                // nome exato do cardápio (bebida, borda, adicional, combo "01".."04")
   casou_pelo_cardapio: boolean
-  opcoes: string[]                   // quando ambíguo: os sabores possíveis
+  opcoes: string[]                   // fora da pizza, quando ambíguo: os itens possíveis
 }]
 pagamento: [{ forma_escrita: string, forma: "dinheiro" | "cartao" | "pix" | null, valor_escrito: string | null }]
 total_escrito:   string | null       // ex.: "113,00"
@@ -88,10 +88,11 @@ promocao:         boolean
 
 Fica em `supabase/functions/_shared/prompt.ts`, igual para todos os provedores. O system leva:
 1. As regras:
-   > Você está lendo uma comanda de pizzaria escrita à mão. Transcreva exatamente o que está escrito, linha por linha, sem corrigir, deduzir ou completar nada. Marque trechos ilegíveis com [?] e liste-os em "ilegiveis". Transcreva o total e o telefone dígito por dígito. Use o cardápio e o glossário só para identificar itens, e marque casou_pelo_cardapio quando usar. Se uma palavra couber em mais de um sabor, devolva as opções em vez de escolher. Não calcule valores.
+   > Você está lendo uma comanda de pizzaria escrita à mão. Transcreva exatamente o que está escrito, linha por linha, sem corrigir, deduzir ou completar nada. Marque trechos ilegíveis com [?] e liste-os em "ilegiveis". Transcreva o total e o telefone dígito por dígito. Use o cardápio e o glossário só para identificar itens, e marque casou_pelo_cardapio quando usar. Se uma palavra couber em mais de um sabor ou item, não escolha: na pizza, ponha a palavra como escrita em sabores; nos outros itens, devolva as opções. Não calcule valores.
 2. O glossário.
-3. O cardápio: nomes dos sabores por faixa, tamanhos, bebidas, bordas, adicionais e combos. Os ingredientes não vão.
-4. Os exemplos de `exemplos/`, cada um com a foto e o JSON esperado. Por enquanto só a 3557. Depois da noite de teste entram de 3 a 5 comandas de cada uma das duas pessoas que escrevem. Depois de mudar um exemplo, `npm run exemplos` gera `exemplos/exemplos.ts`, o módulo que a função publica.
+3. O cardápio: nomes dos sabores por faixa com os apelidos, tamanhos, bebidas, a regra do refrigerante (marca + tamanho), bordas, adicionais, combos e as palavras ambíguas com as outras grafias. Os ingredientes não vão.
+4. Os bairros da Barra, só para ajudar a ler a letra: `local_escrito` continua como está escrito.
+5. Os exemplos de `exemplos/`, cada um com a foto e o JSON esperado. Por enquanto só a 3557. Depois da noite de teste entram de 3 a 5 comandas de cada uma das duas pessoas que escrevem. Depois de mudar um exemplo, `npm run exemplos` gera `exemplos/exemplos.ts`, o módulo que a função publica.
 
 A parte fixa (system e exemplos) vem sempre primeiro e idêntica em toda chamada; a foto da comanda vem por último. Assim o cache do provedor funciona: no Gemini é automático, mas só a partir de um prefixo de uns 4.096 tokens (com só a 3557 pode não chegar; `tokens_cache` mostra); na Anthropic, usar `cache_control` no system e nos exemplos.
 

@@ -4,12 +4,14 @@ import { useState } from 'react'
 import { comandaRepetida, FORMAS, NOMES_FORMA } from '../domain/comanda'
 import { formatarReais, paraCampo } from '../domain/dinheiro'
 import {
+  chaveEscolha,
   comandaDaLeitura,
   conferirLeitura,
   houveCorrecao,
   registroLeitura,
   type CampoProblema,
   type Correcoes,
+  type ItemConferido,
   type RegistroLeitura,
   type RespostaLeitura,
   type ResultadoLeitura,
@@ -126,6 +128,38 @@ function TotalLido({ texto, confusos }: { texto: string; confusos: number[] }) {
 }
 
 const campo = (r: ResultadoLeitura, c: CampoProblema) => (r.problemas.includes(c) ? 'campo-problema' : undefined)
+
+/** Os sabores da pizza na ordem escrita; o que ainda espera a escolha leva "?". */
+const nomeDaPizza = (it: ItemConferido) =>
+  it.sabores.map((s) => s.sabor ?? (s.opcoes.length ? `${s.escrito}?` : s.escrito)).join(' / ')
+
+/** Opções de uma palavra ambígua (R20), com o preço que cada uma dá; a escolhida fica marcada. */
+function OpcoesDeSabor(props: {
+  rotulo: string
+  opcoes: { sabor: string; preco: number | null }[]
+  escolhida: string | null
+  onEscolher: (sabor: string) => void
+}) {
+  return (
+    <div className="pilha-curta">
+      <span className="rotulo-grupo">{props.rotulo}</span>
+      <div className="chips" role="group" aria-label={props.rotulo}>
+        {props.opcoes.map((o) => (
+          <button
+            key={o.sabor}
+            type="button"
+            className="chip chip-sabor"
+            aria-pressed={props.escolhida === o.sabor}
+            onClick={() => props.onEscolher(o.sabor)}
+          >
+            <span>{o.sabor}</span>
+            {o.preco !== null && <small className="num">{formatarReais(o.preco)}</small>}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export function ConfirmarLeitura(props: {
   foto: FotoDaComanda
@@ -339,25 +373,32 @@ export function ConfirmarLeitura(props: {
               <span>
                 {it.item.quantidade > 1 && `${it.item.quantidade}× `}
                 {it.item.tamanho && `${it.item.tamanho} `}
-                {it.item.sabores.length ? it.item.sabores.join(' / ') : (it.item.item ?? it.item.lido)}
+                {it.sabores.length ? nomeDaPizza(it) : (it.item.item ?? it.item.lido)}
               </span>
               <span className="valor">{it.preco === null ? '—' : formatarReais(it.preco)}</span>
             </div>
             {it.problema && <p className="erro pequeno">{it.problema}</p>}
+            {it.aviso && <p className="aviso pequeno">{it.aviso}</p>}
+            {/* Meio a meio: cada sabor com a sua dúvida, nas opções logo abaixo. */}
+            {it.sabores.map(
+              (sabor, k) =>
+                sabor.opcoes.length > 0 && (
+                  <OpcoesDeSabor
+                    key={k}
+                    rotulo={`Sabor "${sabor.escrito}"`}
+                    opcoes={sabor.opcoes}
+                    escolhida={sabor.sabor}
+                    onEscolher={(o) => corrigir({ escolhas: { ...cor.escolhas, [chaveEscolha(i, k)]: o } })}
+                  />
+                ),
+            )}
             {it.opcoes.length > 0 && (
-              <div className="chips">
-                {it.opcoes.map((o) => (
-                  <button
-                    key={o.sabor}
-                    type="button"
-                    className="chip chip-area"
-                    onClick={() => corrigir({ escolhas: { ...cor.escolhas, [i]: o.sabor } })}
-                  >
-                    <span>{o.sabor}</span>
-                    {o.preco !== null && <small className="num">{formatarReais(o.preco)}</small>}
-                  </button>
-                ))}
-              </div>
+              <OpcoesDeSabor
+                rotulo={`"${it.item.lido}"`}
+                opcoes={it.opcoes}
+                escolhida={null}
+                onEscolher={(o) => corrigir({ escolhas: { ...cor.escolhas, [chaveEscolha(i)]: o } })}
+              />
             )}
           </li>
         ))}

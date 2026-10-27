@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import exemplo3557 from '../../supabase/functions/_shared/exemplos/3557.json'
-import { CARDAPIO, normalizar, precoAvulso } from './cardapio'
+import { acharAmbiguidade, acharBebida, acharSabor, CARDAPIO, chaveNome, precoAvulso } from './cardapio'
 import {
   avisoLeitura,
   comandaDaLeitura,
@@ -162,17 +162,23 @@ describe('leitura da comanda: L1 a L14', () => {
     )
     expect(r.estado).toBe('vermelho')
     expect([r.itens[0].preco, r.somaItens, r.esperado]).toEqual([null, null, null])
-    expect(r.itens[0].opcoes).toEqual([
-      { sabor: 'Frango c/ Catupiry', preco: R(73) },
-      { sabor: 'Franguinho', preco: R(73) },
-      { sabor: 'Estrogonofe de Frango', preco: R(86) },
-      { sabor: 'Frango com Pequi', preco: R(93) },
+    expect(r.itens[0].sabores).toEqual([
+      {
+        escrito: 'frango',
+        sabor: null,
+        opcoes: [
+          { sabor: 'Frango c/ Catupiry', preco: R(73) },
+          { sabor: 'Franguinho', preco: R(73) },
+          { sabor: 'Estrogonofe de Frango', preco: R(86) },
+          { sabor: 'Frango com Pequi', preco: R(93) },
+        ],
+      },
     ])
     // Escolhendo Franguinho: 73 + 5 = 78 fecha.
     const escolhido = conferir(
       comanda({ itens: [pizza('G', [], 'G frango', frango.opcoes)], local_escrito: 'Arag.', total_escrito: '78' }),
       null,
-      { escolhas: { 0: 'Franguinho' } },
+      { escolhas: { '0.0': 'Franguinho' } },
     )
     expect([escolhido.esperado, escolhido.estado]).toEqual([R(78), 'verde'])
   })
@@ -379,8 +385,44 @@ describe('leitura: área, promoção e itens', () => {
   })
 
   it('"Parque" sozinho não é o Parque de Exposições', () => {
-    const r = conferir(comanda({ local_escrito: 'Parque das Águas Quentes', total_escrito: '120,00' }))
+    const r = conferir(comanda({ local_escrito: 'Parque das Nações', total_escrito: '120,00' }))
     expect([r.sugestao, r.estado]).toEqual([{ areaId: 'barra', origem: 'valor' }, 'verde'])
+  })
+
+  it('R22 bairro da Barra no lugar da cidade, também abreviado', () => {
+    const r = (local: string) => conferir(comanda({ local_escrito: local })).sugestao
+    const barra = { areaId: 'barra', origem: 'escrito' }
+    expect(r('N. Horizonte')).toEqual(barra)
+    expect(r('Rua 5, Jd. Araguaia')).toEqual(barra)
+    expect(r('Parque das Águas Quentes')).toEqual(barra)
+    // Nome de três palavras aceita uma faltando ("Residencial Wilmar Peres de Farias").
+    expect(r('Wilmar Peres')).toEqual(barra)
+    // A cidade escrita vale sobre o bairro.
+    expect(r('Jd. Araguaia, Pontal')).toEqual({ areaId: 'pontal', origem: 'escrito' })
+    // Bairro de uma palavra só pede o tipo; "Belo Horizonte" não é "N. Horizonte": fica a conta pelo valor.
+    expect(r('Av. Araguaia')).toEqual({ areaId: 'aragarcas', origem: 'valor' })
+    expect(r('Rua Belo Horizonte')).toEqual({ areaId: 'aragarcas', origem: 'valor' })
+    // Endereço não é bairro, mesmo com o nome de um: o bairro vem depois da vírgula ou do número.
+    expect(r('Rua São João, 45')).toEqual({ areaId: 'aragarcas', origem: 'valor' })
+    expect(r('Rua São João 45 Jd. Araguaia')).toEqual(barra)
+  })
+
+  it('R22 bairro errado não passa: a conta acusa a diferença da taxa', () => {
+    const r = conferir(comanda({ local_escrito: 'N. Horizonte' }))
+    expect(r.estado).toBe('vermelho')
+    expect(r.motivos).toContain(r$('A conta dá R$ 120,00, mas o total lido é R$ 113,00.'))
+  })
+
+  it('bebida pelo dicionário, mesmo sem a IA casar, e a ambígua com as opções do cardápio', () => {
+    const filéCalabresa = pizza('G', ['Filé Mignon', 'Calabresa'])
+    const coca = { ...avulso('bebida', 'coca zero 2lts'), casou_pelo_cardapio: false }
+    expect(conferir(comanda({ itens: [filéCalabresa, coca] })).estado).toBe('verde')
+    const r = conferir(comanda({ itens: [filéCalabresa, avulso('bebida', 'heineken')] }))
+    expect(r.itens[1].opcoes).toEqual([
+      { sabor: 'Long Neck (Heineken)', preco: R(12) },
+      { sabor: 'Heineken 600ml', preco: R(20) },
+    ])
+    expect(r.motivos).toContain('"heineken" pode ser mais de um item. Escolha qual.')
   })
 
   it('local ilegível pede o toque na área', () => {
@@ -421,6 +463,83 @@ describe('leitura: área, promoção e itens', () => {
     const suco = { ...avulso('bebida', 'suco'), item: null, opcoes: ['Suco de Laranja 400ml', 'Suco de Maracujá 400ml'] }
     const s = conferir(comanda({ itens: [pizza('G', ['Filé Mignon']), suco] }))
     expect([s.itens[1].preco, s.estado]).toEqual([R(15), 'verde'])
+  })
+})
+
+describe('leitura: meio a meio', () => {
+  const lida = (item: ItemLido, total: string) => comanda({ itens: [item], local_escrito: 'Arag.', total_escrito: total })
+  const nomes = (r: ReturnType<typeof conferir>) => r.itens[0].sabores.map((s) => s.sabor ?? s.escrito)
+
+  it('um sabor certo e outro com dúvida: mostra os dois e pede só o da dúvida', () => {
+    const item = pizza('G', ['calabresa', 'frango'], 'G calabresa/frango')
+    const r = conferir(lida(item, '78'))
+    expect(nomes(r)).toEqual(['Calabresa', 'frango'])
+    expect(r.itens[0].sabores.map((s) => s.opcoes.length)).toEqual([0, 4])
+    expect([r.itens[0].preco, r.estado]).toEqual([null, 'vermelho'])
+    expect(r.motivos).toContain('"frango" pode ser mais de um sabor. Escolha qual.')
+    // Escolhendo o frango: Franguinho e Calabresa dão 73, + 5 = 78.
+    const e = conferir(lida(item, '78'), null, { escolhas: { '0.1': 'Franguinho' } })
+    expect(nomes(e)).toEqual(['Calabresa', 'Franguinho'])
+    expect([e.itens[0].preco, e.esperado, e.estado]).toEqual([R(73), R(78), 'verde'])
+    // A escolha continua à vista, para trocar.
+    expect(e.itens[0].sabores[1].opcoes).toHaveLength(4)
+  })
+
+  it('dúvida que não muda a conta: os dois sabores aparecem e a pizza tem preço', () => {
+    // "brócolis" são três sabores do mesmo preço: não pede escolha, mas o sabor aparece.
+    const r = conferir(lida(pizza('G', ['brócolis', 'Filé Mignon'], 'G brócolis/filé'), '98'))
+    expect(nomes(r)).toEqual(['brócolis', 'Filé Mignon'])
+    expect(r.itens[0].sabores[0].opcoes).toEqual([])
+    expect([r.itens[0].preco, r.itens[0].faixa, r.estado]).toEqual([R(93), 'premium', 'verde'])
+  })
+
+  it('os dois sabores com dúvida: pede cada um', () => {
+    const item = pizza('G', ['frango', 'lombo'], 'G frango/lombo')
+    const r = conferir(lida(item, '78'))
+    expect(r.itens[0].sabores.map((s) => [s.escrito, s.opcoes.length])).toEqual([
+      ['frango', 4],
+      ['lombo', 3],
+    ])
+    expect(r.motivos).toContain('"frango" e "lombo" podem ser mais de um sabor. Escolha cada um.')
+    const e = conferir(lida(item, '78'), null, { escolhas: { '0.0': 'Franguinho', '0.1': 'Lombinho' } })
+    expect([nomes(e), e.esperado, e.estado]).toEqual([['Franguinho', 'Lombinho'], R(78), 'verde'])
+    expect(houveCorrecao({ escolhas: { '0.0': 'Franguinho' } }, e)).toBe(true)
+  })
+
+  it('como a IA respondia antes (opções à parte): o palpite não duplica e o meio a meio aparece', () => {
+    const calabresa = conferir(lida(pizza('G', ['Calabresa'], 'G Calabresa', ['Calabresa', 'Calabresa Picante']), '78'))
+    expect([nomes(calabresa), calabresa.estado]).toEqual([['calabresa'], 'verde'])
+    const frango = CARDAPIO.ambiguidades.find((a) => a.escrito === 'frango')!
+    const meio = conferir(lida(pizza('G', ['Filé Mignon'], 'G filé/frango', frango.opcoes), '98'))
+    expect([nomes(meio), meio.itens[0].preco, meio.estado]).toEqual([['Filé Mignon', 'frango'], R(93), 'verde'])
+  })
+
+  it('a 7326 real: "Calabresa / Moda" com S/ catupiry e S/ cebola, na Barra, 85', () => {
+    const c7326 = (sabores: string[]) =>
+      comanda({
+        telefone_final: '7326',
+        itens: [pizza('G', sabores, 'G Calabresa / moda')],
+        local_escrito: 'Barra',
+        total_escrito: '85,00',
+        transcricao: ['7326', '*', '1 G', 'Calabresa / moda', 'S/ catupiry', 'S/ cebola', 'Barra', '85,00'],
+      })
+    // "moda" é apelido de A Moda do Chefe: os dois sabores aparecem; 73 + 12 da Barra = 85.
+    const r = conferir(c7326(['Calabresa', 'moda']))
+    expect(nomes(r)).toEqual(['Calabresa', 'A Moda do Chefe'])
+    expect([r.itens[0].preco, r.esperado, r.estado]).toEqual([R(73), R(85), 'verde'])
+    // Como foi lida antes, só com a Calabresa: a conta fecha, mas agora fica amarelo para conferir.
+    const antes = conferir(c7326(['Calabresa']))
+    expect([antes.esperado, antes.estado]).toEqual([R(85), 'amarelo'])
+  })
+
+  it('parece meio a meio mas veio um sabor só: amarelo para conferir', () => {
+    const r = conferir(lida(pizza('G', ['Calabresa'], 'G calabresa/frango'), '78'))
+    expect(r.estado).toBe('amarelo')
+    expect(r.motivos).toContain('"G calabresa/frango" parece meio a meio, mas veio um sabor só: confira.')
+    expect(conferir(lida(pizza('G', ['Portuguesa'], 'G 1/2 portuguesa 1/2 calabresa'), '78')).estado).toBe('amarelo')
+    // "c/" faz parte do nome do sabor; sabor único escrito por inteiro não avisa.
+    expect(conferir(lida(pizza('G', ['Frango c/ Catupiry'], 'G Frango c/ Catupiry'), '78')).estado).toBe('verde')
+    expect(conferir(lida(pizza('G', ['Romeu e Julieta'], 'G Romeu e Julieta'), '78')).itens[0].aviso).toBeNull()
   })
 })
 
@@ -527,17 +646,55 @@ describe('cardápio', () => {
   it('todo sabor tem uma faixa com preço nos 4 tamanhos', () => {
     for (const s of sabores) expect(Object.keys(CARDAPIO.pizzas.faixas[s.faixa]).sort()).toEqual(['B', 'G', 'M', 'P'])
   })
-  it('nomes e apelidos não se repetem', () => {
-    const nomes = sabores.flatMap((s) => [s.nome, ...(s.apelidos ?? [])]).map(normalizar)
-    expect(new Set(nomes).size).toBe(nomes.length)
-  })
-  it('as opções das ambiguidades existem e o "muda_preco" bate com as faixas', () => {
-    for (const a of CARDAPIO.ambiguidades) {
-      const faixas = a.opcoes.map((o) => sabores.find((s) => s.nome === o)?.faixa)
-      expect(faixas.every(Boolean)).toBe(true)
-      const precos = new Set(faixas.map((f) => CARDAPIO.pizzas.faixas[f!].G))
-      expect(precos.size > 1).toBe(a.muda_preco)
+  it('nomes e apelidos não se repetem (como o app compara)', () => {
+    for (const lista of [sabores, CARDAPIO.bebidas]) {
+      const nomes = lista.flatMap((s) => [s.nome, ...(s.apelidos ?? [])]).map(chaveNome)
+      expect(nomes.filter((n, i) => nomes.indexOf(n) !== i)).toEqual([])
     }
+  })
+  it('as opções das ambiguidades existem e o "muda_preco" bate com os preços', () => {
+    for (const a of CARDAPIO.ambiguidades) {
+      const precos = a.opcoes.map((o) => {
+        const sabor = sabores.find((s) => s.nome === o)
+        return sabor ? CARDAPIO.pizzas.faixas[sabor.faixa].G : CARDAPIO.bebidas.find((b) => b.nome === o)?.preco
+      })
+      expect(precos.every((p) => p !== undefined), a.escrito).toBe(true)
+      expect(new Set(precos).size > 1, a.escrito).toBe(a.muda_preco)
+    }
+  })
+  it('palavra ambígua não é apelido de outro item (senão a dúvida nunca aparece)', () => {
+    for (const a of CARDAPIO.ambiguidades)
+      for (const escrito of [a.escrito, ...(a.apelidos ?? [])])
+        for (const achado of [acharSabor(CARDAPIO, escrito)?.nome, acharBebida(CARDAPIO, escrito)?.nome])
+          // Só o nome exato de uma das opções: "calabresa" escrita é a Calabresa.
+          if (achado) expect(a.opcoes, escrito).toContain(achado)
+  })
+  it('apelidos: abreviação, outra grafia e palavras de ligação', () => {
+    const sabor = (x: string) => acharSabor(CARDAPIO, x)?.nome
+    expect(sabor('Port.')).toBe('Portuguesa')
+    expect(sabor('4 Queijos')).toBe('Quatro Queijos')
+    expect(sabor('brocolis c/ bacon')).toBe('Brócolis com Bacon')
+    expect(sabor('Brócolis Bacon')).toBe('Brócolis com Bacon')
+    expect(sabor('Strogonoff de frango')).toBe('Estrogonofe de Frango')
+    expect(sabor('hotdog')).toBe('Hot Dog')
+    expect(sabor('Romeu & Julieta')).toBe('Romeu e Julieta')
+    expect(acharAmbiguidade(CARDAPIO, 'Strogonoff')?.escrito).toBe('estrogonofe')
+  })
+  it('refrigerante pela marca e o tamanho, em qualquer grafia', () => {
+    const bebida = (x: string) => acharBebida(CARDAPIO, x)?.nome
+    expect(bebida('coca 2lts')).toBe('Refrigerante 2L')
+    expect(bebida('Coca-Cola Zero 2 litros')).toBe('Refrigerante 2L')
+    expect(bebida('2L coca')).toBe('Refrigerante 2L')
+    expect(bebida('guaraná lata')).toBe('Refrigerante lata')
+    expect(bebida('Fanta Uva 1,5L')).toBe('Refrigerante 1,5L')
+    expect(bebida('refri 500 ml')).toBe('Refrigerante 500ml')
+    // Sem tamanho ou num tamanho que o cardápio não tem: não chuta.
+    expect(bebida('coca')).toBeUndefined()
+    expect(bebida('sprite 600ml')).toBeUndefined()
+    expect(bebida('brahma')).toBe('Brahma 600ml')
+    expect(bebida('Suco laranja 400')).toBe('Suco de Laranja 400ml')
+    expect(bebida('água com gás')).toBe('Água c/ gás')
+    expect(precoAvulso(CARDAPIO, 'borda', 'borda de cheddar')).toBe(1600)
   })
   it('os itens dos combos existem no cardápio', () => {
     for (const combo of CARDAPIO.combos)

@@ -1333,6 +1333,24 @@ button.foto-cheia img {
   object-fit: contain;
 }
 
+/* Opção de sabor (ou item) da leitura: nome e o preço que a pizza daria. */
+.chip-sabor {
+  flex-direction: column;
+  gap: 0;
+  line-height: 1.15;
+}
+
+.chip-sabor small {
+  font-family: var(--numeros);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--discreto);
+}
+
+.chip-sabor[aria-pressed='true'] small {
+  color: inherit;
+}
+
 .chip-area.chip-sugerida {
   outline: 2px dashed var(--marca);
   outline-offset: 2px;
