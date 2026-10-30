@@ -39,7 +39,9 @@ Object.assign(env, {
   CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
 })
 
-const args = ['-p', '--model', MODELO, '--permission-mode', 'acceptEdits', '--allowedTools', FERRAMENTAS, '--strict-mcp-config']
+// modelOverrides faz o Claude Code reconhecer os modelos da flatt (sem isso avisa unrecognized_model).
+const ajustes = JSON.stringify({ modelOverrides: { 'claude-opus-4-6': MODELO, 'claude-haiku-4-5': MODELO_RAPIDO } })
+const args = ['-p', '--model', MODELO, '--permission-mode', 'acceptEdits', '--allowedTools', FERRAMENTAS, '--strict-mcp-config', '--settings', ajustes]
 // No Windows o claude pode ser .cmd; a tarefa vai pela entrada, então o shell não mexe nela.
 const r = spawnSync('claude', args, { input: tarefa, stdio: ['pipe', 'inherit', 'inherit'], env, shell: process.platform === 'win32' })
 if (r.error) sair(`Não achei o claude: ${r.error.message}`)
