@@ -23,7 +23,6 @@ Sistema para a pizzaria onde trabalho como motoboy, construído aos poucos. O MV
 - `supabase/functions/_shared/cardapio-mel.json`: cardápio, regras, glossário e o dicionário (apelidos, refrigerante por marca e tamanho, bairros da Barra). Fonte única para a Edge Function e para o front.
 - `supabase/functions/_shared/` (`prompt.ts`, `schema.ts`, `ia/`) e `ler-comanda/`: prompt, schema, adaptadores dos provedores e Edge Function da leitura. Depois de mudar um exemplo, `npm run exemplos`.
 - `scripts/comparar-modelos.ts`: compara modelos com as fotos da noite de teste (`npm run comparar -- <pasta>`).
-- `.claude/skills/trabalhador-flatt/`: o Opus delega o braçal (busca, edição repetitiva, rascunho de teste) a outro Claude Code com o `qwen3.8-27b` da flatt, e confere. A chave fica em `FLATT_API_KEY`, na variável do ambiente de nuvem ou do computador, nunca no repositório.
 - `.claude/skills/graphify/`: `/graphify` monta o grafo do código e dos docs (graphify 0.9.85, Apache-2.0, versão fixada). A saída vai para `graphify-out/`, fora do git.
 - `PRODUCT.md`: quem usa, onde e para quê (o Luan usa o painel no celular). Lido pelas skills de interface.
 - `DESIGN.md`: o visual "A rua à noite" (placas de estrada, asfalto, amarelo refletivo): tokens, regras e componentes. Seguir ao mexer na interface; `.impeccable/design.json` é o complemento para as skills.
